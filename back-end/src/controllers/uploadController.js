@@ -1,24 +1,95 @@
-import { uploadPublicImageToStorage } from "../utils/storage.js";
+import sharp from "sharp";
+import { uploadPublicImageToStorage, uploadPendingAvatarToStorage } from "../utils/storage.js";
 import { applyWatermark } from "../utils/watermark.js";
 import { recordUploadOwner } from "../utils/uploadOwnership.js";
+import { validateImageMagicBytes } from "../middleware/upload.js";
+
+const ALLOWED_UPLOAD_TYPES = new Set(["avatar", "logo"]);
+const ALLOWED_SHARP_FORMATS = new Set(["jpeg", "png", "webp"]);
 
 /**
- * POST /api/upload — публичная загрузка фото/логотипа.
- * Поле формы: `file`. Возвращает публичный URL для avatarUrl в register / PUT /me.
+ * POST /api/upload — публичная анонимная загрузка фото/логотипа для регистрации.
+ * Поле формы: `file`.
  *
- * Без водяного знака — используется, например, для логотипов ЖК и аватаров.
- * Для фото объявлений используется uploadListingPhoto ниже.
+ * Безопасность:
+ * - Не доверяет клиентскому Content-Type.
+ * - Проверяет Magic Bytes буфера (строго JPEG, PNG, WebP).
+ * - Анализирует метаданные через sharp.metadata(), отклоняя HTML, SVG, exe и повреждённые байты.
+ * - Принудительно санитайзит и пересохраняет изображение через sharp (удаление EXIF, фиксация формата в webp/jpeg).
+ * - Изолирует файл в отдельном префиксе Storage `avatars/pending/`.
  */
 export const uploadImage = async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.file || !req.file.buffer) {
       return res.status(400).json({
         success: false,
         message: "Файл не передан. Ожидается поле формы `file`.",
       });
     }
 
-    const { publicUrl } = await uploadPublicImageToStorage(req.file);
+    // 1. Валидация типа загрузки (разрешены только avatar / logo)
+    const rawType = req.uploadType || req.body?.type || req.query?.type;
+    const uploadType = (rawType || "avatar").toString().toLowerCase().trim();
+    if (!ALLOWED_UPLOAD_TYPES.has(uploadType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Недопустимый тип загрузки. Разрешены только: avatar, logo",
+      });
+    }
+
+    // 2. Валидация содержимого по Magic Bytes (не доверяем Content-Type от клиента)
+    if (!validateImageMagicBytes(req.file.buffer)) {
+      return res.status(400).json({
+        success: false,
+        message: "Недопустимый формат файла. Разрешены только форматы JPEG, PNG и WebP.",
+      });
+    }
+
+    // 3. Анализ структуры через sharp.metadata() (отклоняем HTML, SVG, exe и повреждённые байты)
+    let metadata;
+    try {
+      metadata = await sharp(req.file.buffer, { limitInputPixels: 25_000_000 }).metadata();
+    } catch (parseErr) {
+      return res.status(400).json({
+        success: false,
+        message: "Недопустимый или повреждённый файл изображения. Ожидаются форматы JPEG, PNG или WebP.",
+      });
+    }
+
+    if (!metadata?.format || !ALLOWED_SHARP_FORMATS.has(metadata.format)) {
+      return res.status(400).json({
+        success: false,
+        message: "Недопустимый формат файла. Разрешены только форматы JPEG, PNG и WebP.",
+      });
+    }
+
+    // 4. Санитайзинг через sharp: удаление EXIF, авто-поворот, перекодирование (фиксация в webp/jpeg)
+    const targetFormat = metadata.format === "jpeg" ? "jpeg" : "webp";
+    const pipeline = sharp(req.file.buffer, { limitInputPixels: 25_000_000 }).rotate();
+
+    let sanitizedBuffer;
+    let finalMime;
+    let finalExt;
+
+    if (targetFormat === "jpeg") {
+      sanitizedBuffer = await pipeline.jpeg({ quality: 85 }).toBuffer();
+      finalMime = "image/jpeg";
+      finalExt = "jpg";
+    } else {
+      sanitizedBuffer = await pipeline.webp({ quality: 85 }).toBuffer();
+      finalMime = "image/webp";
+      finalExt = "webp";
+    }
+
+    // 5. Изоляция: сохраняем анонимный файл в отдельный префикс avatars/pending/
+    const sanitizedFile = {
+      buffer: sanitizedBuffer,
+      mimetype: finalMime,
+      extension: finalExt,
+      originalname: `${uploadType}.${finalExt}`,
+    };
+
+    const { publicUrl } = await uploadPendingAvatarToStorage(sanitizedFile);
 
     return res.json({
       success: true,

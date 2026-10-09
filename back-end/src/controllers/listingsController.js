@@ -1,3 +1,4 @@
+import jwt from "jsonwebtoken";
 import { supabase } from "../config/db.js";
 import {
   createListingSchema,
@@ -14,69 +15,27 @@ import {
   getActiveSubscription,
   consumeTariffListing,
   refundTariffListing,
+  activateListingSlot,
+  checkDraftsLimit,
+  MAX_DRAFTS_PER_USER,
 } from "../services/subscriptionsService.js";
 import { verifyAllOwnedBy } from "../utils/uploadOwnership.js";
 
-// Проверяет лимиты объявлений пользователя. Если у пользователя активен тариф,
-// проверяется несгораемый счётчик израсходованных слотов тарифа (listings_used).
-// Для пользователей без тарифа проверяется лимит одновременно активных объявлений.
-// Возвращает null, если лимит не превышен, иначе готовый объект ответа 403.
-async function checkActiveListingsLimit(userId, accountType, { countIncludesNewRow = false } = {}) {
-  const subscription = await getActiveSubscription(userId);
-
-  if (subscription) {
-    const limit = await getActiveListingsLimit(userId, accountType);
-    const used = subscription.listings_used ?? null;
-
-    if (used != null) {
-      const isOverLimit = countIncludesNewRow ? used > limit : used >= limit;
-      if (isOverLimit) {
-        return {
-          status: 403,
-          body: {
-            success: false,
-            message: `Лимит объявлений по вашему тарифу исчерпан (${limit} из ${limit}). Для размещения новых объявлений продлите тариф или выберите другой план.`,
-          },
-        };
-      }
-      return null;
-    }
+// Удаляет из пользовательского объекта features системные ключи:
+// promotionExpiresAt, urgentExpiresAt, residentialComplexId,
+// чтобы предотвратить их манипуляцию через API.
+export function sanitizeFeatures(features) {
+  if (!features || typeof features !== "object" || Array.isArray(features)) {
+    return {};
   }
-
-  const limit = await getActiveListingsLimit(userId, accountType);
-
-  const nowIso = new Date().toISOString();
-  const { count, error } = await supabase
-    .from("listings")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
-
-  if (error) {
-    console.error("Active Listings Limit Count Error:", error);
-    return {
-      status: 500,
-      body: { success: false, message: "Ошибка проверки лимита активных объявлений" },
-    };
-  }
-
-  const isOverLimit = countIncludesNewRow ? (count || 0) > limit : (count || 0) >= limit;
-
-  if (isOverLimit) {
-    return {
-      status: 403,
-      body: {
-        success: false,
-        message:
-          limit === 0
-            ? "Для публикации объявлений необходим активный тариф UyTap PRO"
-            : `Достигнут лимит активных объявлений по вашему тарифу (${limit}). Повысьте тариф или скройте/удалите другое объявление.`,
-      },
-    };
-  }
-
-  return null;
+  const clean = { ...features };
+  delete clean.promotionExpiresAt;
+  delete clean.urgentExpiresAt;
+  delete clean.residentialComplexId;
+  delete clean.promotion_expires_at;
+  delete clean.urgent_expires_at;
+  delete clean.residential_complex_id;
+  return clean;
 }
 
 // Купленное продвижение (VIP/ТОП/Срочно) действует ограниченный срок, но
@@ -116,6 +75,34 @@ function maskExpiredListing(listing) {
   }
 
   return masked;
+}
+
+// Единая функция валидации переходов статусов для владельца
+export function canOwnerTransition(fromStatus, toStatus) {
+  // Возвращает { allowed: boolean, message?: string }
+  // Модерация: владелец ни при каких условиях не может перевести объявление из или в status="moderation"
+  if (fromStatus === "moderation" || toStatus === "moderation") {
+    return { allowed: false, message: "Статус модерации может изменить только администратор" };
+  }
+  // Черновик: прямой перевод draft -> active запрещён для владельца (активация черновика только через оплату/grantPromotion)
+  if (fromStatus === "draft" && toStatus === "active") {
+    return { allowed: false, message: "Черновик объявления ожидает оплаты или подтверждения публикации" };
+  }
+  // Разрешённые переходы владельца:
+  // active <-> hidden, active -> active, hidden -> hidden, draft -> draft, draft -> hidden
+  const allowedTransitions = new Set([
+    "active->active",
+    "active->hidden",
+    "hidden->active",
+    "hidden->hidden",
+    "draft->draft",
+    "draft->hidden",
+  ]);
+  const key = `${fromStatus}->${toStatus}`;
+  if (allowedTransitions.has(key)) {
+    return { allowed: true };
+  }
+  return { allowed: false, message: `Переход из статуса "${fromStatus}" в "${toStatus}" запрещён` };
 }
 
 // =======================================================
@@ -174,11 +161,11 @@ export const getListings = async (req, res) => {
     if (rentPeriod) query = query.eq("rent_period", rentPeriod);
 
     // Цена
-    if (minPrice) query = query.gte("price", Number(minPrice));
-    if (maxPrice) query = query.lte("price", Number(maxPrice));
+    if (minPrice && !Number.isNaN(Number(minPrice))) query = query.gte("price", Number(minPrice));
+    if (maxPrice && !Number.isNaN(Number(maxPrice))) query = query.lte("price", Number(maxPrice));
 
     // Количественные параметры
-    if (rooms) query = query.eq("rooms", Number(rooms));
+    if (rooms && !Number.isNaN(Number(rooms))) query = query.eq("rooms", Number(rooms));
     if (isResort !== undefined) query = query.eq("is_resort", isResort === "true");
 
     // Пагинация и сортировка
@@ -194,7 +181,7 @@ export const getListings = async (req, res) => {
     const { data: listings, count, error } = await query;
 
     if (error) {
-      console.error("Error fetching listings:", error);
+      console.error("Error fetching listings:", JSON.stringify(error, null, 2) || error);
       return res.status(500).json({ success: false, message: "Ошибка загрузки объявлений" });
     }
 
@@ -242,6 +229,173 @@ export const getListings = async (req, res) => {
 };
 
 // =======================================================
+// Защита PII и учёт просмотров (пункт 7 ТЗ)
+// =======================================================
+
+// Извлекает и валидирует пользователя из req.user (если установлен middleware)
+// либо из заголовка Authorization: Bearer <token>. Безопасно возвращает null для анонимов.
+export async function resolveCurrentUser(req) {
+  if (req?.user) {
+    return req.user;
+  }
+
+  const authHeader = req?.headers?.["authorization"] || req?.headers?.["Authorization"];
+  if (!authHeader || typeof authHeader !== "string") {
+    return null;
+  }
+
+  const parts = authHeader.trim().split(/\s+/);
+  const token = parts.length === 2 && parts[0].toLowerCase() === "bearer" ? parts[1] : null;
+  if (!token) {
+    return null;
+  }
+
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    return null;
+  }
+
+  try {
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] });
+    if (!decoded || decoded.typ !== "access") {
+      return null;
+    }
+
+    const { data: dbUser, error } = await supabase
+      .from("users")
+      .select("id, role, account_type, token_version")
+      .eq("id", decoded.id)
+      .maybeSingle();
+
+    if (error || !dbUser) {
+      return null;
+    }
+
+    if (dbUser.token_version !== (decoded.tv ?? 0)) {
+      return null;
+    }
+
+    const user = {
+      ...decoded,
+      id: dbUser.id,
+      role: dbUser.role || "user",
+      account_type: dbUser.account_type || decoded.accountType,
+      accountType: dbUser.account_type || decoded.accountType,
+    };
+    req.user = user;
+    return user;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Фильтрация PII продавца:
+// - email полностью удаляется во всех случаях
+// - phone отдаётся только для бизнес-аккаунтов (agency, developer, realtor)
+//   либо если у автора включен флаг показа телефона (show_phone).
+//   Для personal-продавцов отдаётся phone: null.
+export function sanitizeAuthorPII(author) {
+  if (!author || typeof author !== "object") return author;
+
+  const isBusinessAccount = ["agency", "developer", "realtor"].includes(author.account_type);
+  const profile = Array.isArray(author.user_profiles) ? author.user_profiles[0] : author.user_profiles;
+  const showPhone =
+    isBusinessAccount ||
+    Boolean(
+      author.show_phone ||
+      author.showPhone ||
+      profile?.show_phone ||
+      profile?.showPhone
+    );
+
+  const sanitized = {
+    ...author,
+    phone: showPhone ? (author.phone || null) : null,
+  };
+
+  delete sanitized.email;
+  return sanitized;
+}
+
+// Извлечение реального IP клиента с учётом заголовков прокси
+export function getClientIp(req) {
+  if (!req) return "unknown";
+  const forwarded = req.headers?.["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    const firstIp = forwarded.split(",")[0].trim();
+    if (firstIp) return firstIp;
+  }
+  const realIp = req.headers?.["x-real-ip"];
+  if (typeof realIp === "string" && realIp.trim()) {
+    return realIp.trim();
+  }
+  return req.ip || req.socket?.remoteAddress || "unknown";
+}
+
+// Защита от спама просмотров: не чаще 1 инкремента с одного IP на объявление за 10 минут
+export const VIEW_THROTTLE_MS = 10 * 60 * 1000;
+export const viewsThrottleMap = new Map();
+
+export function shouldIncrementView(ip, listingId) {
+  if (!ip || !listingId) return true;
+  const key = `${ip}:${listingId}`;
+  const now = Date.now();
+  const lastViewTime = viewsThrottleMap.get(key);
+  if (lastViewTime && now - lastViewTime < VIEW_THROTTLE_MS) {
+    return false;
+  }
+  viewsThrottleMap.set(key, now);
+
+  // Защита от утечки памяти при большом числе ключей
+  if (viewsThrottleMap.size > 10000) {
+    for (const [k, timestamp] of viewsThrottleMap.entries()) {
+      if (now - timestamp >= VIEW_THROTTLE_MS) {
+        viewsThrottleMap.delete(k);
+      }
+    }
+  }
+  return true;
+}
+
+// Атомарный инкремент просмотров в базе данных через RPC increment_views с фолбэком
+export async function incrementListingViews(listingId, currentViewsCount) {
+  let newViewsCount = (currentViewsCount || 0) + 1;
+  try {
+    const { data: rpcViews, error: rpcError } = await supabase.rpc("increment_views", {
+      listing_id: listingId,
+    });
+    if (!rpcError && typeof rpcViews === "number") {
+      newViewsCount = rpcViews;
+    } else {
+      if (rpcError) {
+        console.warn(
+          "⚠️ increment_views RPC failed or not installed, falling back to direct update:",
+          rpcError.message || rpcError
+        );
+      }
+      const { error: updateError } = await supabase
+        .from("listings")
+        .update({ views_count: newViewsCount })
+        .eq("id", listingId);
+      if (updateError) {
+        console.warn("Direct views_count update failed:", updateError.message);
+      }
+    }
+  } catch (err) {
+    console.warn("increment_views exception, falling back to direct update:", err.message);
+    try {
+      await supabase
+        .from("listings")
+        .update({ views_count: newViewsCount })
+        .eq("id", listingId);
+    } catch (directErr) {
+      console.warn("Fallback direct views_count update failed:", directErr.message);
+    }
+  }
+  return newViewsCount;
+}
+
+// =======================================================
 // 2. Получение одного объявления по ID
 // =======================================================
 export const getListingById = async (req, res) => {
@@ -253,7 +407,7 @@ export const getListingById = async (req, res) => {
       .select(`
         *,
         listing_photos (*),
-        users (id, email, phone, is_verified, account_type, user_profiles (first_name, last_name, company_name, avatar_url, about))
+        users (id, phone, is_verified, account_type, user_profiles (first_name, last_name, company_name, avatar_url, about))
       `)
       .eq("id", id)
       .single();
@@ -262,11 +416,53 @@ export const getListingById = async (req, res) => {
       return res.status(404).json({ success: false, message: "Объявление не найдено" });
     }
 
-    // Увеличение счетчика просмотров
-    await supabase
-      .from("listings")
-      .update({ views_count: (listing.views_count || 0) + 1 })
-      .eq("id", id);
+    // 1. Определение текущего пользователя
+    const currentUser = await resolveCurrentUser(req);
+    const userId = currentUser?.id;
+    const userRole = currentUser?.role;
+
+    const isOwner = Boolean(userId && listing.user_id === userId);
+    const isAdmin = userRole === "admin";
+
+    // 2. Разграничение доступа:
+    // Для анонимных пользователей и чужих аккаунтов (не владелец и не admin):
+    // отдавать карточку ТОЛЬКО если status === 'active' И (expires_at IS NULL ИЛИ expires_at > NOW()).
+    // Если объявление в draft, moderation, hidden или expired — возвращать 404 Not Found!
+    // Владелец и admin видят объявление в любом статусе.
+    if (!isOwner && !isAdmin) {
+      const isExpired = listing.expires_at && new Date(listing.expires_at).getTime() <= Date.now();
+      if (listing.status !== "active" || isExpired) {
+        return res.status(404).json({ success: false, message: "Объявление не найдено" });
+      }
+    }
+
+    // 3. Защита от накрутки просмотров:
+    // - Не считать просмотры владельца (если userId === listing.user_id — счётчик не увеличивать).
+    // - Защита от спама: не чаще 1 инкремента с одного IP на объявление за 10 минут.
+    // - Счётчик инкрементируется только для активных неистёкших объявлений.
+    const isListingActive =
+      listing.status === "active" &&
+      (!listing.expires_at || new Date(listing.expires_at).getTime() > Date.now());
+
+    if (!isOwner && isListingActive) {
+      const clientIp = getClientIp(req);
+      if (shouldIncrementView(clientIp, listing.id)) {
+        const updatedViews = await incrementListingViews(listing.id, listing.views_count);
+        listing.views_count = updatedViews;
+      }
+    }
+
+    // 4. Фильтрация PII:
+    // Из объекта автора users полностью убрать поле email.
+    // Поле phone отдавать только для бизнес-аккаунтов (agency, developer, realtor)
+    // либо если у автора включен флаг показа телефона. Для personal-продавцов отдавать phone: null.
+    if (listing.users) {
+      if (Array.isArray(listing.users)) {
+        listing.users = listing.users.map(sanitizeAuthorPII);
+      } else {
+        listing.users = sanitizeAuthorPII(listing.users);
+      }
+    }
 
     return res.json({ success: true, data: maskExpiredListing(listing) });
   } catch (error) {
@@ -291,11 +487,6 @@ export const createListing = async (req, res) => {
     }
 
     const userId = req.user.id;
-
-    const limitError = await checkActiveListingsLimit(userId, req.user.account_type);
-    if (limitError) {
-      return res.status(limitError.status).json(limitError.body);
-    }
 
     const {
       title,
@@ -361,8 +552,9 @@ export const createListing = async (req, res) => {
     // Платное продвижение, покрытое лимитом тарифа, списывается ДО
     // вставки строки — если тарифа/лимита нет, объявление создаётся
     // "draft" и ждёт оплаты, а не публикуется бесплатно.
+    const operationId = `listing_create_${userId}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     let tariffGrant = null; // { serviceType, days, remaining } если списано с тарифа
-    let initialStatus = "active";
+    let initialStatus = req.body.status === "draft" ? "draft" : "active";
 
     if (listingType === "vip" || listingType === "top") {
       const consumption = await consumeTariffBoost(userId, listingType);
@@ -376,22 +568,20 @@ export const createListing = async (req, res) => {
       initialStatus = "draft";
     }
 
-    // Если объявление создается как активное (initialStatus === "active"):
-    // списываем 1 слот размещения с тарифа (одноразовый расход квоты)
+    // Проверка лимитов:
+    // - для draft: лимит одновременных черновиков (максимум 10)
+    // - для active: атомарная проверка и вставка через create_listing_with_limit (Пункт 11)
     let tariffListingGrant = false;
-    if (initialStatus === "active") {
-      const listingConsumption = await consumeTariffListing(userId);
-      if (listingConsumption.hasSubscription) {
-        if (!listingConsumption.granted) {
-          if (tariffGrant) {
-            await refundTariffBoost(userId, tariffGrant.serviceType);
-          }
-          return res.status(403).json({
-            success: false,
-            message: `Лимит объявлений по вашему тарифу исчерпан (${listingConsumption.limit} из ${listingConsumption.limit}). Для размещения новых объявлений продлите тариф или выберите другой план.`,
-          });
+    if (initialStatus === "draft") {
+      const draftsCheck = await checkDraftsLimit(userId);
+      if (!draftsCheck.allowed) {
+        if (tariffGrant) {
+          await refundTariffBoost(userId, tariffGrant.serviceType, `${operationId}_boost`);
         }
-        tariffListingGrant = true;
+        return res.status(400).json({
+          success: false,
+          message: "Превышен лимит одновременных черновиков (максимум 10)",
+        });
       }
     }
 
@@ -417,6 +607,9 @@ export const createListing = async (req, res) => {
         .maybeSingle();
 
       if (!complexRow) {
+        if (tariffGrant) {
+          await refundTariffBoost(userId, tariffGrant.serviceType, `${operationId}_boost`);
+        }
         return res.status(400).json({
           success: false,
           message: "Указанный жилой комплекс не найден",
@@ -426,85 +619,151 @@ export const createListing = async (req, res) => {
       verifiedComplexId = complexRow.id;
     }
 
-    const { data: newListing, error: createError } = await supabase
-      .from("listings")
-      .insert([
-        {
-          user_id: userId,
-          title,
-          description,
-          property_type: propertyType,
-          deal_type: dealType,
-          rent_period: dealType === "rent" ? rentPeriod : null,
-          region,
-          city,
-          district,
-          microdistrict,
-          address,
-          latitude: latitude ?? null,
-          longitude: longitude ?? null,
-          price: Number(price),
-          currency: currency || "KGS",
-          area: area ? Number(area) : null,
-          rooms: rooms ? Number(rooms) : null,
-          floor: floor ? Number(floor) : null,
-          total_floors: totalFloors ? Number(totalFloors) : null,
-          is_resort: Boolean(isResort),
-          resort_filters: mergedResortFilters,
-          features: { ...(features || {}), residentialComplexId: verifiedComplexId },
-          status: initialStatus,
-          promotion_status,
-          is_urgent,
-          expires_at: new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ])
-      .select()
-      .single();
+    const listingPayload = {
+      title,
+      description,
+      property_type: propertyType,
+      deal_type: dealType,
+      rent_period: dealType === "rent" ? rentPeriod : null,
+      region,
+      city,
+      district,
+      microdistrict,
+      address,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
+      price: Number(price),
+      currency: currency || "KGS",
+      area: area ? Number(area) : null,
+      rooms: rooms ? Number(rooms) : null,
+      floor: floor ? Number(floor) : null,
+      total_floors: totalFloors ? Number(totalFloors) : null,
+      is_resort: Boolean(isResort),
+      resort_filters: mergedResortFilters,
+      features: { ...sanitizeFeatures(features), residentialComplexId: verifiedComplexId },
+      status: initialStatus,
+      promotion_status,
+      is_urgent,
+      expires_at: new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString(),
+    };
 
-    if (createError || !newListing) {
-      console.error("Listing Create Error:", createError);
+    let newListing = null;
 
-      // Тариф уже списан выше — раз объявление не создалось, возвращаем
-      // поднятие и слот обратно, иначе пользователь теряет их без результата.
-      if (tariffGrant) {
-        await refundTariffBoost(userId, tariffGrant.serviceType);
-      }
-      if (tariffListingGrant) {
-        await refundTariffListing(userId);
-      }
-
-      return res.status(500).json({ success: false, message: "Ошибка создания объявления" });
-    }
-
-    // Повторная проверка лимита ПОСЛЕ вставки — сама по себе она не
-    // делает операцию полностью атомарной (между двумя параллельными
-    // запросами возможна гонка: оба проходят первую проверку до того, как
-    // друг друга увидят), но резко сужает окно: пока не появится
-    // Postgres-функция с блокировкой на уровне БД, это не позволяет
-    // превысить лимит больше чем на количество реально одновременных
-    // запросов, а не бесконечно. "draft" (ждущие оплаты) в лимит не
-    // входят — перепроверять их нет смысла.
+    // Пункт 11: Для статуса "active" вызываем атомарный механизм create_listing_with_limit
+    // с advisory lock на уровне БД, исключающий любые состояния гонки.
     if (initialStatus === "active") {
-      const raceCheck = await checkActiveListingsLimit(userId, req.user.account_type, {
-        countIncludesNewRow: true,
-      });
-      if (raceCheck) {
-        console.warn(
-          "Create Listing: active listings limit race detected, rolling back",
-          newListing.id
+      const activeLimit = await getActiveListingsLimit(userId, req.user.account_type);
+      const activeSub = await getActiveSubscription(userId);
+      if (activeSub) {
+        tariffListingGrant = true;
+      }
+
+      let rpcExecuted = false;
+      try {
+        const { data: rpcListing, error: rpcError } = await supabase.rpc(
+          "create_listing_with_limit",
+          {
+            p_user_id: userId,
+            p_listing_data: listingPayload,
+            p_limit: activeLimit,
+          }
         );
 
-        await supabase.from("listings").delete().eq("id", newListing.id);
+        if (!rpcError && rpcListing) {
+          newListing = Array.isArray(rpcListing) ? rpcListing[0] : rpcListing;
+          rpcExecuted = true;
+        } else if (rpcError) {
+          if (
+            rpcError.message?.includes("LIMIT_EXCEEDED") ||
+            rpcError.code === "P0002" ||
+            rpcError.details?.includes("LIMIT_EXCEEDED")
+          ) {
+            if (tariffGrant) {
+              await refundTariffBoost(userId, tariffGrant.serviceType, `${operationId}_boost`);
+            }
+            return res.status(403).json({
+              success: false,
+              message: `Достигнут лимит активных объявлений (${activeLimit}). Для размещения новых объявлений продлите тариф или выберите другой план.`,
+            });
+          }
 
-        if (tariffGrant) {
-          await refundTariffBoost(userId, tariffGrant.serviceType);
+          console.warn(
+            "⚠️ create_listing_with_limit RPC failed or not installed, falling back to direct insertion:",
+            rpcError.message || rpcError
+          );
         }
-        if (tariffListingGrant) {
-          await refundTariffListing(userId);
+      } catch (rpcEx) {
+        if (rpcEx.message?.includes("LIMIT_EXCEEDED")) {
+          if (tariffGrant) {
+            await refundTariffBoost(userId, tariffGrant.serviceType, `${operationId}_boost`);
+          }
+          return res.status(403).json({
+            success: false,
+            message: `Достигнут лимит активных объявлений (${activeLimit}). Для размещения новых объявлений продлите тариф или выберите другой план.`,
+          });
         }
-
-        return res.status(raceCheck.status).json(raceCheck.body);
+        console.warn("⚠️ create_listing_with_limit exception, fallback:", rpcEx.message);
       }
+
+      // Фолбэк на прямое создание (если RPC ещё не развёрнут в БД)
+      if (!rpcExecuted) {
+        const slot = await activateListingSlot(userId, null, req.user.account_type);
+        if (!slot.granted) {
+          if (tariffGrant) {
+            await refundTariffBoost(userId, tariffGrant.serviceType, `${operationId}_boost`);
+          }
+          return res.status(403).json({
+            success: false,
+            message: slot.message,
+          });
+        }
+
+        const { data: directListing, error: createError } = await supabase
+          .from("listings")
+          .insert([
+            {
+              user_id: userId,
+              ...listingPayload,
+            },
+          ])
+          .select()
+          .single();
+
+        if (createError || !directListing) {
+          console.error("Listing Create Error (fallback):", JSON.stringify(createError, null, 2) || createError);
+          if (tariffGrant) {
+            await refundTariffBoost(userId, tariffGrant.serviceType, `${operationId}_boost`);
+          }
+          if (tariffListingGrant) {
+            await refundTariffListing(userId, `${operationId}_slot`);
+          }
+          return res.status(500).json({ success: false, message: "Ошибка создания объявления" });
+        }
+
+        newListing = directListing;
+      }
+    } else {
+      // initialStatus === "draft"
+      const { data: draftListing, error: createError } = await supabase
+        .from("listings")
+        .insert([
+          {
+            user_id: userId,
+            ...listingPayload,
+          },
+        ])
+        .select()
+        .single();
+
+      if (createError || !draftListing) {
+        console.error("Draft Listing Create Error:", JSON.stringify(createError, null, 2) || createError);
+        if (tariffGrant) {
+          await refundTariffBoost(userId, tariffGrant.serviceType, `${operationId}_boost`);
+        }
+        return res.status(500).json({ success: false, message: "Ошибка создания черновика объявления" });
+      }
+
+      newListing = draftListing;
     }
 
     // Сохранение фото
@@ -515,7 +774,18 @@ export const createListing = async (req, res) => {
         is_main: idx === 0,
         display_order: idx,
       }));
-      await supabase.from("listing_photos").insert(photosData);
+      const { error: photosError } = await supabase.from("listing_photos").insert(photosData);
+      if (photosError) {
+        console.error("Listing Photos Insert Error:", photosError);
+        await supabase.from("listings").delete().eq("id", newListing.id);
+        if (tariffGrant) {
+          await refundTariffBoost(userId, tariffGrant.serviceType, `${operationId}_boost`);
+        }
+        if (tariffListingGrant) {
+          await refundTariffListing(userId, `${operationId}_slot`);
+        }
+        return res.status(500).json({ success: false, message: "Ошибка сохранения фотографий объявления" });
+      }
     }
 
     // Тип размещения "instagram" публикует объявление как обычное (оплата
@@ -553,7 +823,7 @@ export const createListing = async (req, res) => {
         // ответ клиенту, но возвращаем поднятие, раз применить его не
         // получилось, чтобы пользователь не терял его впустую.
         console.error("Create Listing: grantPromotion failed after tariff consumption", newListing.id);
-        await refundTariffBoost(userId, tariffGrant.serviceType);
+        await refundTariffBoost(userId, tariffGrant.serviceType, `${operationId}_boost`);
       }
     }
 
@@ -784,8 +1054,8 @@ export const updateListing = async (req, res) => {
     if (data.features !== undefined || data.residentialComplexId !== undefined) {
       const nextFeatures =
         data.features !== undefined
-          ? { ...data.features }
-          : { ...(existingListing.features || {}) };
+          ? sanitizeFeatures(data.features)
+          : sanitizeFeatures(existingListing.features || {});
 
       if (data.residentialComplexId !== undefined) {
         if (data.residentialComplexId === null) {
@@ -815,14 +1085,21 @@ export const updateListing = async (req, res) => {
       updates.features = nextFeatures;
     }
 
-    // promotionStatus/isUrgent отражают ОПЛАЧЕННОЕ продвижение (см.
+    // promotionStatus/isUrgent и сроки продвижения отражают ОПЛАЧЕННОЕ продвижение (см.
     // services/promotionsService.js grantPromotion) — владелец не может
     // выставлять их напрямую, иначе получал бы платный VIP/ТОП/Срочно
-    // бесплатно через обычный PUT. По той же причине владелец не может
-    // самостоятельно снять объявление со статуса "moderation" (или
-    // отправить его туда) — это решает только модератор/admin.
+    // бесплатно через обычный PUT. Валидация переходов статусов для владельца
+    // выполняется через canOwnerTransition (запрещены переход в/из moderation,
+    // прямой переход draft -> active и любые недопустимые переходы).
     if (userRole !== "admin") {
-      if (data.promotionStatus !== undefined || data.isUrgent !== undefined) {
+      if (
+        data.promotionStatus !== undefined ||
+        data.isUrgent !== undefined ||
+        data.promotionExpiresAt !== undefined ||
+        data.urgentExpiresAt !== undefined ||
+        data.promotion_expires_at !== undefined ||
+        data.urgent_expires_at !== undefined
+      ) {
         return res.status(403).json({
           success: false,
           message:
@@ -830,14 +1107,11 @@ export const updateListing = async (req, res) => {
         });
       }
 
-      if (
-        (data.status !== undefined && data.status === "moderation") ||
-        existingListing.status === "moderation"
-      ) {
-        return res.status(403).json({
-          success: false,
-          message: "Статус модерации может изменить только администратор",
-        });
+      if (data.status !== undefined && data.status !== existingListing.status) {
+        const check = canOwnerTransition(existingListing.status, data.status);
+        if (!check.allowed) {
+          return res.status(403).json({ success: false, message: check.message });
+        }
       }
     }
 
@@ -851,9 +1125,12 @@ export const updateListing = async (req, res) => {
       existingListing.status !== "active";
 
     if (isReactivating) {
-      const limitError = await checkActiveListingsLimit(userId, req.user.account_type);
-      if (limitError) {
-        return res.status(limitError.status).json(limitError.body);
+      const slot = await activateListingSlot(userId, id, req.user.account_type);
+      if (!slot.granted) {
+        return res.status(403).json({
+          success: false,
+          message: slot.message,
+        });
       }
     }
 
@@ -861,6 +1138,14 @@ export const updateListing = async (req, res) => {
     if (userRole === "admin") {
       if (data.promotionStatus !== undefined) updates.promotion_status = data.promotionStatus;
       if (data.isUrgent !== undefined) updates.is_urgent = data.isUrgent;
+      if (data.promotionExpiresAt !== undefined) updates.promotion_expires_at = data.promotionExpiresAt;
+      if (data.promotion_expires_at !== undefined) updates.promotion_expires_at = data.promotion_expires_at;
+      if (data.urgentExpiresAt !== undefined) updates.urgent_expires_at = data.urgentExpiresAt;
+      if (data.urgent_expires_at !== undefined) updates.urgent_expires_at = data.urgent_expires_at;
+    } else {
+      // Для не-admin гарантируем, что серверные колонки сроков продвижения не перезаписываются
+      delete updates.promotion_expires_at;
+      delete updates.urgent_expires_at;
     }
 
     // 4. Обновление записи в таблице listings
@@ -873,16 +1158,17 @@ export const updateListing = async (req, res) => {
 
     if (updateError || !updatedListing) {
       console.error("Listing Update Error:", updateError);
+      if (isReactivating) {
+        await refundTariffListing(userId, `update_fail_${id}_${Date.now()}`);
+      }
       return res.status(500).json({ success: false, message: "Ошибка обновления объявления" });
     }
 
     // Та же повторная проверка после записи, что и в createListing — сужает
     // окно гонки при параллельной реактивации нескольких объявлений сразу.
     if (isReactivating) {
-      const raceCheck = await checkActiveListingsLimit(userId, req.user.account_type, {
-        countIncludesNewRow: true,
-      });
-      if (raceCheck) {
+      const raceCheck = await activateListingSlot(userId, id, req.user.account_type);
+      if (!raceCheck.granted) {
         console.warn(
           "Update Listing: active listings limit race detected, reverting status",
           updatedListing.id
@@ -893,7 +1179,12 @@ export const updateListing = async (req, res) => {
           .update({ status: existingListing.status })
           .eq("id", id);
 
-        return res.status(raceCheck.status).json(raceCheck.body);
+        await refundTariffListing(userId, `reactivate_race_${id}_${Date.now()}`);
+
+        return res.status(403).json({
+          success: false,
+          message: raceCheck.message,
+        });
       }
     }
 
@@ -1062,6 +1353,7 @@ export const renewListing = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
+    const userRole = req.user.role;
 
     // 1. Поиск объявления
     const { data: listing, error } = await supabase
@@ -1075,20 +1367,55 @@ export const renewListing = async (req, res) => {
     }
 
     // 2. Защита от IDOR
-    if (listing.user_id !== userId && req.user.role !== "admin") {
+    if (listing.user_id !== userId && userRole !== "admin") {
       return res.status(403).json({ success: false, message: "Вы не являетесь владельцем этого объявления" });
     }
 
-    // 3. Проверка лимитов тарифа (если объявление сейчас не активно)
+    // 3. Валидация возможности продления для не-admin
+    if (userRole !== "admin") {
+      if (listing.status === "moderation") {
+        return res.status(403).json({
+          success: false,
+          message: "Нельзя продлить объявление, находящееся на модерации",
+        });
+      }
+
+      if (listing.status === "draft") {
+        return res.status(403).json({
+          success: false,
+          message: "Нельзя продлить неоплаченный черновик. Завершите оплату публикации",
+        });
+      }
+
+      const transitionCheck = canOwnerTransition(listing.status, "active");
+      if (!transitionCheck.allowed) {
+        return res.status(403).json({
+          success: false,
+          message: transitionCheck.message,
+        });
+      }
+
+      if (listing.status !== "active" && listing.status !== "hidden") {
+        return res.status(403).json({
+          success: false,
+          message: `Переход из статуса "${listing.status}" в "active" запрещён`,
+        });
+      }
+    }
+
+    // 4. Проверка лимитов тарифа (если объявление сейчас не активно)
     const isCurrentlyActive =
       listing.status === "active" &&
       listing.expires_at &&
       new Date(listing.expires_at) > new Date();
 
     if (!isCurrentlyActive) {
-      const limitError = await checkActiveListingsLimit(userId, req.user.account_type);
-      if (limitError) {
-        return res.status(limitError.status).json(limitError.body);
+      const slot = await activateListingSlot(userId, id, req.user.account_type);
+      if (!slot.granted) {
+        return res.status(403).json({
+          success: false,
+          message: slot.message,
+        });
       }
     }
 
@@ -1109,6 +1436,9 @@ export const renewListing = async (req, res) => {
       .single();
 
     if (updateError) {
+      if (!isCurrentlyActive) {
+        await refundTariffListing(userId, `renew_fail_${id}_${Date.now()}`);
+      }
       return res.status(500).json({ success: false, message: "Не удалось продлить объявление" });
     }
 

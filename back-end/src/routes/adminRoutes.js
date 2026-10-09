@@ -32,6 +32,7 @@ import {
 } from "../controllers/bannersController.js";
 import { authenticateToken, requireAdmin } from "../middleware/auth.js";
 import { uploadBannerImage as uploadBannerImageFile } from "../middleware/upload.js";
+import { refulfillPayment } from "../controllers/paymentsController.js";
 
 const router = express.Router();
 
@@ -56,6 +57,7 @@ const handleBannerImageUpload = (req, res, next) => {
 router.get("/stats", authenticateToken, requireAdmin, getDashboardStats);
 
 router.get("/payments", authenticateToken, requireAdmin, listPayments);
+router.post("/payments/:id/refulfill", authenticateToken, requireAdmin, refulfillPayment);
 
 // Изменение цен тарифов и услуг (чтение — публичное, /api/settings/pricing)
 router.put("/pricing", authenticateToken, requireAdmin, updatePricing);

@@ -1,11 +1,13 @@
 import { supabase } from "../config/db.js";
 import { markPromotionOrderStatus } from "../utils/promotionOrders.js";
+import { activateListingSlot } from "./subscriptionsService.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Выставляет флаг продвижения (VIP/ТОП/Срочно) + срок истечения внутри
-// features (отдельной колонки под срок в listings нет — см.
-// promotionOrders.js). Общая логика для источников продвижения:
+// Выставляет флаг продвижения (VIP/ТОП/Срочно) + срок истечения в колонках listings
+// (promotion_expires_at, urgent_expires_at). Сроки хранятся строго в колонках listings,
+// а не внутри features.
+// Общая логика для источников продвижения:
 // оплаченного заказа (applyPromotion ниже), бесплатного списания с тарифа
 // при создании и через /:id/promote-with-tariff (см.
 // controllers/listingsController.js). Возвращает true, если продвижение
@@ -13,7 +15,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export async function grantPromotion({ listingId, serviceType, days }) {
   const { data: listing, error } = await supabase
     .from("listings")
-    .select("features, status")
+    .select("id, status, user_id")
     .eq("id", listingId)
     .maybeSingle();
 
@@ -23,7 +25,6 @@ export async function grantPromotion({ listingId, serviceType, days }) {
   }
 
   const expiresAt = new Date(Date.now() + Number(days) * DAY_MS).toISOString();
-  const nextFeatures = { ...(listing.features || {}) };
 
   const updates = { updated_at: new Date().toISOString() };
 
@@ -38,21 +39,26 @@ export async function grantPromotion({ listingId, serviceType, days }) {
   // (осознанное действие владельца). "moderation" НЕ трогаем — снять с
   // модерации может только admin, оплата продвижения это не обходит.
   if (listing.status === "draft" || listing.status === "hidden") {
+    const slot = await activateListingSlot(listing.user_id, listingId);
+    if (!slot.granted) {
+      console.error(
+        `Grant Promotion: Cannot activate listing ${listingId} for user ${listing.user_id}: ${slot.message}`
+      );
+      return false;
+    }
     updates.status = "active";
   }
 
   if (serviceType === "vip" || serviceType === "top") {
     updates.promotion_status = serviceType;
-    nextFeatures.promotionExpiresAt = expiresAt;
+    updates.promotion_expires_at = expiresAt;
   } else if (serviceType === "urgent") {
     updates.is_urgent = true;
-    nextFeatures.urgentExpiresAt = expiresAt;
+    updates.urgent_expires_at = expiresAt;
   } else {
     console.error("Grant Promotion: unknown serviceType", serviceType);
     return false;
   }
-
-  updates.features = nextFeatures;
 
   const { error: updateError } = await supabase
     .from("listings")
@@ -94,30 +100,37 @@ export async function applyPromotion(order) {
 // даже если БД ещё не обновлена. Сама функция ничего не пишет в БД —
 // вызывающий код (см. downgradeExpiredPromotionInDb в listingsController.js)
 // решает, стоит ли фиксировать исправление.
+//
+// Сроки берутся строго из колонок listing.promotion_expires_at и
+// listing.urgent_expires_at (НЕ из features).
+// Принцип Fail-Closed: если promotion_status ∈ ('vip', 'top'), но
+// promotion_expires_at отсутствует (null/undefined/невалидная дата) — считать
+// продвижение ИСТЁКШИМ (сбрасывать в regular).
+// Если is_urgent === true, но urgent_expires_at отсутствует — сбрасывать is_urgent в false.
+// Если срок наступил (<= Date.now()) — также сбрасывать статус.
 export function resolvePromotionExpiry(listing) {
   const now = Date.now();
-  const features = listing?.features || {};
 
   let promotionStatus = listing?.promotion_status ?? "regular";
   let isUrgent = Boolean(listing?.is_urgent);
   let changed = false;
 
-  if (
-    (promotionStatus === "vip" || promotionStatus === "top") &&
-    features.promotionExpiresAt &&
-    new Date(features.promotionExpiresAt).getTime() <= now
-  ) {
-    promotionStatus = "regular";
-    changed = true;
+  if (promotionStatus === "vip" || promotionStatus === "top") {
+    const promoExpiresAt = listing?.promotion_expires_at;
+    const expiresTime = promoExpiresAt ? new Date(promoExpiresAt).getTime() : NaN;
+    if (!promoExpiresAt || isNaN(expiresTime) || expiresTime <= now) {
+      promotionStatus = "regular";
+      changed = true;
+    }
   }
 
-  if (
-    isUrgent &&
-    features.urgentExpiresAt &&
-    new Date(features.urgentExpiresAt).getTime() <= now
-  ) {
-    isUrgent = false;
-    changed = true;
+  if (isUrgent) {
+    const urgentExpiresAt = listing?.urgent_expires_at;
+    const expiresTime = urgentExpiresAt ? new Date(urgentExpiresAt).getTime() : NaN;
+    if (!urgentExpiresAt || isNaN(expiresTime) || expiresTime <= now) {
+      isUrgent = false;
+      changed = true;
+    }
   }
 
   return { promotionStatus, isUrgent, changed };

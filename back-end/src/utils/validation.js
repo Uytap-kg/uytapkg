@@ -319,6 +319,10 @@ export const updateListingSchema = z
       })
       .optional(),
     isUrgent: z.boolean().optional(),
+    promotionExpiresAt: z.string().optional().nullable(),
+    promotion_expires_at: z.string().optional().nullable(),
+    urgentExpiresAt: z.string().optional().nullable(),
+    urgent_expires_at: z.string().optional().nullable(),
     beachDistanceFrom: z.number().optional().nullable(),
     beachDistanceTo: z.number().optional().nullable(),
     developerOrComplex: z.string().optional().nullable(),

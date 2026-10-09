@@ -1,143 +1,120 @@
-import { randomUUID } from "crypto";
 import { supabase } from "../config/db.js";
-import { APP_SETTINGS_BUCKET } from "./pricingSettings.js";
 
-// Разовые покупки продвижения объявлений (VIP/ТОП/Срочно/Instagram) —
-// платёжная запись (сумма/статус/счёт O!Dengi) всегда живёт в таблице
-// `payments` (как и у тарифов PRO), а вот к какому именно объявлению и
-// какая услуга относится покупка — хранить негде: в `payments` нет колонки
-// под listing_id, а добавить её нельзя (в этом окружении нет доступа к
-// прямым DDL-миграциям Postgres, см. комментарии в pricingSettings.js /
-// bannersStore.js — тот же самый JSON-в-Storage паттерн). Поэтому эта
-// метаинформация хранится здесь, отдельным JSON-объектом, и связывается с
-// платежом по orderId (он уникален и уже есть в payments).
-const ORDERS_OBJECT = "promotion-orders.json";
-
-let cache = null;
-let cacheAt = 0;
-const CACHE_TTL_MS = 10 * 1000;
-
-async function ensureBucket() {
-  const { data: buckets } = await supabase.storage.listBuckets();
-  const exists = (buckets || []).some((b) => b.name === APP_SETTINGS_BUCKET);
-  if (!exists) {
-    await supabase.storage.createBucket(APP_SETTINGS_BUCKET, { public: false });
-  }
+/**
+ * Нормализует запись из таблицы promotion_orders для совместимости с кодом
+ * контроллеров и сервисов (поддерживает и camelCase, и snake_case).
+ */
+function mapPromotionOrder(row) {
+  if (!row) return null;
+  return {
+    id: row.order_id,
+    orderId: row.order_id,
+    order_id: row.order_id,
+    userId: row.user_id,
+    user_id: row.user_id,
+    listingId: row.listing_id,
+    listing_id: row.listing_id,
+    serviceType: row.service_type,
+    service_type: row.service_type,
+    days: row.days,
+    status: row.status,
+    createdAt: row.created_at,
+    created_at: row.created_at,
+    appliedAt: row.applied_at,
+    applied_at: row.applied_at,
+  };
 }
 
-// См. bannersStore.js — та же причина не форсировать fresh-перечитывание
-// сразу после записи (in-process кэш этого процесса всегда как минимум
-// так же свеж, как последняя запись, сделанная им же).
-async function readAll() {
-  if (cache && Date.now() - cacheAt < CACHE_TTL_MS) {
-    return cache;
-  }
+/**
+ * Создаёт запись о заказе продвижения в таблице promotion_orders.
+ * Вызывается сразу после создания записи в payments с данным orderId.
+ */
+export async function createPromotionOrder({ orderId, userId, listingId, serviceType, days }) {
+  const newRow = {
+    order_id: orderId,
+    user_id: userId,
+    listing_id: listingId,
+    service_type: serviceType,
+    days: Number(days),
+    status: "pending",
+  };
 
-  try {
-    const { data, error } = await supabase.storage
-      .from(APP_SETTINGS_BUCKET)
-      .download(ORDERS_OBJECT);
-
-    if (error || !data) {
-      cache = [];
-      cacheAt = Date.now();
-      return cache;
-    }
-
-    const text = await data.text();
-    const parsed = JSON.parse(text);
-    cache = Array.isArray(parsed) ? parsed : [];
-    cacheAt = Date.now();
-    return cache;
-  } catch (err) {
-    console.error("Не удалось загрузить заказы продвижения, использую пустой список:", err);
-    return [];
-  }
-}
-
-async function writeAll(orders) {
-  await ensureBucket();
-
-  const payload = Buffer.from(JSON.stringify(orders), "utf-8");
-
-  const { error } = await supabase.storage
-    .from(APP_SETTINGS_BUCKET)
-    .upload(ORDERS_OBJECT, payload, {
-      contentType: "application/json",
-      upsert: true,
-      cacheControl: "0",
-    });
+  const { data, error } = await supabase
+    .from("promotion_orders")
+    .insert(newRow)
+    .select()
+    .single();
 
   if (error) {
-    throw new Error(error.message || "Не удалось сохранить заказ продвижения");
+    console.error("Create promotion order DB error:", error);
+    throw error;
   }
 
-  cache = orders;
-  cacheAt = Date.now();
-  return orders;
+  return mapPromotionOrder(data);
 }
 
-let writeQueue = Promise.resolve();
-function withWriteLock(fn) {
-  const run = writeQueue.then(fn, fn);
-  writeQueue = run.then(
-    () => undefined,
-    () => undefined
-  );
-  return run;
-}
-
-// Создаёт запись о заказе продвижения — вызывается сразу после того, как в
-// `payments` создана строка с этим orderId (до создания счёта в O!Dengi,
-// чтобы запись гарантированно существовала к моменту, когда реконсиляция
-// статуса платежа попытается её найти).
-export async function createPromotionOrder({ orderId, userId, listingId, serviceType, days }) {
-  return withWriteLock(async () => {
-    const orders = await readAll();
-
-    const order = {
-      id: randomUUID(),
-      orderId,
-      userId,
-      listingId,
-      serviceType,
-      days,
-      status: "pending", // pending -> applied | fulfillment_pending (instagram) | canceled
-      createdAt: new Date().toISOString(),
-      appliedAt: null,
-    };
-
-    await writeAll([order, ...orders]);
-    return order;
-  });
-}
-
+/**
+ * Возвращает заказ продвижения по order_id.
+ * При ошибке запроса к БД выбрасывает исключение, не затирая данные.
+ */
 export async function getPromotionOrderByOrderId(orderId) {
-  const orders = await readAll();
-  return orders.find((o) => o.orderId === orderId) || null;
+  if (!orderId) return null;
+
+  const { data, error } = await supabase
+    .from("promotion_orders")
+    .select("*")
+    .eq("order_id", orderId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Get promotion order DB error:", error);
+    throw error;
+  }
+
+  return mapPromotionOrder(data);
 }
 
+/**
+ * Обновляет статус заказа продвижения (pending -> applied | fulfillment_pending | canceled).
+ * При ошибке запроса к БД выбрасывает исключение.
+ */
 export async function markPromotionOrderStatus(orderId, status) {
-  return withWriteLock(async () => {
-    const orders = await readAll();
-    const index = orders.findIndex((o) => o.orderId === orderId);
-    if (index === -1) return null;
+  if (!orderId) return null;
 
-    const updated = {
-      ...orders[index],
-      status,
-      appliedAt: status === "applied" || status === "fulfillment_pending" ? new Date().toISOString() : orders[index].appliedAt,
-    };
+  const updates = { status };
+  if (status === "applied" || status === "fulfillment_pending") {
+    updates.applied_at = new Date().toISOString();
+  }
 
-    const next = [...orders];
-    next[index] = updated;
-    await writeAll(next);
-    return updated;
-  });
+  const { data, error } = await supabase
+    .from("promotion_orders")
+    .update(updates)
+    .eq("order_id", orderId)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error("Mark promotion order status DB error:", error);
+    throw error;
+  }
+
+  return mapPromotionOrder(data);
 }
 
-// Для админки — список заказов, отсортированный от новых к старым.
+/**
+ * Возвращает список всех заказов продвижения для админ-панели (от новых к старым).
+ * При ошибке запроса к БД выбрасывает исключение (не затирает пустым массивом).
+ */
 export async function listPromotionOrders() {
-  const orders = await readAll();
-  return [...orders].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  const { data, error } = await supabase
+    .from("promotion_orders")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("List promotion orders DB error:", error);
+    throw error;
+  }
+
+  return (data || []).map(mapPromotionOrder);
 }

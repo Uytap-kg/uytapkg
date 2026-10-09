@@ -41,12 +41,22 @@ export const uploadAvatarToStorage = async (userId, file) => {
   return uploadImageToStorage(objectPath, file);
 };
 
-/** Публичная загрузка (регистрация и т.п.): `uploads/{uuid}.{ext}` */
-export const uploadPublicImageToStorage = async (file) => {
-  const ext = getImageExtension(file);
-  const objectPath = `uploads/${randomUUID()}.${ext}`;
+/** Публичная загрузка (регистрация, объявления и т.п.): `uploads/{uuid}.{ext}` (или с заданным префиксом) */
+export const uploadPublicImageToStorage = async (file, prefix = "uploads") => {
+  const ext = file.extension || getImageExtension(file);
+  const objectPath = `${prefix}/${randomUUID()}.${ext}`;
   return uploadImageToStorage(objectPath, file);
 };
+
+/**
+ * Изолированная анонимная загрузка аватара/логотипа при регистрации:
+ * складывается в отдельную временную папку/префикс `avatars/pending/` (`pending/{uuid}.{ext}` в бакете `avatars`).
+ */
+export const uploadPendingAvatarToStorage = async (file) => {
+  return uploadPublicImageToStorage(file, "pending");
+};
+
+export const uploadAnonymousImageToStorage = uploadPendingAvatarToStorage;
 
 /**
  * Удаляет файл из Storage, если URL принадлежит нашему бакету.

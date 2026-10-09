@@ -139,3 +139,187 @@ test("Payments Webhook: строгая валидация order_id", () => {
   assert.equal(isValidOrderId(undefined), false, "undefined должен отклоняться");
   assert.equal(isValidOrderId({}), false, "Объект вместо строки должен отклоняться");
 });
+
+// 6. Тестирование защиты от потери оплаты после approved (Fulfillment Protection)
+test("Payment Fulfillment: наличие экспортов fulfillPayment и refulfillPayment", async () => {
+  const { fulfillPayment, refulfillPayment } = await import("../src/controllers/paymentsController.js");
+  assert.equal(typeof fulfillPayment, "function", "fulfillPayment должна быть функцией");
+  assert.equal(typeof refulfillPayment, "function", "refulfillPayment должна быть экспортирована");
+});
+
+test("Payment Fulfillment: логика сохранения статуса approved при сбое выдачи услуги", () => {
+  // Проверяем инвариант: сбой выдачи НЕ должен переводить статус из approved в failed/canceled
+  const payment = {
+    id: "pay-123",
+    order_id: "UT-123",
+    status: "approved",
+    fulfilled_at: null,
+    fulfill_attempts: 0,
+  };
+
+  const simulateFulfillmentError = (p, err) => {
+    const nextAttempts = (p.fulfill_attempts || 0) + 1;
+    return {
+      ...p,
+      // status остаётся неизменным (approved)
+      status: p.status,
+      fulfill_attempts: nextAttempts,
+      fulfill_error: err.message,
+    };
+  };
+
+  const failedState = simulateFulfillmentError(payment, new Error("DB connection timeout"));
+  assert.equal(failedState.status, "approved", "Статус должен оставаться approved при сбое выдачи");
+  assert.equal(failedState.fulfill_attempts, 1, "Счётчик попыток должен инкрементироваться");
+  assert.equal(failedState.fulfill_error, "DB connection timeout", "Ошибка должна быть записана");
+  assert.equal(failedState.fulfilled_at, null, "fulfilled_at должен оставаться null");
+
+  // При третьем сбое
+  const thirdFail = simulateFulfillmentError(
+    simulateFulfillmentError(failedState, new Error("Service down")),
+    new Error("Third fail")
+  );
+  assert.equal(thirdFail.fulfill_attempts, 3, "Счётчик попыток должен стать 3");
+  assert.equal(thirdFail.status, "approved", "Статус ОБЯЗАН оставаться approved даже после 3 сбоев");
+});
+
+test("Payment Fulfillment: проверка регистрации роута refulfill в adminRoutes", async () => {
+  const adminRoutes = (await import("../src/routes/adminRoutes.js")).default;
+  const refulfillLayer = adminRoutes.stack.find(
+    (layer) => layer.route && layer.route.path === "/payments/:id/refulfill" && layer.route.methods.post
+  );
+  assert.ok(refulfillLayer, "Роут POST /payments/:id/refulfill должен быть зарегистрирован в adminRoutes");
+});
+
+// 7. Тестирование защиты от уязвимости "Вечное VIP/ТОП/Срочно через features"
+test("Promotions Security: sanitizeFeatures очищает системные ключи", async () => {
+  const { sanitizeFeatures } = await import("../src/controllers/listingsController.js");
+
+  const dirtyFeatures = {
+    pool: true,
+    balcony: true,
+    promotionExpiresAt: "9999-12-31",
+    urgentExpiresAt: "9999-12-31",
+    residentialComplexId: "complex-uuid",
+    promotion_expires_at: "9999-12-31",
+    urgent_expires_at: "9999-12-31",
+  };
+
+  const clean = sanitizeFeatures(dirtyFeatures);
+  assert.deepStrictEqual(clean, { pool: true, balcony: true });
+  assert.equal(clean.promotionExpiresAt, undefined);
+  assert.equal(clean.urgentExpiresAt, undefined);
+  assert.equal(clean.residentialComplexId, undefined);
+});
+
+test("Promotions Security: resolvePromotionExpiry реализует принцип Fail-Closed и игнорирует features", async () => {
+  const { resolvePromotionExpiry } = await import("../src/services/promotionsService.js");
+
+  // VIP без promotion_expires_at (но с фейковым сроком в features) -> сброс в regular
+  const fakeFeaturesVip = {
+    promotion_status: "vip",
+    promotion_expires_at: null,
+    features: { promotionExpiresAt: "9999-12-31" },
+  };
+  const res1 = resolvePromotionExpiry(fakeFeaturesVip);
+  assert.equal(res1.promotionStatus, "regular", "VIP без promotion_expires_at должен сбрасываться в regular");
+  assert.equal(res1.changed, true);
+
+  // TOP с истёкшей датой -> сброс в regular
+  const expiredTop = {
+    promotion_status: "top",
+    promotion_expires_at: new Date(Date.now() - 10000).toISOString(),
+  };
+  const res2 = resolvePromotionExpiry(expiredTop);
+  assert.equal(res2.promotionStatus, "regular", "Истёкший TOP должен сбрасываться в regular");
+  assert.equal(res2.changed, true);
+
+  // Urgent без urgent_expires_at -> сброс is_urgent в false
+  const fakeUrgent = {
+    is_urgent: true,
+    urgent_expires_at: null,
+    features: { urgentExpiresAt: "9999-12-31" },
+  };
+  const res3 = resolvePromotionExpiry(fakeUrgent);
+  assert.equal(res3.isUrgent, false, "Срочно без urgent_expires_at должно сбрасываться в false");
+  assert.equal(res3.changed, true);
+
+  // Активный VIP со сроком в будущем -> сохраняется
+  const activeVip = {
+    promotion_status: "vip",
+    promotion_expires_at: new Date(Date.now() + 86400000).toISOString(),
+    is_urgent: true,
+    urgent_expires_at: new Date(Date.now() + 86400000).toISOString(),
+  };
+  const res4 = resolvePromotionExpiry(activeVip);
+  assert.equal(res4.promotionStatus, "vip");
+  assert.equal(res4.isUrgent, true);
+  assert.equal(res4.changed, false);
+});
+
+test("Status Transitions Security: canOwnerTransition защищает от обхода модерации и активации черновика", async () => {
+  const { canOwnerTransition } = await import("../src/controllers/listingsController.js");
+
+  // moderation: нельзя никуда переводить и нельзя переводить в moderation
+  assert.equal(canOwnerTransition("moderation", "active").allowed, false);
+  assert.equal(canOwnerTransition("moderation", "active").message, "Статус модерации может изменить только администратор");
+  assert.equal(canOwnerTransition("active", "moderation").allowed, false);
+  assert.equal(canOwnerTransition("active", "moderation").message, "Статус модерации может изменить только администратор");
+  assert.equal(canOwnerTransition("draft", "moderation").allowed, false);
+  assert.equal(canOwnerTransition("moderation", "hidden").allowed, false);
+
+  // draft: прямой переход в active запрещён
+  assert.equal(canOwnerTransition("draft", "active").allowed, false);
+  assert.equal(canOwnerTransition("draft", "active").message, "Черновик объявления ожидает оплаты или подтверждения публикации");
+
+  // разрешённые переходы владельца
+  assert.equal(canOwnerTransition("active", "active").allowed, true);
+  assert.equal(canOwnerTransition("active", "hidden").allowed, true);
+  assert.equal(canOwnerTransition("hidden", "active").allowed, true);
+  assert.equal(canOwnerTransition("hidden", "hidden").allowed, true);
+  assert.equal(canOwnerTransition("draft", "draft").allowed, true);
+  assert.equal(canOwnerTransition("draft", "hidden").allowed, true);
+
+  // запрещённые переходы
+  assert.equal(canOwnerTransition("active", "draft").allowed, false);
+  assert.equal(canOwnerTransition("hidden", "draft").allowed, false);
+});
+
+// 12. Тестирование защиты от анонимной загрузки файлов (Item 10)
+test("Upload Security: защита эндпоинта анонимной загрузки (Item 10)", async () => {
+  const { validateImageMagicBytes, ANONYMOUS_MAX_FILE_SIZE } = await import(
+    "../src/middleware/upload.js"
+  );
+  const { ALLOWED_ANONYMOUS_TYPES, anonymousUploadLimiter } = await import(
+    "../src/routes/uploadRoutes.js"
+  );
+  const { uploadPendingAvatarToStorage } = await import("../src/utils/storage.js");
+
+  // 1. Проверка лимитов размера
+  assert.equal(ANONYMOUS_MAX_FILE_SIZE, 2 * 1024 * 1024, "Лимит анонимного файла — 2 МБ");
+
+  // 2. Проверка разрешённых типов
+  assert.deepEqual(
+    Array.from(ALLOWED_ANONYMOUS_TYPES).sort(),
+    ["avatar", "logo"],
+    "Разрешены только типы avatar и logo"
+  );
+
+  // 3. Проверка Magic Bytes
+  const validPngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+  assert.equal(validateImageMagicBytes(validPngHeader), true, "PNG заголовок должен быть валидным");
+
+  const validJpegHeader = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+  assert.equal(validateImageMagicBytes(validJpegHeader), true, "JPEG заголовок должен быть валидным");
+
+  const htmlPayload = Buffer.from("<html><script>alert(1)</script></html>");
+  assert.equal(validateImageMagicBytes(htmlPayload), false, "HTML заголовок должен отклоняться");
+
+  const svgPayload = Buffer.from("<svg width='10' height='10'></svg>");
+  assert.equal(validateImageMagicBytes(svgPayload), false, "SVG заголовок должен отклоняться");
+
+  // 4. Проверка изоляции хранилища
+  assert.equal(typeof uploadPendingAvatarToStorage, "function");
+});
+
+

@@ -13,7 +13,15 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 // Генерация JWT токена
 export const generateToken = (payload) => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d", algorithm: "HS256" });
+  return jwt.sign(
+    {
+      ...payload,
+      typ: "access",
+      tv: payload?.tokenVersion ?? payload?.tv ?? 0,
+    },
+    JWT_SECRET,
+    { expiresIn: "1d", algorithm: "HS256" }
+  );
 };
 
 // Middleware для проверки токена доступа
@@ -43,11 +51,19 @@ export const authenticateToken = (req, res, next) => {
       });
     }
 
+    // Проверяем тип токена
+    if (decodedUser.typ !== "access") {
+      return res.status(401).json({
+        success: false,
+        message: "Недействительный тип токена",
+      });
+    }
+
     try {
-      // Подтягиваем роль и тип аккаунта пользователя из базы данных
+      // Подтягиваем роль, тип аккаунта и версию токена пользователя из базы данных
       const { data: dbUser, error: dbError } = await supabase
         .from("users")
-        .select("role, account_type")
+        .select("role, account_type, token_version")
         .eq("id", decodedUser.id)
         .single();
 
@@ -78,11 +94,20 @@ export const authenticateToken = (req, res, next) => {
         userRole = dbUser.role || "user";
       }
 
+      // Сравниваем версионность токена: если версия в БД не совпадает с версией в токене
+      if (dbUser && dbUser.token_version !== (decodedUser.tv ?? 0)) {
+        return res.status(401).json({
+          success: false,
+          message: "Сессия отозвана или устарела. Пожалуйста, выполните вход заново",
+        });
+      }
+
       req.user = {
         ...decodedUser,
         role: userRole,
         account_type: dbUser?.account_type || decodedUser.accountType || decodedUser.account_type,
         accountType: dbUser?.account_type || decodedUser.accountType || decodedUser.account_type,
+        token_version: dbUser?.token_version ?? 0,
       };
       next();
     } catch (dbQueryError) {

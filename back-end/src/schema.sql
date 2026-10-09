@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
     phone VARCHAR(50) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     is_verified BOOLEAN DEFAULT FALSE,
+    show_phone BOOLEAN DEFAULT FALSE,
+    token_version INT NOT NULL DEFAULT 0,
     role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -78,7 +80,9 @@ CREATE TABLE IF NOT EXISTS listings (
     -- Статусы
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'hidden', 'draft', 'moderation')),
     promotion_status VARCHAR(20) DEFAULT 'regular' CHECK (promotion_status IN ('regular', 'vip', 'top')),
+    promotion_expires_at TIMESTAMP WITH TIME ZONE,
     is_urgent BOOLEAN DEFAULT FALSE,
+    urgent_expires_at TIMESTAMP WITH TIME ZONE,
     views_count INT DEFAULT 0,
     expires_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP + INTERVAL '40 days'),
     
@@ -214,12 +218,20 @@ CREATE TABLE IF NOT EXISTS payments (
     link_app TEXT,
     provider_response JSONB,
     paid_at TIMESTAMP WITH TIME ZONE,
+    fulfilled_at TIMESTAMP WITH TIME ZONE,
+    fulfill_attempts INT DEFAULT 0,
+    fulfill_error TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS fulfilled_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS fulfill_attempts INT DEFAULT 0;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS fulfill_error TEXT;
+CREATE INDEX IF NOT EXISTS idx_payments_approved_unfulfilled ON payments(status, fulfilled_at) WHERE status = 'approved' AND fulfilled_at IS NULL;
 
 -- 14. Юристы (раздел «Юристы», управляется из админ-панели)
 CREATE TABLE IF NOT EXISTS lawyers (
@@ -242,10 +254,14 @@ CREATE INDEX IF NOT EXISTS idx_lawyers_is_active ON lawyers(is_active);
 -- 11. Индексы для сверхбыстрого поиска
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+CREATE INDEX IF NOT EXISTS idx_users_token_version ON users(id, token_version);
 CREATE INDEX IF NOT EXISTS idx_listings_region ON listings(region);
 CREATE INDEX IF NOT EXISTS idx_listings_property_type ON listings(property_type);
 CREATE INDEX IF NOT EXISTS idx_listings_promotion ON listings(promotion_status);
 CREATE INDEX IF NOT EXISTS idx_listings_created_at ON listings(created_at DESC);
+
+-- Отзыв токенов (Token Revocation)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0;
 
 -- Добавление колонки срока жизни объявления (40 дней)
 ALTER TABLE listings 
@@ -261,6 +277,21 @@ WHERE expires_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_listings_active_expires 
 ON listings(status, expires_at);
 
+-- Колонки и индексы сроков продвижения (VIP/ТОП/Срочно)
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS promotion_expires_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS urgent_expires_at TIMESTAMP WITH TIME ZONE;
+CREATE INDEX IF NOT EXISTS idx_listings_promotion_expires ON listings(promotion_status, promotion_expires_at);
+CREATE INDEX IF NOT EXISTS idx_listings_urgent_expires ON listings(is_urgent, urgent_expires_at);
+
+-- Миграция данных из features
+UPDATE listings 
+SET promotion_expires_at = (features->>'promotionExpiresAt')::timestamptz
+WHERE features ? 'promotionExpiresAt' AND promotion_expires_at IS NULL;
+
+UPDATE listings 
+SET urgent_expires_at = (features->>'urgentExpiresAt')::timestamptz
+WHERE features ? 'urgentExpiresAt' AND urgent_expires_at IS NULL;
+
 -- ============================================================
 -- Storage (аватарки): создать вручную в Supabase Dashboard
 -- Storage → New bucket → имя: avatars → Public bucket: ON
@@ -275,16 +306,36 @@ ON listings(status, expires_at);
 CREATE TABLE IF NOT EXISTS email_verifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) NOT NULL,
-    code VARCHAR(6) NOT NULL,
+    code VARCHAR(6),
+    code_hash VARCHAR(64),
     type VARCHAR(30) NOT NULL CHECK (type IN ('registration', 'password_reset')),
     attempts INT DEFAULT 0,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     is_used BOOLEAN DEFAULT FALSE,
+    reset_completed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_email_verifications_lookup
 ON email_verifications(email, type, is_used, expires_at);
+
+ALTER TABLE email_verifications ADD COLUMN IF NOT EXISTS code_hash VARCHAR(64);
+ALTER TABLE email_verifications ALTER COLUMN code DROP NOT NULL;
+ALTER TABLE email_verifications ADD COLUMN IF NOT EXISTS reset_completed BOOLEAN DEFAULT FALSE;
+
+-- Функция атомарного инкремента попыток ввода OTP ДО проверки кода (защита от race condition и брутфорса)
+CREATE OR REPLACE FUNCTION consume_otp_attempt(p_id UUID)
+RETURNS INT LANGUAGE plpgsql AS $$
+DECLARE
+    v_attempts INT;
+BEGIN
+    UPDATE email_verifications
+    SET attempts = attempts + 1
+    WHERE id = p_id AND is_used = false AND attempts < 5
+    RETURNING attempts INTO v_attempts;
+    RETURN COALESCE(v_attempts, -1);
+END;
+$$;
 
 -- Колонка подтверждения email. Если колонки ещё не было, все УЖЕ существующие
 -- пользователи считаются подтверждёнными (иначе они потеряют возможность входа).
@@ -298,3 +349,503 @@ BEGIN
         UPDATE users SET is_email_verified = TRUE;
     END IF;
 END $$;
+
+-- =======================================================
+-- 15. Заказы продвижения (Promotion Orders)
+-- =======================================================
+CREATE TABLE IF NOT EXISTS promotion_orders (
+    order_id VARCHAR(64) PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    listing_id UUID NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+    service_type VARCHAR(50) NOT NULL,
+    days INT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    applied_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX IF NOT EXISTS idx_promotion_orders_user_id ON promotion_orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_promotion_orders_listing_id ON promotion_orders(listing_id);
+
+-- =======================================================
+-- 16. Реестр владельцев загрузок (Upload Ownership)
+-- =======================================================
+CREATE TABLE IF NOT EXISTS upload_ownership (
+    object_path TEXT PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_upload_ownership_user_id ON upload_ownership(user_id);
+
+-- =======================================================
+-- 17. Обработанные платежи подписок (Идемпотентность)
+-- =======================================================
+CREATE TABLE IF NOT EXISTS processed_subscription_payments (
+    payment_id VARCHAR(64) PRIMARY KEY,
+    user_id UUID,
+    tariff_id VARCHAR(30),
+    processed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_processed_sub_payments_user_id ON processed_subscription_payments(user_id);
+
+-- =======================================================
+-- 18. Атомарная активация/продление подписки с защитой от гонок и арбитража
+-- =======================================================
+CREATE OR REPLACE FUNCTION activate_subscription_atomic(
+    p_user_id UUID,
+    p_tariff_id VARCHAR,
+    p_days INT,
+    p_payment_id VARCHAR DEFAULT NULL
+)
+RETURNS subscriptions
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_existing subscriptions%ROWTYPE;
+    v_result subscriptions%ROWTYPE;
+    v_new_expires_at TIMESTAMPTZ;
+BEGIN
+    -- 1. Гарантия идемпотентности по p_payment_id
+    IF p_payment_id IS NOT NULL THEN
+        IF EXISTS (SELECT 1 FROM processed_subscription_payments WHERE payment_id = p_payment_id) THEN
+            SELECT * INTO v_result FROM subscriptions WHERE user_id = p_user_id;
+            RETURN v_result;
+        END IF;
+    END IF;
+
+    -- 2. Транзакционная блокировка на уровне пользователя для защиты от гонок
+    PERFORM pg_advisory_xact_lock(hashtext(p_user_id::text));
+
+    -- 3. FOR UPDATE блокировка существующей строки подписки
+    SELECT * INTO v_existing
+    FROM subscriptions
+    WHERE user_id = p_user_id
+    FOR UPDATE;
+
+    -- 4. Защита активной индивидуальной подписки:
+    -- Нельзя затереть выданный администратором корпоративный/индивидуальный тариф
+    IF v_existing.id IS NOT NULL 
+       AND v_existing.is_individual = TRUE 
+       AND v_existing.is_active = TRUE 
+       AND v_existing.expires_at > CURRENT_TIMESTAMP THEN
+        RAISE EXCEPTION 'У вас активен персональный корпоративный тариф. Для смены тарифа обратитесь к администратору'
+            USING ERRCODE = 'P0001';
+    END IF;
+
+    -- 5. Накопительное продление сроков:
+    -- Если тариф тот же — прибавляем дни к текущему сроку окончания.
+    -- Если тариф другой (или подписка истекла) — дни отсчитываются от CURRENT_TIMESTAMP.
+    IF v_existing.id IS NOT NULL AND v_existing.expires_at > CURRENT_TIMESTAMP THEN
+        IF v_existing.tariff_id = p_tariff_id THEN
+            v_new_expires_at := v_existing.expires_at + (p_days || ' days')::INTERVAL;
+        ELSE
+            v_new_expires_at := CURRENT_TIMESTAMP + (p_days || ' days')::INTERVAL;
+        END IF;
+    ELSE
+        v_new_expires_at := CURRENT_TIMESTAMP + (p_days || ' days')::INTERVAL;
+    END IF;
+
+    -- 6. Атомарный upsert подписки
+    INSERT INTO subscriptions (
+        user_id,
+        tariff_id,
+        started_at,
+        expires_at,
+        is_active,
+        is_individual,
+        custom_name,
+        active_listings_limit,
+        vip_boosts_limit,
+        top_boosts_limit,
+        listings_used,
+        vip_boosts_used,
+        top_boosts_used,
+        updated_at
+    ) VALUES (
+        p_user_id,
+        p_tariff_id,
+        COALESCE(v_existing.started_at, CURRENT_TIMESTAMP),
+        v_new_expires_at,
+        TRUE,
+        FALSE,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        0,
+        0,
+        0,
+        CURRENT_TIMESTAMP
+    )
+    ON CONFLICT (user_id) DO UPDATE SET
+        tariff_id = p_tariff_id,
+        expires_at = v_new_expires_at,
+        is_active = TRUE,
+        is_individual = FALSE,
+        custom_name = NULL,
+        active_listings_limit = NULL,
+        vip_boosts_limit = NULL,
+        top_boosts_limit = NULL,
+        listings_used = 0,
+        vip_boosts_used = 0,
+        top_boosts_used = 0,
+        updated_at = CURRENT_TIMESTAMP
+    RETURNING * INTO v_result;
+
+    -- 7. Фиксация обработанного платежа для предотвращения повторной обработки
+    IF p_payment_id IS NOT NULL THEN
+        INSERT INTO processed_subscription_payments (
+            payment_id,
+            user_id,
+            tariff_id,
+            processed_at
+        ) VALUES (
+            p_payment_id,
+            p_user_id,
+            p_tariff_id,
+            CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (payment_id) DO NOTHING;
+    END IF;
+
+    RETURN v_result;
+END;
+$$;
+
+-- 19. Атомарное инкрементирование просмотров объявления
+CREATE OR REPLACE FUNCTION increment_views(listing_id UUID)
+RETURNS INT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_views INT;
+BEGIN
+    UPDATE listings
+    SET views_count = COALESCE(views_count, 0) + 1
+    WHERE id = listing_id
+    RETURNING views_count INTO v_views;
+
+    RETURN COALESCE(v_views, 0);
+END;
+$$;
+
+-- =======================================================
+-- 20. Реестр обработанных операций возвратов (Идемпотентность, Пункт 12)
+-- =======================================================
+CREATE TABLE IF NOT EXISTS processed_refund_operations (
+    operation_id VARCHAR(128) PRIMARY KEY,
+    user_id UUID,
+    subscription_id UUID,
+    operation_type VARCHAR(50),
+    processed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_processed_refund_ops_user_id ON processed_refund_operations(user_id);
+
+-- =======================================================
+-- 21. Атомарный возврат слота объявления (Пункт 12)
+-- =======================================================
+CREATE OR REPLACE FUNCTION refund_tariff_listing_atomic(
+    p_user_id UUID,
+    p_operation_id VARCHAR DEFAULT NULL,
+    p_subscription_id UUID DEFAULT NULL
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_sub_id UUID := p_subscription_id;
+BEGIN
+    -- 1. Проверка идемпотентности по operation_id
+    IF p_operation_id IS NOT NULL THEN
+        IF EXISTS (SELECT 1 FROM processed_refund_operations WHERE operation_id = p_operation_id) THEN
+            RETURN TRUE;
+        END IF;
+    END IF;
+
+    -- 2. Если ID подписки не передан, находим её по user_id
+    IF v_sub_id IS NULL THEN
+        SELECT id INTO v_sub_id
+        FROM subscriptions
+        WHERE user_id = p_user_id
+          AND is_active = TRUE
+          AND expires_at > CURRENT_TIMESTAMP;
+
+        IF v_sub_id IS NULL THEN
+            SELECT id INTO v_sub_id
+            FROM subscriptions
+            WHERE user_id = p_user_id
+            ORDER BY updated_at DESC
+            LIMIT 1;
+        END IF;
+    END IF;
+
+    IF v_sub_id IS NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    -- 3. Атомарный SQL-запрос для исключения гонки read-modify-write
+    UPDATE subscriptions
+    SET listings_used = GREATEST(listings_used - 1, 0),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = v_sub_id;
+
+    -- 4. Фиксация обработанной операции возврата
+    IF p_operation_id IS NOT NULL THEN
+        INSERT INTO processed_refund_operations (
+            operation_id,
+            user_id,
+            subscription_id,
+            operation_type,
+            processed_at
+        ) VALUES (
+            p_operation_id,
+            p_user_id,
+            v_sub_id,
+            'listing_refund',
+            CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (operation_id) DO NOTHING;
+    END IF;
+
+    RETURN TRUE;
+END;
+$$;
+
+-- =======================================================
+-- 22. Атомарный возврат VIP/TOP поднятия (Пункт 12)
+-- =======================================================
+CREATE OR REPLACE FUNCTION refund_tariff_boost_atomic(
+    p_user_id UUID,
+    p_boost_type VARCHAR,
+    p_operation_id VARCHAR DEFAULT NULL,
+    p_subscription_id UUID DEFAULT NULL
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_sub_id UUID := p_subscription_id;
+BEGIN
+    -- 1. Проверка идемпотентности по operation_id
+    IF p_operation_id IS NOT NULL THEN
+        IF EXISTS (SELECT 1 FROM processed_refund_operations WHERE operation_id = p_operation_id) THEN
+            RETURN TRUE;
+        END IF;
+    END IF;
+
+    -- 2. Если ID подписки не передан, находим её по user_id
+    IF v_sub_id IS NULL THEN
+        SELECT id INTO v_sub_id
+        FROM subscriptions
+        WHERE user_id = p_user_id
+          AND is_active = TRUE
+          AND expires_at > CURRENT_TIMESTAMP;
+
+        IF v_sub_id IS NULL THEN
+            SELECT id INTO v_sub_id
+            FROM subscriptions
+            WHERE user_id = p_user_id
+            ORDER BY updated_at DESC
+            LIMIT 1;
+        END IF;
+    END IF;
+
+    IF v_sub_id IS NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    -- 3. Атомарный SQL-запрос обновления счётчика
+    IF p_boost_type = 'vip' THEN
+        UPDATE subscriptions
+        SET vip_boosts_used = GREATEST(vip_boosts_used - 1, 0),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = v_sub_id;
+    ELSIF p_boost_type = 'top' THEN
+        UPDATE subscriptions
+        SET top_boosts_used = GREATEST(top_boosts_used - 1, 0),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = v_sub_id;
+    ELSE
+        RETURN FALSE;
+    END IF;
+
+    -- 4. Фиксация в таблице идемпотентности
+    IF p_operation_id IS NOT NULL THEN
+        INSERT INTO processed_refund_operations (
+            operation_id,
+            user_id,
+            subscription_id,
+            operation_type,
+            processed_at
+        ) VALUES (
+            p_operation_id,
+            p_user_id,
+            v_sub_id,
+            p_boost_type || '_boost_refund',
+            CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (operation_id) DO NOTHING;
+    END IF;
+
+    RETURN TRUE;
+END;
+$$;
+
+-- =======================================================
+-- 23. Атомарное создание объявления с проверкой лимита (Пункт 11)
+-- =======================================================
+CREATE OR REPLACE FUNCTION create_listing_with_limit(
+    p_user_id UUID,
+    p_listing_data JSONB,
+    p_limit INT DEFAULT NULL
+)
+RETURNS listings
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_active_count INT;
+    v_limit INT;
+    v_account_type VARCHAR(20);
+    v_subscription subscriptions%ROWTYPE;
+    v_new_listing listings%ROWTYPE;
+    v_initial_status VARCHAR(20);
+BEGIN
+    -- 1. Транзакционная блокировка advisory lock для предотвращения гонок создания
+    PERFORM pg_advisory_xact_lock(hashtext(p_user_id::text));
+
+    v_initial_status := COALESCE(p_listing_data->>'status', 'active');
+
+    -- Проверяем лимит только если создаваемое объявление публикуется в статусе "active"
+    IF v_initial_status = 'active' THEN
+        -- 2. Подсчёт реально активных неистёкших объявлений пользователя
+        SELECT COUNT(*)
+        INTO v_active_count
+        FROM listings
+        WHERE user_id = p_user_id
+          AND status = 'active'
+          AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP);
+
+        -- Ищем действующую подписку
+        SELECT * INTO v_subscription
+        FROM subscriptions
+        WHERE user_id = p_user_id
+          AND is_active = TRUE
+          AND expires_at > CURRENT_TIMESTAMP;
+
+        -- 3. Определение лимита пользователя
+        IF p_limit IS NOT NULL THEN
+            v_limit := p_limit;
+        ELSIF v_subscription.id IS NOT NULL THEN
+            IF v_subscription.is_individual = TRUE THEN
+                v_limit := COALESCE(v_subscription.active_listings_limit, 0);
+            ELSE
+                CASE v_subscription.tariff_id
+                    WHEN 'start' THEN v_limit := 5;
+                    WHEN 'optimal' THEN v_limit := 15;
+                    WHEN 'business' THEN v_limit := 50;
+                    WHEN 'developer' THEN v_limit := 100;
+                    ELSE v_limit := COALESCE(v_subscription.active_listings_limit, 0);
+                END CASE;
+            END IF;
+        ELSE
+            SELECT account_type INTO v_account_type
+            FROM users
+            WHERE id = p_user_id;
+
+            IF v_account_type = 'personal' THEN
+                v_limit := 2; -- Личный продавец без тарифа: максимум 2 бесплатных объявления
+            ELSE
+                v_limit := 0; -- Бизнес (agency/developer/realtor) без тарифа: 0 бесплатных объявлений
+            END IF;
+        END IF;
+
+        -- 4. Если лимит превышен — откат транзакции с исключением 'LIMIT_EXCEEDED'
+        IF v_active_count >= v_limit THEN
+            RAISE EXCEPTION 'LIMIT_EXCEEDED'
+                USING ERRCODE = 'P0002',
+                      DETAIL = format('User %s exceeded active listings limit: %s of %s', p_user_id, v_active_count, v_limit);
+        END IF;
+
+        -- Если у пользователя есть тариф — атомарно проверяем listings_used и списываем слот
+        IF v_subscription.id IS NOT NULL THEN
+            IF v_subscription.listings_used >= v_limit THEN
+                RAISE EXCEPTION 'LIMIT_EXCEEDED'
+                    USING ERRCODE = 'P0002',
+                          DETAIL = format('User %s exhausted subscription listings_used: %s of %s', p_user_id, v_subscription.listings_used, v_limit);
+            END IF;
+
+            UPDATE subscriptions
+            SET listings_used = listings_used + 1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = v_subscription.id;
+        END IF;
+    END IF;
+
+    -- 5. Если лимит не превышен — вставка строки в listings и возврат созданного объявления
+    INSERT INTO listings (
+        user_id,
+        title,
+        description,
+        property_type,
+        deal_type,
+        rent_period,
+        region,
+        city,
+        district,
+        microdistrict,
+        address,
+        latitude,
+        longitude,
+        price,
+        currency,
+        area,
+        rooms,
+        floor,
+        total_floors,
+        is_resort,
+        resort_filters,
+        features,
+        status,
+        promotion_status,
+        promotion_expires_at,
+        is_urgent,
+        urgent_expires_at,
+        expires_at
+    ) VALUES (
+        p_user_id,
+        p_listing_data->>'title',
+        p_listing_data->>'description',
+        COALESCE(p_listing_data->>'property_type', p_listing_data->>'propertyType'),
+        COALESCE(p_listing_data->>'deal_type', p_listing_data->>'dealType'),
+        COALESCE(p_listing_data->>'rent_period', p_listing_data->>'rentPeriod'),
+        p_listing_data->>'region',
+        p_listing_data->>'city',
+        p_listing_data->>'district',
+        p_listing_data->>'microdistrict',
+        p_listing_data->>'address',
+        NULLIF(p_listing_data->>'latitude', '')::NUMERIC,
+        NULLIF(p_listing_data->>'longitude', '')::NUMERIC,
+        NULLIF(p_listing_data->>'price', '')::NUMERIC,
+        COALESCE(p_listing_data->>'currency', 'KGS'),
+        NULLIF(p_listing_data->>'area', '')::NUMERIC,
+        NULLIF(p_listing_data->>'rooms', '')::INT,
+        NULLIF(p_listing_data->>'floor', '')::INT,
+        NULLIF(COALESCE(p_listing_data->>'total_floors', p_listing_data->>'totalFloors'), '')::INT,
+        COALESCE(NULLIF(COALESCE(p_listing_data->>'is_resort', p_listing_data->>'isResort'), '')::BOOLEAN, FALSE),
+        COALESCE(p_listing_data->'resort_filters', p_listing_data->'resortFilters', '{}'::JSONB),
+        COALESCE(p_listing_data->'features', '{}'::JSONB),
+        v_initial_status,
+        COALESCE(p_listing_data->>'promotion_status', p_listing_data->>'promotionStatus', 'regular'),
+        NULLIF(COALESCE(p_listing_data->>'promotion_expires_at', p_listing_data->>'promotionExpiresAt'), '')::TIMESTAMPTZ,
+        COALESCE(NULLIF(COALESCE(p_listing_data->>'is_urgent', p_listing_data->>'isUrgent'), '')::BOOLEAN, FALSE),
+        NULLIF(COALESCE(p_listing_data->>'urgent_expires_at', p_listing_data->>'urgentExpiresAt'), '')::TIMESTAMPTZ,
+        COALESCE(NULLIF(COALESCE(p_listing_data->>'expires_at', p_listing_data->>'expiresAt'), '')::TIMESTAMPTZ, CURRENT_TIMESTAMP + INTERVAL '40 days')
+    )
+    RETURNING * INTO v_new_listing;
+
+    RETURN v_new_listing;
+END;
+$$;

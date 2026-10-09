@@ -59,3 +59,106 @@ export function calculateTariffTotal(tariffId, months, pricing) {
     total,
   };
 }
+
+export const DAYS_IN_MONTH = 30;
+
+const DEFAULT_TARIFF_PRICES = {
+  start: 390,
+  optimal: 790,
+  business: 1890,
+};
+
+// Расчёт суточной стоимости тарифа (в сомах) для Pro-Rata перерасчёта.
+// Принимает либо id тарифа ("start", "optimal", "business") и опциональный pricing,
+// либо готовый объект тарифа { price, ... }.
+export function getTariffDailyPrice(tariffIdOrTariff, pricing) {
+  if (!tariffIdOrTariff) return 0;
+
+  if (typeof tariffIdOrTariff === "object" && typeof tariffIdOrTariff.price === "number") {
+    return tariffIdOrTariff.price > 0 ? tariffIdOrTariff.price / DAYS_IN_MONTH : 0;
+  }
+
+  const tariffId = String(tariffIdOrTariff).toLowerCase();
+  if (pricing) {
+    const tariff = getTariff(tariffId, pricing);
+    if (tariff && typeof tariff.price === "number" && tariff.price > 0) {
+      return tariff.price / DAYS_IN_MONTH;
+    }
+  }
+
+  const fallbackPrice = DEFAULT_TARIFF_PRICES[tariffId];
+  return fallbackPrice ? fallbackPrice / DAYS_IN_MONTH : 0;
+}
+
+export const dailyPrice = getTariffDailyPrice;
+
+/**
+ * Бизнес-правило Pro-Rata при смене тарифа:
+ * Если у пользователя уже есть активная подписка (expires_at > NOW()):
+ *   а) Если тариф ТОТ ЖЕ (current.tariff_id === newTariffId):
+ *      просто продлеваем: expiresAt = currentExpiry + months * 30 дней.
+ *   б) Если тариф ДРУГОЙ:
+ *      рассчитываем остаточную стоимость текущей подписки:
+ *      remainingDays = (currentExpiry - NOW()) / (24 * 60 * 60 * 1000).
+ *      remainingValue = remainingDays * dailyPrice(currentTariff).
+ *      Переводим эту стоимость в дни нового тарифа:
+ *      convertedDays = Math.floor(remainingValue / dailyPrice(newTariff)).
+ *      Итоговый срок = NOW() + (convertedDays + months * 30 дней).
+ */
+export function calculateProRata({
+  currentTariffId,
+  newTariffId,
+  currentExpiresAt,
+  newMonths,
+  pricing,
+  nowMs = Date.now(),
+}) {
+  const currentExpiry = currentExpiresAt ? new Date(currentExpiresAt).getTime() : 0;
+  const periodMonths = Number(newMonths) || 0;
+  const newPeriodDays = periodMonths * DAYS_IN_MONTH;
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  // Если подписка отсутствует или уже истекла:
+  if (!currentExpiry || currentExpiry <= nowMs) {
+    const totalDays = newPeriodDays;
+    return {
+      sameTariff: false,
+      remainingDays: 0,
+      remainingValue: 0,
+      convertedDays: 0,
+      totalDays,
+      expiresAt: new Date(nowMs + totalDays * dayMs),
+    };
+  }
+
+  // Если тариф тот же — просто прибавляем новый период к текущему сроку
+  if (currentTariffId === newTariffId) {
+    const totalDays = newPeriodDays;
+    return {
+      sameTariff: true,
+      remainingDays: Math.max(0, (currentExpiry - nowMs) / dayMs),
+      remainingValue: 0,
+      convertedDays: 0,
+      totalDays,
+      expiresAt: new Date(currentExpiry + newPeriodDays * dayMs),
+    };
+  }
+
+  // Если тариф другой — Pro-Rata перерасчёт остаточной стоимости
+  const remainingDays = Math.max(0, (currentExpiry - nowMs) / dayMs);
+  const curDaily = getTariffDailyPrice(currentTariffId, pricing);
+  const newDaily = getTariffDailyPrice(newTariffId, pricing);
+
+  const remainingValue = remainingDays * curDaily;
+  const convertedDays = newDaily > 0 ? Math.floor(remainingValue / newDaily) : 0;
+  const totalDays = convertedDays + newPeriodDays;
+
+  return {
+    sameTariff: false,
+    remainingDays,
+    remainingValue,
+    convertedDays,
+    totalDays,
+    expiresAt: new Date(nowMs + totalDays * dayMs),
+  };
+}

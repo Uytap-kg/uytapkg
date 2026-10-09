@@ -4,7 +4,7 @@ import { calculateTariffTotal } from "../constants/tariffs.js";
 import { getPricingSettings } from "../utils/pricingSettings.js";
 import { createPromotionPaymentSchema } from "../utils/validation.js";
 import * as odengi from "../services/odengiService.js";
-import { activateSubscription } from "../services/subscriptionsService.js";
+import { activateSubscription, getActiveSubscription } from "../services/subscriptionsService.js";
 import { applyPromotion } from "../services/promotionsService.js";
 import {
   createPromotionOrder,
@@ -31,13 +31,19 @@ function generateOrderId() {
 }
 
 function toPublicPayment(payment) {
+  if (!payment) return null;
   return {
+    id: payment.id,
     orderId: payment.order_id,
     invoiceId: payment.invoice_id,
     tariffId: payment.tariff_id,
     months: payment.months,
-    amount: payment.amount / 100,
+    amount: payment.amount !== undefined && payment.amount !== null ? payment.amount / 100 : 0,
     status: payment.status,
+    fulfilled: Boolean(payment.fulfilled_at),
+    fulfilledAt: payment.fulfilled_at || null,
+    fulfillAttempts: payment.fulfill_attempts || 0,
+    fulfillError: payment.fulfill_error || null,
     qrUrl: payment.qr_url,
     paylinkUrl: payment.paylink_url,
     linkApp: payment.link_app,
@@ -58,6 +64,16 @@ export const createPayment = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "tariffId и months обязательны",
+      });
+    }
+
+    // Защита активного индивидуального тарифа:
+    // покупка дефолтного тарифа отклоняется с 409 Conflict
+    const currentSub = await getActiveSubscription(userId);
+    if (currentSub?.is_individual) {
+      return res.status(409).json({
+        success: false,
+        message: "У вас активен персональный корпоративный тариф. Для смены тарифа обратитесь к администратору",
       });
     }
 
@@ -315,13 +331,114 @@ export const createPromotionPayment = async (req, res) => {
   }
 };
 
-// Сверяет статус платежа с O!Dengi и, если он только что подтверждён,
-// один раз активирует тариф пользователю. Используется и при опросе с
-// фронтенда, и при получении callback'а (resultUrl) — сам callback
-// НЕ считается источником истины, мы всегда перепроверяем статус
-// напрямую в O!Dengi перед активацией тарифа.
+// =======================================================
+// Выдача оплаченной услуги (подписка или продвижение).
+// Вынесена отдельно от фиксации approved, чтобы сбой при выдаче услуги
+// (сеть, упавшая БД, ошибка в applyPromotion) не приводил к потере факта оплаты.
+// Статус платежа в БД остаётся "approved", а ошибка сохраняется в fulfill_error.
+// =======================================================
+export async function fulfillPayment(payment) {
+  if (!payment) return null;
+  if (payment.fulfilled_at) {
+    return payment;
+  }
+
+  const nextAttempts = (payment.fulfill_attempts || 0) + 1;
+  const now = new Date().toISOString();
+
+  try {
+    if (payment.tariff_id?.startsWith(PROMOTION_TARIFF_PREFIX)) {
+      const order = await getPromotionOrderByOrderId(payment.order_id);
+      if (!order) {
+        throw new Error(`Заказ на продвижение для order_id ${payment.order_id} не найден`);
+      }
+      await applyPromotion(order);
+    } else {
+      await activateSubscription(payment.user_id, payment.tariff_id, payment.months, payment.order_id || payment.id);
+    }
+
+    const { data: updated, error: updateError } = await supabase
+      .from("payments")
+      .update({
+        fulfilled_at: now,
+        fulfill_attempts: nextAttempts,
+        fulfill_error: null,
+        updated_at: now,
+      })
+      .eq("id", payment.id)
+      .select()
+      .maybeSingle();
+
+    if (updateError) {
+      console.error("Fulfill Payment update success DB error:", updateError);
+      return {
+        ...payment,
+        fulfilled_at: now,
+        fulfill_attempts: nextAttempts,
+        fulfill_error: null,
+        updated_at: now,
+      };
+    }
+
+    return updated || {
+      ...payment,
+      fulfilled_at: now,
+      fulfill_attempts: nextAttempts,
+      fulfill_error: null,
+      updated_at: now,
+    };
+  } catch (error) {
+    const errorMessage = error?.message || String(error);
+    console.error(`Fulfill Payment Error for payment ${payment.id}:`, error);
+
+    if (nextAttempts >= 3) {
+      console.error(
+        `[CRITICAL PAYMENT ALERT] Fulfillment failed >3 times for payment ${payment.id}:`,
+        payment.id,
+        error
+      );
+    }
+
+    // ВАЖНО: статус платежа ОБЯЗАН оставаться "approved"! Не переводить в failed/canceled.
+    const { data: updated, error: updateError } = await supabase
+      .from("payments")
+      .update({
+        fulfill_attempts: nextAttempts,
+        fulfill_error: errorMessage,
+        updated_at: now,
+      })
+      .eq("id", payment.id)
+      .select()
+      .maybeSingle();
+
+    if (updateError) {
+      console.error("Fulfill Payment update error DB failed:", updateError);
+    }
+
+    return updated || {
+      ...payment,
+      fulfill_attempts: nextAttempts,
+      fulfill_error: errorMessage,
+      updated_at: now,
+    };
+  }
+}
+
+// Сверяет статус платежа с O!Dengi и, если он подтверждён:
+// 1) сначала атомарно фиксирует статус "approved" в БД;
+// 2) только затем вызывает fulfillPayment(payment) для выдачи услуги.
+//
+// Если платёж уже approved, но ещё не fulfilled (!payment.fulfilled_at),
+// запускает повторную попытку fulfillPayment(payment).
 async function reconcilePaymentStatus(payment) {
-  if (payment.status === "approved" || payment.status === "canceled") {
+  if (payment.status === "approved") {
+    if (!payment.fulfilled_at) {
+      return await fulfillPayment(payment);
+    }
+    return payment;
+  }
+
+  if (payment.status === "canceled") {
     return payment;
   }
 
@@ -337,8 +454,8 @@ async function reconcilePaymentStatus(payment) {
   const providerStatus = paymentAttempt?.status || statusData?.status;
 
   if (providerStatus === "approved") {
-    // Атомарно "забираем" переход в approved, чтобы при параллельных
-    // запросах тариф активировался ровно один раз.
+    // Шаг 1: Атомарно фиксируем переход в approved, trans_id, paid_at в БД.
+    // Факт оплаты надёжно фиксируется ДО вызова выдачи услуги.
     const { data: claimed } = await supabase
       .from("payments")
       .update({
@@ -355,25 +472,23 @@ async function reconcilePaymentStatus(payment) {
       .select()
       .maybeSingle();
 
+    // Шаг 2: Только после фиксации approved вызываем fulfillPayment
     if (claimed) {
-      if (claimed.tariff_id?.startsWith(PROMOTION_TARIFF_PREFIX)) {
-        try {
-          const order = await getPromotionOrderByOrderId(claimed.order_id);
-          if (order) {
-            await applyPromotion(order);
-          } else {
-            console.error("Reconcile: promotion order not found for", claimed.order_id);
-          }
-        } catch (applyError) {
-          // Платёж уже подтверждён и зафиксирован — ошибку применения
-          // логируем, но не роняем ответ клиенту; статус оплаты в любом
-          // случае "approved", несостыковку можно будет разобрать вручную.
-          console.error("Apply Promotion Error:", applyError);
+      return await fulfillPayment(claimed);
+    } else {
+      // Если параллельный запрос уже перевёл статус в approved, проверяем актуальную запись в БД
+      const { data: latest } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("id", payment.id)
+        .maybeSingle();
+
+      if (latest) {
+        if (!latest.fulfilled_at) {
+          return await fulfillPayment(latest);
         }
-      } else {
-        await activateSubscription(payment.user_id, payment.tariff_id, payment.months);
+        return latest;
       }
-      return claimed;
     }
   } else if (providerStatus === "canceled") {
     const { data: updated } = await supabase
@@ -582,3 +697,64 @@ export const handleResultUrl = async (req, res) => {
     return res.status(200).json({ success: true });
   }
 };
+
+// =======================================================
+// 5. Повторная выдача услуги администратором (POST /api/admin/payments/:id/refulfill)
+// =======================================================
+export const refulfillPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "ID платежа обязателен",
+      });
+    }
+
+    const { data: payment, error } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Refulfill Payment DB Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Ошибка при получении платежа",
+      });
+    }
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Платёж не найден",
+      });
+    }
+
+    if (payment.status !== "approved") {
+      return res.status(400).json({
+        success: false,
+        message: "Повторная выдача услуги возможна только для оплаченных (approved) платежей",
+      });
+    }
+
+    const updatedPayment = await fulfillPayment(payment);
+
+    return res.json({
+      success: true,
+      data: {
+        ...updatedPayment,
+        ...toPublicPayment(updatedPayment),
+      },
+    });
+  } catch (error) {
+    console.error("Refulfill Payment Controller Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка сервера при повторной выдаче услуги",
+    });
+  }
+};
+

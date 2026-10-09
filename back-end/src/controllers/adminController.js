@@ -149,6 +149,7 @@ export const listPayments = async (req, res) => {
         const order = promotionOrdersByOrderId.get(payment.order_id);
 
         return {
+          id: payment.id,
           orderId: payment.order_id,
           invoiceId: payment.invoice_id,
           type: "promotion",
@@ -159,6 +160,10 @@ export const listPayments = async (req, res) => {
           listingTitle: order?.listingId ? listingTitlesById.get(order.listingId) || null : null,
           days: payment.months,
           fulfillmentStatus: order?.status || null,
+          fulfilled: Boolean(payment.fulfilled_at),
+          fulfilledAt: payment.fulfilled_at || null,
+          fulfillAttempts: payment.fulfill_attempts || 0,
+          fulfillError: payment.fulfill_error || null,
           amount: payment.amount / 100,
           status: payment.status,
           userEmail: payment.users?.email || null,
@@ -177,6 +182,7 @@ export const listPayments = async (req, res) => {
       const calc = calculateTariffTotal(payment.tariff_id, payment.months, pricing);
 
       return {
+        id: payment.id,
         orderId: payment.order_id,
         invoiceId: payment.invoice_id,
         type: "subscription",
@@ -187,6 +193,10 @@ export const listPayments = async (req, res) => {
         pricePerMonth: calc?.pricePerMonth ?? null,
         discountPercent: calc?.discountPercent ?? 0,
         status: payment.status,
+        fulfilled: Boolean(payment.fulfilled_at),
+        fulfilledAt: payment.fulfilled_at || null,
+        fulfillAttempts: payment.fulfill_attempts || 0,
+        fulfillError: payment.fulfill_error || null,
         userEmail: payment.users?.email || null,
         userPhone: payment.users?.phone || null,
         paidAt: payment.paid_at,

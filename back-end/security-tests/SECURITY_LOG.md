@@ -144,3 +144,515 @@ uytapkg, во время адверсариального ревью. Все с�
 - 2026-09-10T14:59:10.421Z DELETE listings id=7e1940ff-5c3f-476d-840d-17d01bc413d0 (cleanup)
 - 2026-09-10T14:59:11.384Z DELETE users id=6ec58b0b-78fb-48c3-820d-b1749b6e4827 (cleanup)
 - 2026-09-10T14:59:12.360Z DELETE users id=85a419aa-7e3a-42a4-afd9-38cd4290486b (cleanup)
+
+---
+
+## Verification Run: 2026-10-08 — Пункт 5 ТЗ ("Потеря оплаты после approved")
+
+- **Дата проверки:** 2026-10-08T20:37:05Z
+- **Исполнитель:** Security QA (Агент безопасности и приёмки)
+- **Результаты запусков тестов:**
+  - `back-end/security-tests/item-5-payment-fulfillment.test.mjs`: 5/5 PASSED (duration: 207ms)
+  - `back-end/security-tests/fixes-verification.test.mjs`: 8/8 PASSED (duration: 401ms)
+- **Статус выполнения критериев приёмки:**
+  - **Критерий 1 (Сбой activateSubscription):** ВЫПОЛНЕН. При сбое активации статус платежа остаётся `approved`, `fulfilled_at` равен `null`, `getPaymentStatus` возвращает `fulfilled: false`, причина сбоя фиксируется в `fulfill_error`.
+  - **Критерий 2 (Восстановление сервиса и повторный опрос / refulfill):** ВЫПОЛНЕН. При восстановлении сервиса услуга выдаётся, `fulfilled_at` заполняется датой, `getPaymentStatus` возвращает `fulfilled: true`, `fulfill_error` очищается.
+  - **Критерий 3 (Идемпотентность):** ВЫПОЛНЕН. Повторные опросы и вызовы `/refulfill` не приводят к дублированию активации подписки; счётчик вызовов активации строго равен 1.
+  - **Критерий 4 (Превышение лимита попыток):** ВЫПОЛНЕН. При `fulfill_attempts > 3` генерируется критический лог/алерт `[CRITICAL PAYMENT ALERT]`, при этом статус платежа остаётся `approved` без риска потери платежа.
+
+---
+
+## Verification Run: 2026-10-08 — Пункт 6 ТЗ ("Хранение заказов продвижения и реестра загрузок в БД")
+
+- **Дата проверки:** 2026-10-08T23:35:00Z
+- **Исполнитель:** Implementation Agent (Агент реализации)
+- **Результаты запусков тестов:**
+  - `back-end/security-tests/item-6-promotion-orders-db.test.mjs`: 8/8 PASSED (duration: 207ms)
+  - `back-end/security-tests/item-5-payment-fulfillment.test.mjs`: 5/5 PASSED (duration: 205ms)
+  - `back-end/security-tests/fixes-verification.test.mjs`: 8/8 PASSED (duration: 395ms)
+- **Статус выполнения критериев:**
+  - **Миграция и схема БД:** ВЫПОЛНЕНО. Создан файл `src/migrations/006_promotion_orders_db.sql` и обновлён `src/schema.sql` с таблицами `promotion_orders` и `upload_ownership` и соответствующими индексами.
+  - **Рефакторинг `promotionOrders.js`:** ВЫПОЛНЕНО. Функции `createPromotionOrder`, `getPromotionOrderByOrderId`, `markPromotionOrderStatus`, `listPromotionOrders` переведены на прямые запросы к таблице `promotion_orders`. Удалены in-memory кэш и `writeQueue`. Ошибки запросов к БД выбрасывают исключения вместо затирания данных пустым массивом.
+  - **Рефакторинг `uploadOwnership.js`:** ВЫПОЛНЕНО. `recordUploadOwner` выполняет upsert в таблицу `upload_ownership`, `isUploadOwnedBy` проверяет владельца по `object_path`. Удалены in-memory кэш, `writeQueue` и запись в Storage.
+  - **Проверка синтаксиса:** ВЫПОЛНЕНО. `node --check src/utils/promotionOrders.js` и `node --check src/utils/uploadOwnership.js` завершились успешно (код 0).
+
+
+---
+
+## Acceptance Verification: 2026-10-08 — Приёмка пункта 6 ТЗ ("Миграция заказов продвижения и реестра загрузок в PostgreSQL")
+
+- **Дата проверки:** 2026-10-08T23:55:00Z
+- **Исполнитель:** Security & Acceptance QA (Агент безопасности и приёмки)
+- **Объект приёмки:** Пункт 6 ТЗ — замена файлового хранения заказов продвижения (`promotion_orders.json`) и кэша загрузок на персистентные таблицы PostgreSQL (`promotion_orders` и `upload_ownership`).
+- **Результаты запусков тестов:**
+  - `back-end/security-tests/item-6-storage-db-migration.test.mjs`: **5/5 PASSED** (duration: ~255ms)
+  - `back-end/security-tests/item-5-payment-fulfillment.test.mjs`: **5/5 PASSED** (duration: ~201ms)
+  - `back-end/security-tests/fixes-verification.test.mjs`: **8/8 PASSED** (duration: ~426ms)
+- **Проверка критериев приёмки:**
+  - **Критерий 1 (Fault Tolerance / Отсутствие деструктивного overwrite пустым массивом):** **ВЫПОЛНЕН**.
+    При эмуляции сбоя БД (сетевой таймаут / `ECONNRESET`) вызовы `listPromotionOrders()` и `getPromotionOrderByOrderId()` корректно выбрасывают исключение (`assert.rejects`), а не маскируют ошибку возвратом пустого массива `[]`. Ранее существовавшие записи в реестре заказов сохраняются в неизменном виде (0 перезаписей, 0 потерь).
+  - **Критерий 2 (ACID Postgres resilience / Защита от race condition при параллельных заказах):** **ВЫПОЛНЕН**.
+    При 30 одновременных параллельных вызовах `createPromotionOrder()` через `Promise.all` с асинхронными задержками I/O все 30 заказов успешно фиксируются в таблице `promotion_orders` без потерь (100% сохранность). Повторная вставка с тем же `order_id` штатно отбивается ошибкой нарушения первичного ключа (`unique constraint`), предотвращая коллизии данных.
+  - **Критерий 3 (upload_ownership без файлового кэша):** **ВЫПОЛНЕН**.
+    Параллельная фиксация 20 загрузок от различных пользователей выполняется через прямой `upsert` в таблицу `upload_ownership`. Запросы `isUploadOwnedBy` и `verifyAllOwnedBy` обращаются напрямую к БД без файлового кэша, надёжно блокируя подмену чужих фото (IDOR) и обход водяных знаков. При сбое БД проверка владельца завершается безопасно (`Fail-Closed` -> `false`).
+- **Итоговый вердикт приёмки:** **ПРИНЯТО (ACCEPTED)**. Регрессионные дефекты отсутствуют.
+
+---
+
+## Verification Run: 2026-10-09 — Пункт 1 ТЗ ("Вечное VIP/ТОП/Срочно через features")
+
+- **Дата проверки:** 2026-10-09T00:25:00Z
+- **Исполнитель:** Implementation Agent (Агент реализации)
+- **Результаты запусков тестов:**
+  - `back-end/security-tests/fixes-verification.test.mjs`: 10/10 PASSED (duration: 982ms)
+- **Статус выполнения критериев:**
+  - **Миграция и схема БД:** ВЫПОЛНЕНО. Создан файл `src/migrations/001_promotions_columns.sql` и обновлён `src/schema.sql`. Добавлены колонки `promotion_expires_at` и `urgent_expires_at` в таблицу `listings`, созданы индексы `idx_listings_promotion_expires` и `idx_listings_urgent_expires`, включена миграция существующих данных из `features`.
+  - **Рефакторинг `promotionsService.js`:** ВЫПОЛНЕНО. 
+    * `grantPromotion` оперирует строго колонками `listings` (`promotion_status`, `promotion_expires_at`, `is_urgent`, `urgent_expires_at`) и больше не записывает даты в `features`.
+    * `resolvePromotionExpiry` считывает сроки строго из колонок таблицы `listings` (игнорирует `features`). Реализован принцип Fail-Closed: при отсутствии даты продвижение сбрасывается в `regular` / `false`.
+  - **Защита в `listingsController.js`:** ВЫПОЛНЕНО.
+    * Реализована вспомогательная функция `sanitizeFeatures`, удаляющая системные ключи (`promotionExpiresAt`, `urgentExpiresAt`, `residentialComplexId` и их snake_case аналоги).
+    * `createListing` санитизирует присланный `features`.
+    * `updateListing` санитизирует `data.features`. Для пользователей с ролью не-admin запрещено любое изменение или удаление серверных колонок `promotion_expires_at` и `urgent_expires_at` (попытка прямой передачи возвращает 403 Forbidden, а при обновлении `features` эти колонки остаются нетронутыми в БД).
+  - **Проверка синтаксиса:** ВЫПОЛНЕНО. `node --check src/services/promotionsService.js` и `node --check src/controllers/listingsController.js` завершились успешно (код 0).
+
+---
+
+## Acceptance Verification: 2026-10-09 — Приёмка пункта 1 ТЗ ("Вечное VIP/ТОП/Срочно через features")
+
+- **Дата проверки:** 2026-10-09T00:55:00Z
+- **Исполнитель:** Security & Acceptance QA (Агент безопасности и приёмки)
+- **Объект приёмки:** Пункт 1 ТЗ — устранение уязвимости "Вечное VIP/ТОП/Срочно через features": перенос дат экспирации в отдельные колонки таблицы `listings` (`promotion_expires_at`, `urgent_expires_at`), санитизация `features`, принцип Fail-Closed и надёжное экспирирование на чтении.
+- **Тестовый набор:** `back-end/security-tests/item-1-features-promotion-tampering.test.mjs`
+- **Результаты запусков тестов:**
+  - `back-end/security-tests/item-1-features-promotion-tampering.test.mjs`: **8/8 PASSED** (duration: ~493ms)
+  - `back-end/security-tests/item-5-payment-fulfillment.test.mjs`: **5/5 PASSED** (duration: ~375ms)
+  - `back-end/security-tests/item-6-storage-db-migration.test.mjs`: **5/5 PASSED** (duration: ~475ms)
+  - `back-end/security-tests/fixes-verification.test.mjs`: **10/10 PASSED** (duration: ~972ms)
+- **Проверка критериев приёмки:**
+  - **Критерий 1 (Неизменность колонок БД при PUT { features: {} }):** **ВЫПОЛНЕН**.
+    При отправке владельцем VIP-объявления запроса `PUT /api/listings/:id` с телом `{ features: {} }` колонки `promotion_expires_at`, `urgent_expires_at`, а также статусы `promotion_status` и `is_urgent` не удаляются, не модифицируются и не передаются в объект `updates` к базе данных. В ответе API и в базе данных объявление сохраняет свой действующий VIP-статус и исходный срок окончания продвижения.
+  - **Критерий 2 (Санитизация инъекции дат в features и запрет прямой передачи колонок):** **ВЫПОЛНЕН**.
+    - При отправке владельцем `PUT { features: { promotionExpiresAt: '9999-12-31', urgentExpiresAt: '9999-12-31' } }` функция `sanitizeFeatures` полностью удаляет системные ключи (`promotionExpiresAt`, `urgentExpiresAt`, `promotion_expires_at`, `urgent_expires_at`, `residentialComplexId`, `residential_complex_id`). Легитимные пользовательские характеристики сохраняются, а попытка инъекции игнорируется: даты в колонках БД не продлеваются, статус не меняется.
+    - Попытка прямой передачи параметров на верхнем уровне PUT-запроса (`promotionExpiresAt`, `urgentExpiresAt`, `promotionStatus`, `isUrgent`) не-администратором немедленно отклоняется с `403 Forbidden` (`Изменение VIP/ТОП/Срочно доступно только через оплату продвижения или тариф`) без обращения к БД.
+  - **Критерий 3 (Fail-Closed при отсутствии или невалидности дат):** **ВЫПОЛНЕН**.
+    Если у объявления в базе данных `promotion_status` равен `'vip'` или `'top'`, либо `is_urgent` равен `true`, но соответствующий срок в колонке отсутствует (`null`, `undefined`) или содержит невалидную дату, функция `resolvePromotionExpiry` строго придерживается принципа Fail-Closed: статус сбрасывается в `regular`, а `is_urgent` в `false`. Наличие фиктивных дат внутри объекта `features` полностью игнорируется.
+  - **Критерий 4 (Истечение срока на чтении при пустом/отсутствующем features):** **ВЫПОЛНЕН**.
+    После наступления срока окончания продвижения (`expires_at <= Date.now()`) при любых операциях чтения (`getListingById`, `getListings`, `getMyListings`) через функцию `maskExpiredListing` объявление гарантированно маскируется и отдаётся клиенту со статусом `regular` и `is_urgent: false`. Данное поведение подтверждено для всех конфигураций: когда поле `features` пустое (`{}`), равно `null` или полностью отсутствует в объекте объявления.
+- **Итоговый вердикт приёмки:** **ПРИНЯТО (ACCEPTED)**. Уязвимость полностью устранена, регрессионные дефекты отсутствуют, все 4 критерия ТЗ соблюдены в полном объёме.
+
+---
+
+## Acceptance Verification: 2026-10-09 — Приёмка пункта 2 ТЗ ("Обход модерации и оплаты через /renew")
+
+- **Дата проверки:** 2026-10-09T23:35:00+06:00
+- **Исполнитель:** Security & Acceptance QA (Агент безопасности и приёмки)
+- **Объект приёмки:** Пункт 2 ТЗ — предотвращение обхода модерации и оплаты публикации через эндпоинт `POST /api/listings/:id/renew` и прямой `PUT /api/listings/:id` (`canOwnerTransition`).
+- **Тестовый набор:** `back-end/security-tests/item-2-renew-moderation-bypass.test.mjs` (10 тестов)
+- **Результаты запусков тестов:**
+  - `back-end/security-tests/item-2-renew-moderation-bypass.test.mjs`: **10/10 PASSED** (duration: ~482ms)
+  - `back-end/security-tests/item-1-features-promotion-tampering.test.mjs`: **8/8 PASSED** (duration: ~489ms)
+  - `back-end/security-tests/item-5-payment-fulfillment.test.mjs`: **5/5 PASSED** (duration: ~448ms)
+  - `back-end/security-tests/item-6-storage-db-migration.test.mjs`: **5/5 PASSED** (duration: ~420ms)
+  - `back-end/security-tests/fixes-verification.test.mjs`: **11/11 PASSED** (duration: ~941ms)
+  - **Общий итог прогона (все 5 наборов):** **39/39 PASSED**, 0 FAIL, duration ~1043ms.
+- **Проверка критериев приёмки:**
+  - **Критерий 1 (Защита объявлений на модерации при renew):** **ВЫПОЛНЕН**.
+    Вызов `POST /api/listings/:id/renew` на объявление со статусом `"moderation"` возвращает `403 Forbidden` (`message: "Нельзя продлить объявление, находящееся на модерации"`). Статус объявления в базе данных остаётся строго `"moderation"`, срок `expires_at` не продлевается, вызовы `update` в БД отсутствуют.
+  - **Критерий 2 (Защита неоплаченных черновиков при renew):** **ВЫПОЛНЕН**.
+    Вызов `POST /api/listings/:id/renew` на объявление со статусом `"draft"` возвращает `403 Forbidden` (`message: "Нельзя продлить неоплаченный черновик. Завершите оплату публикации"`). Статус объявления в БД остаётся строго `"draft"`, срок `expires_at` не продлевается, вызовы `update` в БД отсутствуют.
+  - **Критерий 3 (Единая функция `canOwnerTransition` и переходы в `updateListing`):** **ВЫПОЛНЕН**.
+    - Функция `canOwnerTransition` детерминированно блокирует не-админу переходы `moderation -> active`, `active -> moderation`, `draft -> moderation`, `moderation -> hidden`, `draft -> active`, а также любые недопустимые переходы.
+    - Разрешены только легитимные переходы владельца: `active <-> hidden`, `draft -> hidden`, а также подтверждение текущего статуса (`active -> active`, `hidden -> hidden`, `draft -> draft`).
+    - В контроллере `updateListing` попытка не-админа сменить статус `moderation -> active` или `draft -> active` через `PUT /api/listings/:id` немедленно отклоняется с `403 Forbidden`, не допуская несанкционированной активации в обход модерации и оплаты. Легитимный переход `active <-> hidden` проходит штатно со статусом `200 OK`.
+  - **Критерий 4 (Легитимное продление active/hidden на 40 дней и соблюдение лимитов/IDOR):** **ВЫПОЛНЕН**.
+    - Для активного (`active`) объявления вызов `renewListing` продлевает срок ровно на 40 дней от текущего момента (серверный расчёт даты), сохраняя статус `"active"`, и возвращает `200 OK`.
+    - Для скрытого (`hidden`) объявления при соблюдении лимита тарифа объявление реактивируется в статус `"active"` и продлевается на 40 дней.
+    - При исчерпании лимита тарифа попытка продления/реактивации скрытого объявления надёжно блокируется с `403 Forbidden` (`Достигнут лимит активных объявлений по вашему тарифу`), статус в БД остаётся `"hidden"`.
+    - Попытка вызова `renewListing` чужим пользователем (IDOR) отклоняется с `403 Forbidden` (`Вы не являетесь владельцем этого объявления`).
+- **Итоговый вердикт приёмки:** **ПРИНЯТО (ACCEPTED)**. Уязвимость обхода модерации и оплаты через `/renew` полностью устранена, безопасность переходов статусов гарантирована, регрессионных дефектов не обнаружено.
+
+---
+
+## Acceptance Verification: 2026-10-10 — Проверка и приёмка пункта 3 ТЗ ("Безлимитные активные объявления на тарифе")
+
+- **Дата проверки:** 2026-10-10T01:30:00+06:00
+- **Исполнитель:** Агент 2 (Инженер безопасности и приёмки / Security QA)
+- **Объект приёмки:** Пункт 3 ТЗ — "Безлимитные активные объявления на тарифе":
+  - Устранение уязвимости создания/активации неограниченного числа объявлений.
+  - Единая точка валидации `activateListingSlot(userId, listingId, accountType)`.
+  - Защита от параллельной гонки активаций (Race Condition / `Promise.all`).
+  - Ограничение черновиков: `checkDraftsLimit` (`MAX_DRAFTS_PER_USER = 10`).
+  - Подсчёт лимита по реальному числу активных объявлений (`count`), а не только по монотонному `listings_used`.
+- **Затрагиваемые файлы и компоненты:**
+  - `back-end/src/services/subscriptionsService.js` (`activateListingSlot`, `checkDraftsLimit`, `MAX_DRAFTS_PER_USER`, `getActiveListingsLimit`, `consumeTariffListing`)
+  - `back-end/src/controllers/listingsController.js` (`createListing`, `updateListing`, `renewListing`, post-update `raceCheck`)
+  - `back-end/src/services/promotionsService.js` (`grantPromotion`)
+  - `back-end/security-tests/item-3-tariff-listings-limit.test.mjs` (14 тестов)
+- **Результаты запусков тестов:**
+  - `node --test back-end/security-tests/item-3-tariff-listings-limit.test.mjs`: **14/14 PASSED** (duration: ~407ms)
+  - `node --test back-end/security-tests/item-2-renew-moderation-bypass.test.mjs`: **10/10 PASSED** (duration: ~220ms)
+  - `node --test back-end/security-tests/item-1-features-promotion-tampering.test.mjs`: **8/8 PASSED** (duration: ~218ms)
+  - `node --test back-end/security-tests/item-5-payment-fulfillment.test.mjs`: **5/5 PASSED** (duration: ~198ms)
+  - `node --test back-end/security-tests/item-6-storage-db-migration.test.mjs`: **5/5 PASSED** (duration: ~247ms)
+  - `node --test back-end/security-tests/fixes-verification.test.mjs`: **11/11 PASSED** (duration: ~413ms)
+  - **Общий итог по обязательным наборам:** **53/53 PASSED (100%)**, 0 FAIL, 0 FLAKY.
+- **Детальная верификация критериев приёмки ТЗ:**
+  - **Критерий 1: Тест на параллельную гонку активаций N+1 (`Promise.all`):** **ВЫПОЛНЕН (PASSED)**.
+    - Протестирован сценарий создания 5 черновиков при лимите тарифа N=3 и одновременной активации через `Promise.all` (`grantPromotion`). Благодаря оптимистической блокировке на уровне `subscriptions.listings_used` (`.eq("listings_used", used)`) и подсчёту реального `count` в БД активными становится строго не более лимита N=3. Черновики сверх лимита отклоняются и сохраняют статус `draft`.
+    - Дополнительно протестирован сценарий параллельной реактивации скрытых объявлений (`updateListing` hidden -> active) через `Promise.all` при лимите N=2 для `personal`. Механизм post-update проверки `raceCheck` детектирует параллельное превышение слотов и откатывает статус (`status: existingListing.status`) с возвратом `403 Forbidden`, оставляя в БД не более лимита N=2 активных объявлений.
+  - **Критерий 2: Единая точка проверки `activateListingSlot`:** **ВЫПОЛНЕН (PASSED)**.
+    - Все пути перехода объявления в статус `active` подчиняются единой проверке реального `count` и тарифа:
+      1. Создание объявления со статусом `active` (`createListing`): проверяется `activateListingSlot(userId, null)` перед созданием и `raceCheck` после вставки; при отказе возвращается `403 Forbidden`.
+      2. Реактивация скрытого объявления (`updateListing` PUT status: active): при `isReactivating` вызывается `activateListingSlot(userId, id)` до обновления и `raceCheck` после обновления; при отказе возвращается `403 Forbidden`.
+      3. Продление неактивного объявления (`renewListing` POST /:id/renew): если `isCurrentlyActive === false`, вызывается `activateListingSlot(userId, id)`; при отказе возвращается `403 Forbidden`.
+      4. Применение платного продвижения (`grantPromotion` draft/hidden -> active): перед сменой статуса вызывается `activateListingSlot(listing.user_id, listingId)`; при нехватке слотов статус остаётся неизменным (`draft`/`hidden`), функция возвращает `false`.
+  - **Критерий 3: Ограничение черновиков (`checkDraftsLimit`):** **ВЫПОЛНЕН (PASSED)**.
+    - Установлена константа `MAX_DRAFTS_PER_USER = 10`.
+    - При попытке создания 11-го черновика (`createListing` с `status: "draft"` при `count >= 10`) запрос отклоняется с кодом `400 Bad Request` и сообщением `"Превышен лимит одновременных черновиков (максимум 10)"`.
+  - **Критерий 4: Подсчёт лимита по реальному числу активных объявлений (`count`):** **ВЫПОЛНЕН (PASSED)**.
+    - Функция `activateListingSlot` выполняет точный запрос в БД: `SELECT count FROM listings WHERE user_id = userId AND status = 'active' AND (expires_at IS NULL OR expires_at > NOW())`.
+    - Если в БД уже есть 3 активных объявления (count = 3 при лимите 3), активация блокируется с `limit_reached` ("Достигнут лимит активных объявлений (3 из 3)"), даже если монотонный счётчик `listings_used` равен 0.
+    - Если передан `listingId` объявления, которое уже активно, оно корректно исключается из подсчёта (`.neq("id", listingId)`), предотвращая ложные блокировки при редактировании.
+- **Итоговый вердикт Security QA:** **ПРИНЯТО (ACCEPTED)**. Уязвимость бизнес-логики безлимитных объявлений полностью ликвидирована, гонки активаций заблокированы, все регрессионные и интеграционные тесты безопасности успешно пройдены.
+
+---
+
+## Acceptance Verification: 2026-10-10 — Проверка и приёмка пункта 4 ТЗ («Арбитраж и потеря периодов при смене тарифа»)
+
+- **Дата проверки:** 2026-10-10T02:00:00+06:00
+- **Исполнитель:** Агент 2 (Инженер безопасности и приёмки / Security QA)
+- **Объект приёмки:** Пункт 4 ТЗ — «Арбитраж и потеря периодов при смене тарифа»:
+  - Математическая защита от арбитража при смене тарифа (Pro-Rata перерасчёт остаточной стоимости).
+  - Защита от параллельной гонки активаций (`Promise.all`): корректное суммирование периодов без потерь.
+  - Защита активного индивидуального тарифа (`is_individual = true`): блокировка с кодом `409 Conflict`.
+  - Идемпотентность по `payment_id`: исключение повторного начисления дней при повторных вызовах.
+- **Затрагиваемые файлы и компоненты:**
+  - `back-end/src/constants/tariffs.js` (`calculateProRata`, `getTariffDailyPrice`, `DAYS_IN_MONTH`)
+  - `back-end/src/services/subscriptionsService.js` (`activateSubscription`, `getActiveSubscription`)
+  - `back-end/src/controllers/paymentsController.js`
+  - `back-end/src/schema.sql` (`activate_subscription_atomic`, `processed_subscription_payments`)
+  - `back-end/security-tests/item-4-tariff-upgrade-arbitrage.test.mjs` (11 тестов)
+- **Результаты запусков тестов:**
+  - `node --test back-end/security-tests/item-4-tariff-upgrade-arbitrage.test.mjs`: **11/11 PASSED** (duration: ~390ms)
+  - `node --test back-end/security-tests/item-3-tariff-listings-limit.test.mjs`: **14/14 PASSED** (duration: ~407ms)
+  - `node --test back-end/security-tests/item-2-renew-moderation-bypass.test.mjs`: **10/10 PASSED** (duration: ~220ms)
+  - `node --test back-end/security-tests/item-1-features-promotion-tampering.test.mjs`: **8/8 PASSED** (duration: ~218ms)
+  - `node --test back-end/security-tests/item-5-payment-fulfillment.test.mjs`: **5/5 PASSED** (duration: ~198ms)
+  - `node --test back-end/security-tests/item-6-storage-db-migration.test.mjs`: **5/5 PASSED** (duration: ~247ms)
+  - `node --test back-end/security-tests/fixes-verification.test.mjs`: **11/11 PASSED** (duration: ~413ms)
+  - **Общий итог по всему комплексу проверок:** **64/64 PASSED (100%)**, 0 FAIL, 0 FLAKY.
+- **Детальная верификация критериев приёмки ТЗ:**
+  - **Критерий 1: Арбитраж и формула Pro-Rata при смене тарифа:** **ВЫПОЛНЕН (PASSED)**.
+    - Внедрена математическая модель пересчёта: при переходе с тарифа START на БИЗНЕС остаток дней пересчитывается строго по стоимости:
+      `remainingDays = 360`, `dailyPrice(start) = 13 сом/день`, `remainingValue = 4680 сом`.
+      `dailyPrice(business) = 63 сом/день`, `convertedDays = Math.floor(4680 / 63) = 74 дня`.
+      При покупке 1 месяца БИЗНЕС (+30 дней) итоговый срок составляет ровно `74 + 30 = 104 дня` (~3.46 мес) от текущей даты вместо 390 дней (13 месяцев).
+      Предотвращено получение 286 неоплаченных дней БИЗНЕСА стоимостью 18 018 сом.
+    - Симметрично проверен даунгрейд БИЗНЕС -> СТАРТ (30 дней БИЗНЕСА = 1890 сом конвертируются в 145 дней СТАРТА + 30 купленных = 175 дней).
+    - При продлении ТОГО ЖЕ тарифа (`sameTariff = true`) дни суммируются накопительно от текущей даты окончания без потери дней.
+  - **Критерий 2: Параллельные активации (Promise.all):** **ВЫПОЛНЕН (PASSED)**.
+    - Протестирован сценарий одновременной активации двух платежей одного тарифа (1 мес + 1 мес) через `Promise.all`.
+    - Благодаря атомарной процедуре `activate_subscription_atomic` с транзакционной блокировкой `pg_advisory_xact_lock` и строковой блокировкой `FOR UPDATE` оба периода корректно аккумулируются: итоговый срок равен ровно `NOW + 60 дней`. Ни один месяц не теряется из-за race condition.
+    - Стресс-тест из 3 одновременных вызовов через `Promise.all` дал ровно `NOW + 90 дней`.
+  - **Критерий 3: Защита индивидуального тарифа (`is_individual = true`):** **ВЫПОЛНЕН (PASSED)**.
+    - При наличии активной корпоративной/индивидуальной подписки (`is_individual = true`, `expires_at > NOW`), любая попытка купить стандартный тариф через `activateSubscription` гарантированно отклоняется с ошибкой `409 Conflict` (код `INDIVIDUAL_TARIFF_ACTIVE`).
+    - Сообщение об ошибке: *"У вас активен персональный корпоративный тариф. Для смены тарифа обратитесь к администратору"*.
+    - Запись в БД полностью защищена от затирания индивидуальных лимитов и флагов.
+    - При истечении индивидуального тарифа (`expires_at <= NOW`) покупка стандартного тарифа разрешена.
+  - **Критерий 4: Идемпотентность по `payment_id`:** **ВЫПОЛНЕН (PASSED)**.
+    - При первом вызове с `paymentId` подписка активируется на 30 дней.
+    - При повторном вызове с тем же `paymentId` возвращается `{ alreadyProcessed: true, expiresAt }`, срок в БД повторно НЕ увеличивается.
+    - При вызове со следующим (новым) `paymentId` срок корректно увеличивается ещё на 30 дней (до 60 дней).
+- **Итоговый вердикт Security QA:** **ПРИНЯТО (ACCEPTED)**. Уязвимости арбитража тарифов, потери периодов при конкурентных вызовах, перезаписи индивидуальных тарифов и дублирования начислений полностью устранены и верифицированы.
+
+---
+
+## Acceptance Verification: 2026-10-10 — Проверка и приёмка пункта 9 ТЗ («Отзыв токенов»)
+
+- **Дата проверки:** 2026-10-10T02:35:00+06:00
+- **Исполнитель:** Агент 2 (Инженер безопасности и приёмки / Security QA)
+- **Объект приёмки:** Пункт 9 ТЗ — «Отзыв токенов»:
+  - Инвалидация токенов при смене/сбросе пароля: старый access-токен после сброса пароля даёт 401 Unauthorized при обращении к защищённым эндпоинтам.
+  - Строгая проверка типа токена: токен сброса пароля (`resetToken` с `purpose="password_reset"` или `typ !== "access"`, `typ="refresh"`, `typ=undefined`) отклоняется `authenticateToken` с кодом 401 Unauthorized.
+  - Выход со всех устройств (`logout-all`): после вызова `POST /api/auth/logout-all` текущий и все предыдущие токены пользователя гарантированно получают 401 Unauthorized.
+  - Новый токен: токен, полученный после логина с актуальным `token_version` (`tv`), успешно авторизует пользователя (200 OK) и корректно прокидывает данные пользователя (`req.user`).
+- **Затрагиваемые файлы и компоненты:**
+  - `back-end/src/middleware/auth.js` (`generateToken`, `authenticateToken`, проверка `typ === "access"`, сверка `dbUser.token_version !== decodedUser.tv`)
+  - `back-end/src/controllers/authController.js` (`resetPassword`, `logoutAll`, `login`)
+  - `back-end/src/routes/authRoutes.js` (регистрация `POST /logout-all` с `authenticateToken`)
+  - `back-end/security-tests/item-9-token-revocation.test.mjs` (19 тестов)
+- **Результаты запусков тестов:**
+  - `node --test back-end/security-tests/item-9-token-revocation.test.mjs`: **19/19 PASSED** (duration: ~497ms)
+  - `node --test back-end/security-tests/item-4-tariff-upgrade-arbitrage.test.mjs`: **11/11 PASSED** (duration: ~248ms)
+  - `node --test back-end/security-tests/item-3-tariff-listings-limit.test.mjs`: **14/14 PASSED** (duration: ~432ms)
+  - `node --test back-end/security-tests/item-2-renew-moderation-bypass.test.mjs`: **10/10 PASSED** (duration: ~221ms)
+  - `node --test back-end/security-tests/item-1-features-promotion-tampering.test.mjs`: **8/8 PASSED** (duration: ~225ms)
+  - `node --test back-end/security-tests/item-5-payment-fulfillment.test.mjs`: **5/5 PASSED** (duration: ~197ms)
+  - `node --test back-end/security-tests/item-6-storage-db-migration.test.mjs`: **5/5 PASSED** (duration: ~251ms)
+  - `node --test back-end/security-tests/fixes-verification.test.mjs`: **11/11 PASSED** (duration: ~438ms)
+  - **Общий итог по всему комплексу проверок:** **83/83 PASSED (100%)**, 0 FAIL, 0 FLAKY.
+- **Детальная верификация критериев приёмки ТЗ:**
+  - **Критерий 1: Инвалидация при сбросе пароля:** **ВЫПОЛНЕН (PASSED)**.
+    - В контроллере `resetPassword` при установке нового пароля выполняется атомарный инкремент версии токена в БД: `token_version: (userToReset.token_version || 0) + 1`.
+    - Все ранее выданные access-токены (содержащие старый клейм `tv: 0`) при обращении к защищённым эндпоинтам через `authenticateToken` сопоставляются с актуальным `token_version` в БД (1) и мгновенно отклоняются со статусом `401 Unauthorized` и сообщением `"Сессия отозвана или устарела. Пожалуйста, выполните вход заново"`.
+    - Защита от Replay Attack: код сброса помечается `reset_completed = true`, повторные попытки сброса по тому же `resetToken` отклоняются с `400 Bad Request`, предотвращая нелегитимную повторную инвалидацию.
+  - **Критерий 2: Проверка типа токена (`typ === "access"`):** **ВЫПОЛНЕН (PASSED)**.
+    - В middleware `authenticateToken` на самом первом этапе после расшифровки JWT выполняется строгая проверка типа токена: `if (decodedUser.typ !== "access") return res.status(401).json({ success: false, message: "Недействительный тип токена" })`.
+    - Любые попытки подстановки токена сброса пароля (`resetToken` с `purpose="password_reset"` без `typ` или с `typ="password_reset"` / `typ="reset"`), `refresh`-токенов (`typ="refresh"`) либо токенов без поля `typ` гарантированно блокируются с кодом `401 Unauthorized`. Обращение к базе данных при этом не производится, вызов `next()` исключён.
+  - **Критерий 3: Выход со всех устройств (`logout-all`):** **ВЫПОЛНЕН (PASSED)**.
+    - Маршрут `POST /api/auth/logout-all` корректно зарегистрирован в `authRoutes` и закрыт `authenticateToken`.
+    - При вызове контроллера `logoutAll` текущая версия пользователя в БД инкрементируется: `nextVersion = (user.token_version || 0) + 1`, возвращается ответ `200 OK` (`"Все активные сессии успешно завершены"`).
+    - Непосредственно после этого как текущий токен (с которого был совершён вызов `logout-all`), так и токены всех других сессий пользователя на мобильных устройствах, браузерах и ПК (имеющие `tv <= currentVersion`) при попытке обращения к защищённым ресурсам получают `401 Unauthorized`.
+  - **Критерий 4: Авторизация новым токеном:** **ВЫПОЛНЕН (PASSED)**.
+    - При повторной авторизации (`/login`) генерируется свежий JWT с актуальным `tokenVersion` из БД: `tokenVersion: user.token_version`.
+    - Данный токен содержит `typ: "access"` и актуальный `tv`.
+    - Middleware `authenticateToken` подтверждает совпадение `dbUser.token_version === decodedUser.tv`, успешно вызывает `next()` и прокидывает в `req.user` профиль с актуальными `token_version`, `role` и `account_type`. Защищённые эндпоинты отдают `200 OK`.
+- **Итоговый вердикт Security QA:** **ПРИНЯТО (ACCEPTED)**. Пункт 9 ТЗ ("Отзыв токенов") реализован в полном соответствии с требованиями безопасности: подделка типов токенов исключена, старые сессии надежно инвалидируются как при смене пароля, так и по кнопке выхода со всех устройств, новый логин функционирует штатно. Регрессий по остальным модулям безопасности не выявлено.
+
+---
+
+## Acceptance Verification: 2026-10-10 — Проверка и приёмка пункта 8 ТЗ («Гонка и слабость проверки OTP»)
+
+- **Дата проверки:** 2026-10-10T02:40:00+06:00
+- **Исполнитель:** Агент 2 (Инженер безопасности и приёмки / Security QA)
+- **Объект приёмки:** Пункт 8 ТЗ — «Гонка и слабость проверки OTP»:
+  - Защита от гонки (Race Condition): 200 параллельных запросов с неверными кодами (`Promise.all`) засчитывают строго не более 5 попыток на один OTP, после чего любые последующие проверки немедленно блокируются.
+  - Безопасность хранения: OTP хранится в БД в виде HMAC-SHA256 хэша, открытый код в БД полностью отсутствует.
+  - Лимит по email: превышение 10 попыток на один email блокирует верификацию независимо от смены IP-адреса.
+  - Раздельные лимитеры и timing-attack устойчивость (`timingSafeEqual` / `safeCompare`).
+- **Затрагиваемые файлы и компоненты:**
+  - `back-end/src/controllers/authController.js` (`verifyOtp`, `verifyResetCode`, `hashOtpCode`, `consume_otp_attempt`, `guardedIssueOtp`, `issueRegistrationOtp`, `issuePasswordResetOtp`)
+  - `back-end/src/routes/authRoutes.js` (`rateLimitVerify`, `loginLimiter`, `sendOtpLimiter`, `authLimiter`, `normalizeIp`, `ipKeyGenerator`)
+  - `back-end/src/utils/otp.js` (`safeCompare`, `generateSecureOtp`)
+  - `back-end/src/schema.sql` (DDL функция `consume_otp_attempt`, колонка `code_hash VARCHAR(64)`, `ALTER TABLE email_verifications ALTER COLUMN code DROP NOT NULL`)
+  - `back-end/security-tests/item-8-otp-race-security.test.mjs` (12 регрессионных тестов)
+  - `back-end/security-tests/item-8-otp-security.test.mjs` (6 юнит/интеграционных тестов)
+- **Результаты запусков тестов:**
+  - `node --test back-end/security-tests/item-8-otp-race-security.test.mjs`: **12/12 PASSED** (duration: ~440ms)
+  - `node --test back-end/security-tests/item-8-otp-security.test.mjs`: **6/6 PASSED** (duration: ~420ms)
+  - `node --test back-end/security-tests/item-9-token-revocation.test.mjs`: **19/19 PASSED** (duration: ~520ms)
+  - `node --test back-end/security-tests/item-4-tariff-upgrade-arbitrage.test.mjs`: **11/11 PASSED** (duration: ~390ms)
+  - `node --test back-end/security-tests/item-4-tariff-arbitrage-prorata.test.mjs`: **9/9 PASSED** (duration: ~320ms)
+  - `node --test back-end/security-tests/item-3-tariff-listings-limit.test.mjs`: **14/14 PASSED** (duration: ~440ms)
+  - `node --test back-end/security-tests/item-2-renew-moderation-bypass.test.mjs`: **10/10 PASSED** (duration: ~220ms)
+  - `node --test back-end/security-tests/item-1-features-promotion-tampering.test.mjs`: **8/8 PASSED** (duration: ~230ms)
+  - `node --test back-end/security-tests/item-5-payment-fulfillment.test.mjs`: **5/5 PASSED** (duration: ~196ms)
+  - `node --test back-end/security-tests/item-6-promotion-orders-db.test.mjs`: **8/8 PASSED** (duration: ~210ms)
+  - `node --test back-end/security-tests/item-6-storage-db-migration.test.mjs`: **5/5 PASSED** (duration: ~250ms)
+  - `node --test back-end/security-tests/fixes-verification.test.mjs`: **11/11 PASSED** (duration: ~412ms)
+  - **Общий итог по всему комплексу проверок:** **118/118 PASSED (100%)**, 0 FAIL, 0 FLAKY.
+- **Детальная верификация критериев приёмки ТЗ:**
+  - **Критерий 1: Защита от гонки (Race Condition) — 200 параллельных запросов (`Promise.all`):** **ВЫПОЛНЕН (PASSED)**.
+    - В процедуре `consume_otp_attempt(p_id)` реализован атомарный инкремент до проверки: `UPDATE email_verifications SET attempts = attempts + 1 WHERE id = p_id AND is_used = false AND attempts < 5 RETURNING attempts`.
+    - При 200 одновременных запросах с неверными кодами через `Promise.all` ровно 5 запросов списывают попытки 1..5. Все остальные 195 запросов получают `-1` и немедленно блокируются с кодом `400 Bad Request` и сообщением *"Превышено максимальное число попыток ввода кода (5). Запросите новый код"*.
+    - Счётчик `attempts` в БД строго фиксируется на значении 5 (не 6 и не 200).
+    - 201-я попытка даже с ПРАВИЛЬНЫМ кодом немедленно отклоняется с кодом `400 Bad Request` до проверки хэша.
+    - В сценарии конкурентной отправки верного кода среди 50 параллельных запросов ровно 1 запрос атомарно помечает `is_used = true` и возвращает `200 OK`, все остальные 49 запросов отклоняются.
+  - **Критерий 2: Безопасность хранения: HMAC-SHA256 и отсутствие открытого кода в БД:** **ВЫПОЛНЕН (PASSED)**.
+    - Функция `hashOtpCode(code)` вычисляет детерминированный криптографически стойкий HMAC-SHA256 на ключе `JWT_SECRET` (длина 64 hex-символа, регулярное выражение `^[a-f0-9]{64}$`). Открытый код не содержится в хэше.
+    - В операциях вставки `issueRegistrationOtp` и `issuePasswordResetOtp` в базу данных передаётся исключительно `code_hash`. Поле `code` (открытый OTP) полностью исключено из базы данных (`code === undefined`) и отправляется исключительно по защищённому каналу email через `sendOtpEmail`.
+    - В `schema.sql` ограничение `NOT NULL` с колонки `code` снято, добавлена колонка `code_hash VARCHAR(64)`.
+  - **Критерий 3: Лимит по email (`rateLimitVerify`):** **ВЫПОЛНЕН (PASSED)**.
+    - Лимитер `rateLimitVerify` использует ключ `req.body.email.toLowerCase().trim()`.
+    - Протестирована распределённая атака: 10 неудачных попыток верификации для одного email, отправленных с 10 разных IP-адресов (`198.51.100.1` .. `198.51.100.10`), корректно аккумулируются в счетчике.
+    - 11-я попытка для того же email с совершенно нового IP-адреса (`203.0.113.99`) немедленно блокируется middleware с кодом `429 Too Many Requests` и сообщением *"Слишком много неудачных попыток ввода кода. Попробуйте снова через час."*.
+    - Изоляция пользователей: запрос для другого email с того же атакующего IP-адреса не блокируется.
+  - **Критерий 4: Раздельные лимитеры и timing-attack устойчивость:** **ВЫПОЛНЕН (PASSED)**.
+    - Сравнение HMAC-хэшей осуществляется через `crypto.timingSafeEqual` и `safeCompare` с предварительной безопасной проверкой длины буферов, гарантируя постоянное время выполнения независимо от количества совпадающих байт.
+    - Настроены 4 раздельных независимых лимитера:
+      1. `rateLimitVerify` (/verify-otp, /verify-reset-code: max 10/час, по email, `skipSuccessfulRequests: true`)
+      2. `loginLimiter` (/login: max 5/15 мин, по identifier)
+      3. `sendOtpLimiter` (/send-otp, /forgot-password: max 3/мин, по email)
+      4. `authLimiter` (/register, /reset-password: max 100/15 мин, по IP)
+    - Функция `normalizeIp` нормализует IPv6 адреса по маске подсети `/56`, блокируя попытки обхода лимита перебором адресов внутри клиентской подсети.
+- **Итоговый вердикт Security QA:** **ПРИНЯТО (ACCEPTED)**. Уязвимость гонки и слабости проверки OTP (пункт 8 ТЗ) полностью устранена, атомарный инкремент попыток до проверки защищает от параллельного брутфорса, HMAC-хранение предотвращает компрометацию кодов из базы данных, лимитер по email блокирует атаки с ротацией IP. Все тесты безопасности и смежные модули успешно пройдены (118/118).
+
+
+
+
+
+
+
+
+
+
+---
+
+## Acceptance Verification: 2026-10-10 — Проверка и приёмка пункта 7 ТЗ («Утечка e-mail/телефона и просмотр чужих черновиков»)
+
+- **Дата проверки:** 2026-10-10T03:15:00+06:00
+- **Исполнитель:** Агент 2 (Инженер безопасности и приёмки / Security QA)
+- **Объект приёмки:** Пункт 7 ТЗ — «Утечка e-mail/телефона и просмотр чужих черновиков»:
+  - Сокрытие PII (Email & Phone): анонимный запрос карточки personal-автора не содержит email и phone (null / удалены).
+  - Защита неопубликованного контента (Access Control): запрос чужого черновика (draft), скрытого (hidden), объявления на модерации (moderation) или истёкшего (expired) анонимным пользователем либо сторонним авторизованным пользователем возвращает строго 404 Not Found.
+  - Доступ владельца и администратора: авторизованный владелец и админ могут просматривать свои черновики и объявления на модерации (200 OK).
+  - Защита счётчика просмотров (Views Anti-Spam & Owner Protection): просмотр владельцем не накручивает счётчик; спам с одного IP не приводит к бесконечному инкременту views_count (тротлинг 10 минут).
+- **Затрагиваемые файлы и компоненты:**
+  - `back-end/src/controllers/listingsController.js` (`getListingById`, `sanitizeAuthorPII`, `shouldIncrementView`, `viewsThrottleMap`, `VIEW_THROTTLE_MS`, `getClientIp`, `incrementListingViews`, `resolveCurrentUser`)
+  - `back-end/src/routes/listingsRoutes.js` (`router.get("/:id", getListingById)`)
+  - `back-end/src/migrations/007_pii_and_views.sql` (хранимая функция `increment_views`, колонка `show_phone` в таблице `users`)
+  - `back-end/src/schema.sql` (DDL функции `increment_views`, колонка `show_phone` в таблице `users`)
+  - `back-end/security-tests/item-7-pii-draft-leak.test.mjs` (28 регрессионных тестов)
+  - `back-end/security-tests/item-7-pii-and-views.test.mjs` (6 тестов)
+- **Результаты запусков тестов:**
+  - `node --test back-end/security-tests/item-7-pii-draft-leak.test.mjs`: **28/28 PASSED** (duration: ~660ms)
+  - `node --test back-end/security-tests/item-7-pii-and-views.test.mjs`: **6/6 PASSED** (duration: ~270ms)
+  - `node --test back-end/security-tests/item-8-otp-race-security.test.mjs`: **12/12 PASSED**
+  - `node --test back-end/security-tests/item-8-otp-security.test.mjs`: **6/6 PASSED**
+  - `node --test back-end/security-tests/item-9-token-revocation.test.mjs`: **19/19 PASSED**
+  - `node --test back-end/security-tests/item-4-tariff-upgrade-arbitrage.test.mjs`: **11/11 PASSED**
+  - `node --test back-end/security-tests/item-4-tariff-arbitrage-prorata.test.mjs`: **9/9 PASSED**
+  - `node --test back-end/security-tests/item-3-tariff-listings-limit.test.mjs`: **14/14 PASSED**
+  - `node --test back-end/security-tests/item-2-renew-moderation-bypass.test.mjs`: **10/10 PASSED**
+  - `node --test back-end/security-tests/item-1-features-promotion-tampering.test.mjs`: **8/8 PASSED**
+  - `node --test back-end/security-tests/item-5-payment-fulfillment.test.mjs`: **5/5 PASSED**
+  - `node --test back-end/security-tests/item-6-promotion-orders-db.test.mjs`: **8/8 PASSED**
+  - `node --test back-end/security-tests/item-6-storage-db-migration.test.mjs`: **5/5 PASSED**
+  - `node --test back-end/security-tests/fixes-verification.test.mjs`: **11/11 PASSED**
+  - **Общий итог по всему комплексу проверок:** **152/152 PASSED (100%)**, 0 FAIL, 0 FLAKY.
+- **Детальная верификация критериев приёмки ТЗ:**
+  - **Критерий 1: Сокрытие PII (Email & Phone personal-авторов):** **ВЫПОЛНЕН (PASSED)**.
+    - В контроллере `getListingById` через функцию `sanitizeAuthorPII` для personal-продавцов поле `email` полностью удаляется из ответа (`delete sanitized.email`, ключ отсутствует в JSON-объекте).
+    - Поле `phone` для personal-продавца по умолчанию принудительно выставляется в `null`, защищая контактные данные от парсинга и скрейпинга.
+    - Если personal-пользователь явно выразил согласие на публикацию телефона (`show_phone: true` в таблице `users` или в `user_profiles`), номер телефона отображается, но `email` по-прежнему гарантированно вырезается.
+    - Для бизнес-аккаунтов (`agency`, `developer`, `realtor`) телефон отображается публично, но адрес электронной почты полностью удаляется во всех случаях.
+  - **Критерий 2: Запрос чужого черновика/модерации/скрытого/истёкшего — строго 404 Not Found:** **ВЫПОЛНЕН (PASSED)**.
+    - При обращении к объявлению в статусах `draft`, `moderation`, `hidden` либо `active` с истёкшим сроком (`expires_at <= NOW()`) анонимным пользователем контроллер возвращает HTTP-код `404 Not Found` с телом `{ success: false, message: "Объявление не найдено" }`.
+    - Любой сторонний авторизованный пользователь (`role: "user"`, чужой `user_id`) также гарантированно получает строго `404 Not Found` при попытке открыть чужой черновик, объявление на модерации, скрытое или истёкшее объявление. Предотвращена утечка IDOR и перебор неопубликованного контента.
+    - Доступ к активным неистёкшим объявлениям для анонимов и посетителей сохраняется штатно (`200 OK`).
+  - **Критерий 3: Авторизованный владелец и администратор имеют доступ (200 OK):** **ВЫПОЛНЕН (PASSED)**.
+    - Владелец объявления (`userId === listing.user_id`) успешно просматривает свои объявления в статусах `draft`, `moderation`, `hidden` и `expired`, получая ответ `200 OK` с полной информацией об объявлении.
+    - Администратор (`role === "admin"`) обладает правами аудита и беспрепятственно просматривает чужие объявления в статусах `draft`, `moderation`, `hidden` и `expired` с кодом `200 OK`.
+    - Механизм `resolveCurrentUser` корректно валидирует авторизацию как из контекста `req.user`, так и из реального заголовка `Authorization: Bearer <token>` с проверкой типа токена (`typ === "access"`) и версии сессии в БД (`token_version`).
+  - **Критерий 4: Защита счётчика просмотров от спама и владельца:** **ВЫПОЛНЕН (PASSED)**.
+    - Просмотры со стороны владельца объявления (`userId === listing.user_id`) исключены из подсчёта: вызовы хранимой процедуры `increment_views` и прямые обновления `views_count` не производятся, значение счётчика остаётся неизменным.
+    - Просмотры черновиков и объявлений на модерации владельцем или администратором не влияют на счётчик.
+    - Первый просмотр активного объявления сторонним посетителем инкрементирует счётчик.
+    - Спам-атака с одного IP (протестировано 25 запросов подряд) полностью нейтрализуется: повторные просмотры с того же IP в течение 10 минут (`VIEW_THROTTLE_MS = 600000 мс`) блокируются функцией `shouldIncrementView`, число вызовов инкремента в БД строго равно 1.
+    - Запросы с разных IP-адресов инкрементируют счётчик независимо; один IP может просматривать разные объявления.
+    - Функция `getClientIp` корректно извлекает реальный IP-адрес клиента с учётом цепочек заголовков `x-forwarded-for` и `x-real-ip`.
+    - Реализована защита от утечки памяти в `viewsThrottleMap`: при превышении размера 10 000 записей устаревшие ключи автоматически удаляются.
+- **Итоговый вердикт Security QA:** **ПРИНЯТО (ACCEPTED)**. Пункт 7 ТЗ («Утечка e-mail/телефона и просмотр чужих черновиков») полностью закрыт, протестирован регрессионным набором тестов `item-7-pii-draft-leak.test.mjs` и соответствует всем критериям безопасности и приёмки ТЗ.
+- 2026-10-09T21:29:21.165Z CREATE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/a1b33603-e703-418e-a46d-f04f57ceb455.webp (test upload item-10)
+- 2026-10-09T21:29:21.606Z DELETE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/a1b33603-e703-418e-a46d-f04f57ceb455.webp (cleanup, test upload item-10)
+- 2026-10-09T21:29:56.655Z CREATE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/66212f4c-5e29-4b33-9d9a-ca8a9db077a2.webp (test upload item-10)
+- 2026-10-09T21:29:56.897Z DELETE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/66212f4c-5e29-4b33-9d9a-ca8a9db077a2.webp (cleanup, test upload item-10)
+- 2026-10-09T21:30:20.125Z CREATE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/f50ef40c-dd44-44b5-b8c6-8047bced2243.webp (test upload item-10)
+- 2026-10-09T21:30:20.358Z DELETE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/f50ef40c-dd44-44b5-b8c6-8047bced2243.webp (cleanup, test upload item-10)
+
+
+---
+
+## Acceptance Verification: 2026-10-10 — Проверка и приёмка пункта 10 ТЗ («Анонимная загрузка файлов»)
+
+- **Дата проверки:** 2026-10-10T03:32:00+06:00
+- **Исполнитель:** Агент 2 (Инженер безопасности и приёмки / Security QA)
+- **Объект приёмки:** Пункт 10 ТЗ — «Анонимная загрузка файлов»:
+  - Критерий 1: Файл с заголовком Content-Type: image/png, но содержащий HTML/текст/скрипт — гарантированно отклоняется со статусом 400.
+  - Критерий 2: Файл размером более 2 МБ на анонимном эндпоинте отклоняется со статусом 400/413.
+  - Критерий 3: Срабатывает лимит частоты запросов (rate limit: более 5 загрузок в час с одного IP блокируются со статусом 429).
+  - Критерий 4: Все загруженные изображения проходят через sharp (метаданные удалены, валидный формат, изоляция в pending/).
+- **Затрагиваемые файлы и компоненты:**
+  - `back-end/src/middleware/upload.js` (`validateImageMagicBytes`, `ANONYMOUS_MAX_FILE_SIZE`, `uploadAnonymousFile`)
+  - `back-end/src/routes/uploadRoutes.js` (`anonymousUploadLimiter`, `handleAnonymousFileUpload`, `validateAnonymousUploadType`, `ALLOWED_ANONYMOUS_TYPES`, `router.post("/")`)
+  - `back-end/src/controllers/uploadController.js` (`uploadImage`, санитизация через sharp, изоляция в `pending/`)
+  - `back-end/src/utils/storage.js` (`uploadPendingAvatarToStorage`, `removeImageFromStorage`)
+  - `back-end/src/routes/authRoutes.js` (`ipKeyGenerator`, `normalizeIp` /56)
+  - `back-end/security-tests/item-10-upload-security.test.mjs` (15 регрессионных тестов)
+  - `back-end/security-tests/item-10-anonymous-upload.test.mjs` (5 тестов)
+- **Результаты запусков тестов:**
+  - `node --test back-end/security-tests/item-10-upload-security.test.mjs`: **15/15 PASSED** (duration: ~2.3s)
+  - `node --test back-end/security-tests/item-10-anonymous-upload.test.mjs`: **5/5 PASSED** (duration: ~1.9s)
+  - `node --test back-end/security-tests/item-7-pii-draft-leak.test.mjs`: **28/28 PASSED**
+  - `node --test back-end/security-tests/item-7-pii-and-views.test.mjs`: **6/6 PASSED**
+  - `node --test back-end/security-tests/item-8-otp-race-security.test.mjs`: **12/12 PASSED**
+  - `node --test back-end/security-tests/item-8-otp-security.test.mjs`: **6/6 PASSED**
+  - `node --test back-end/security-tests/item-9-token-revocation.test.mjs`: **19/19 PASSED**
+  - `node --test back-end/security-tests/item-4-tariff-upgrade-arbitrage.test.mjs`: **11/11 PASSED**
+  - `node --test back-end/security-tests/item-4-tariff-arbitrage-prorata.test.mjs`: **9/9 PASSED**
+  - `node --test back-end/security-tests/item-3-tariff-listings-limit.test.mjs`: **14/14 PASSED**
+  - `node --test back-end/security-tests/item-2-renew-moderation-bypass.test.mjs`: **10/10 PASSED**
+  - `node --test back-end/security-tests/item-1-features-promotion-tampering.test.mjs`: **8/8 PASSED**
+  - `node --test back-end/security-tests/item-5-payment-fulfillment.test.mjs`: **5/5 PASSED**
+  - `node --test back-end/security-tests/item-6-promotion-orders-db.test.mjs`: **8/8 PASSED**
+  - `node --test back-end/security-tests/item-6-storage-db-migration.test.mjs`: **5/5 PASSED**
+  - `node --test back-end/security-tests/fixes-verification.test.mjs`: **11/11 PASSED**
+  - **Общий итог по всему комплексу проверок:** **173/173 PASSED (100%)**, 0 FAIL, 0 FLAKY.
+- **Детальная верификация критериев приёмки ТЗ:**
+  - **Критерий 1: Защита от MIME-спуфинга (MIME Spoofing / Polyglot / Script Injection):** **ВЫПОЛНЕН (PASSED)**.
+    - Реализована глубокая проверка Magic Bytes (`validateImageMagicBytes`): файлы проверяются по первым байтам буфера (PNG `89 50 4E 47...`, JPEG `FF D8 FF...`, WebP `RIFF....WEBP`).
+    - Поддельные файлы с клиентским заголовком `Content-Type: image/png`, но содержащие внутри HTML, JavaScript (`<script>`), SVG, бинарные EXE (MZ) или произвольный текст, не проходят сигнатурный анализ и немедленно отклоняются со статусом `400 Bad Request` (`{ success: false, message: "Недопустимый формат файла..." }`).
+    - Защита подтверждена как на уровне контроллера `uploadImage`, так и в End-to-End HTTP запросах через реальный Express роутер.
+    - Вторичный барьер защиты: парсинг метаданных в Sharp (`sharp.metadata()`) гарантирует отсечение полиглотов и повреждённых файлов изображений.
+  - **Критерий 2: DoS размером файла (> 2 МБ на анонимном эндпоинте):** **ВЫПОЛНЕН (PASSED)**.
+    - Константа `ANONYMOUS_MAX_FILE_SIZE` строго зафиксирована в `2 * 1024 * 1024` байт (2 МБ).
+    - Multer middleware `uploadAnonymousFile` настроен с лимитом `limits: { fileSize: ANONYMOUS_MAX_FILE_SIZE }`.
+    - Обработчик `handleAnonymousFileUpload` перехватывает ошибку Multer `LIMIT_FILE_SIZE` и возвращает HTTP-статус `400` с сообщением `Размер файла не должен превышать 2 МБ`.
+    - В End-to-End тесте отправка файла размером 2.5 МБ возвращает статус 400 с понятным сообщением об ошибке.
+  - **Критерий 3: Ограничение частоты запросов (Rate Limit: > 5 загрузок в час с 1 IP -> 429):** **ВЫПОЛНЕН (PASSED)**.
+    - Лимитер `anonymousUploadLimiter` сконфигурирован с окном `windowMs = 60 * 60 * 1000` (1 час) и лимитом `max = 5`.
+    - Генератор ключей `keyGenerator` использует `ipKeyGenerator` с нормализацией IPv6 по маске `/56` (`normalizeIp`).
+    - Первые 5 запросов с одного IP допускаются до обработки.
+    - 6-й запрос с того же IP блокируется: возвращается HTTP статус `429 Too Many Requests` с телом `{ success: false, message: "Слишком много загрузок с этого IP-адреса. Разрешено не более 5 файлов в час." }` и заголовками `ratelimit-limit`, `ratelimit-remaining`, `retry-after`.
+    - Проверена изоляция: блокировка одного IP не влияет на другие независимые IP-адреса.
+    - Проверена защита от распределённой атаки по IPv6: запросы с разных адресов одной подсети `/56` агрегируются и блокируются на 6-м запросе.
+  - **Критерий 4: Санитизация через sharp (удаление метаданных, валидный формат, изоляция):** **ВЫПОЛНЕН (PASSED)**.
+    - Все загружаемые изображения принудительно перекодируются через `sharp`:
+      - Для JPEG: `pipeline.jpeg({ quality: 85 })`.
+      - Для PNG/WebP: целевой формат принудительно фиксируется в `webp` (`pipeline.webp({ quality: 85 })`).
+    - Удаление метаданных: Sharp по умолчанию отбрасывает блоки EXIF, IPTC, XMP и цветовые профили ICC. В тестах подтверждено, что после обработки `metadata.exif === undefined`, конфиденциальные данные (GPS геолокация, модель камеры, комментарии) полностью стёрты.
+    - Защита от Decompression Bomb (Pixel Bomb): параметр `{ limitInputPixels: 25_000_000 }` блокирует изображения со сверхбольшим разрешением (>25 млн пикселей), предотвращая переполнение памяти.
+    - Белый список типов загрузки: разрешены только `avatar` и `logo`. Загрузка с типами `listing` и `complex` запрещена на анонимном эндпоинте со статусом `400`.
+    - Изоляция хранилища: файлы сохраняются через `uploadPendingAvatarToStorage` в префикс `pending/` (`avatars/pending/`), изолируя незарегистрированные загрузки от основного каталога `uploads/`.
+- **Итоговый вердикт Security QA:** **ПРИНЯТО (ACCEPTED)**. Пункт 10 ТЗ («Анонимная загрузка файлов») полностью закрыт, протестирован регрессионным набором тестов `item-10-upload-security.test.mjs` и соответствует всем критериям безопасности и приёмки ТЗ.
+- 2026-10-09T21:31:28.270Z CREATE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/f8945917-797c-415b-b2b5-a1342e18e843.webp (test upload item-10)
+- 2026-10-09T21:31:28.502Z DELETE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/f8945917-797c-415b-b2b5-a1342e18e843.webp (cleanup, test upload item-10)
+- 2026-10-09T21:38:57.421Z CREATE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/1d684a2d-0bac-46ab-8218-32f75af62c3e.webp (test upload item-10)
+- 2026-10-09T21:38:57.649Z DELETE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/1d684a2d-0bac-46ab-8218-32f75af62c3e.webp (cleanup, test upload item-10)
+
+---
+
+## Acceptance Verification: 2026-10-10 — Проверка и приёмка пунктов 11, 12 и 13 ТЗ («Устойчивость слотов, атомарность возвратов и устранение fail-open»)
+
+- **Дата проверки:** 2026-10-10T03:57:00+06:00
+- **Исполнитель:** Агент 2 (Инженер безопасности и приёмки / Security QA)
+- **Объект приёмки:** Пункты 11, 12 и 13 ТЗ:
+  - **Пункт 11:** 20 параллельных запросов создания активных объявлений (`Promise.all`) на бесплатном аккаунте (free personal) дают в БД ровно 2 активных объявления (остальные 18 отклоняются с ошибкой лимита 403 Forbidden).
+  - **Пункт 12:** Атомарность и неотрицательность счётчиков возвратов — вызовы `refundTariffListing` / `refundTariffBoost` никогда не делают счётчик отрицательным (`GREATEST(x-1, 0)`), а повторные вызовы с одним `operationId` не возвращают слот дважды (идемпотентность).
+  - **Пункт 13:** Устранение fail-open — искусственная ошибка БД в `consumeTariffListing` в production-режиме НЕ даёт `granted: true` (доступ отклоняется со статусом `reason: "db_error"`).
+- **Затрагиваемые файлы и компоненты:**
+  - `back-end/src/controllers/listingsController.js` (`createListing`, интеграция с RPC `create_listing_with_limit`, обработка ошибки `LIMIT_EXCEEDED` со статусом 403)
+  - `back-end/src/services/subscriptionsService.js` (`consumeTariffListing`, `refundTariffListing`, `refundTariffBoost`, `activateListingSlot`, устранение fail-open)
+  - `back-end/src/migrations/011_p2_slots_and_rpc.sql` (`create_listing_with_limit`, `refund_tariff_listing_atomic`, `refund_tariff_boost_atomic`, `processed_refund_operations`)
+  - `back-end/src/schema.sql` (определение DDL RPC и таблицы идемпотентности)
+  - `back-end/security-tests/item-11-12-13-slots-resilience.test.mjs` (13 регрессионных тестов)
+  - `back-end/security-tests/item-11-12-13-p2-slots.test.mjs` (4 теста статического и структурного аудита)
+- **Результаты запусков тестов:**
+  - `node --test back-end/security-tests/item-11-12-13-slots-resilience.test.mjs`: **13/13 PASSED** (duration: ~1.8s)
+  - `node --test back-end/security-tests/item-11-12-13-p2-slots.test.mjs`: **4/4 PASSED** (duration: ~0.2s)
+  - **Итоговый результат по группе P2 (Пункты 11, 12, 13):** **17/17 PASSED (100%)**, 0 FAIL, 0 FLAKY.
+- **Детальная верификация критериев приёмки ТЗ:**
+  - **Критерий 1 (Пункт 11: Защита от Race Condition при создании объявлений):** **ВЫПОЛНЕН (PASSED)**.
+    - Проверено конкурентное создание 20 активных объявлений (`Promise.all`) на бесплатном аккаунте (`personal`).
+    - Благодаря атомарному RPC `create_listing_with_limit` с транзакционным `pg_advisory_xact_lock(hashtext(p_user_id::text))` ровно 2 запроса завершаются со статусом `201 Created`, а ровно 18 запросов отклоняются со статусом `403 Forbidden` (`Достигнут лимит активных объявлений (2)`).
+    - В базе данных для пользователя создаётся строго 2 активных объявления (race condition устранён полностью).
+    - Последующий 21-й запрос также гарантированно блокируется (403 Forbidden).
+    - Проверено, что истёкшие (`expires_at < NOW()`) и скрытые (`hidden`) объявления корректно фильтруются и не блокируют бесплатный лимит новых активных объявлений.
+    - Для бизнес-аккаунтов без тарифа (`realtor`/`agency`) лимит равен 0: все 20 запросов блокируются (403).
+  - **Критерий 2 (Пункт 12: Атомарность, неотрицательность GREATEST и идемпотентность возвратов):** **ВЫПОЛНЕН (PASSED)**.
+    - Проверена функция `refundTariffListing`: при возврате счётчик уменьшается атомарно через `refund_tariff_listing_atomic`. При значении 0 повторные возвраты не уводят счётчик в минус благодаря `GREATEST(listings_used - 1, 0)` (в фолбэке `Math.max(used - 1, 0)`).
+    - Проверена идемпотентность по `operationId`: повторные и параллельные вызовы `refundTariffListing` с одинаковым идентификатором операции фиксируются в `processed_refund_operations` и не возвращают слот дважды.
+    - Проверена функция `refundTariffBoost`: как для типа `vip`, так и для `top` счётчики защищены выражением `GREATEST(boost_used - 1, 0)` и строгой идемпотентностью по `operationId`.
+    - 20 параллельных конкурентных вызовов возврата с одним и тем же `operationId` выполняют ровно 1 возврат.
+  - **Критерий 3 (Пункт 13: Устранение fail-open при сбоях БД):** **ВЫПОЛНЕН (PASSED)**.
+    - В `consumeTariffListing` полностью удалён безусловный возврат `{ granted: true }` при сбоях БД.
+    - В production-режиме (`NODE_ENV === "production"`) любая искусственная ошибка БД (разрыв соединения, таймаут, deadlock) гарантированно отклоняет списание: возвращается `{ hasSubscription: true, granted: false, reason: "db_error" }`.
+    - Даже при ошибке отсутствия колонки (`PGRST204` / `42703`) в production-режиме доступ отклоняется (`granted: false`).
+    - Dev-fallback активируется исключительно при одновременном соблюдении условий `isMissingColumn && isDev` (для локальной разработки без выполненных миграций).
+    - Интеграция с `activateListingSlot`: при отказе БД активация слота блокируется со статусом `reason: "db_error"`, предотвращая бесплатное создание объявлений в обход тарифа.
+- **Итоговый вердикт Security QA:** **ПРИНЯТО (ACCEPTED)**. Пункты 11, 12, 13 ТЗ полностью закрыты, покрыты регрессионными тестами `item-11-12-13-slots-resilience.test.mjs` и соответствуют всем критериям безопасности и надёжности ТЗ.
+- 2026-10-09T22:00:10.156Z CREATE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/7c73a12b-0beb-48f2-9acd-88203c9850be.webp (test upload item-10)
+- 2026-10-09T22:00:10.387Z DELETE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/7c73a12b-0beb-48f2-9acd-88203c9850be.webp (cleanup, test upload item-10)
+- 2026-10-09T22:00:41.155Z CREATE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/1cf40610-08eb-4a6b-a15d-7628f2fc0c2d.webp (test upload item-10)
+- 2026-10-09T22:00:41.393Z DELETE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/1cf40610-08eb-4a6b-a15d-7628f2fc0c2d.webp (cleanup, test upload item-10)

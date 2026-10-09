@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { supabase } from "../config/db.js";
 import { registerSchema, loginSchema, updateMeSchema, normalizePhone } from "../utils/validation.js";
 import { generateSecureOtp, safeCompare } from "../utils/otp.js";
@@ -79,6 +80,15 @@ const OTP_MAX_ATTEMPTS = 5; // неверных попыток на один к�
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // не чаще 1 отправки в 60 секунд
 const OTP_HOURLY_LIMIT = 5; // не более 5 кодов в час на email
 
+/**
+ * Хэширование одноразового OTP-кода (HMAC-SHA256).
+ * Защищает от утечки кодов при чтении БД (коды не хранятся в открытом виде).
+ */
+export function hashOtpCode(code) {
+  const secret = process.env.JWT_SECRET || "uytap-secret-key-fallback";
+  return crypto.createHmac("sha256", secret).update(String(code)).digest("hex");
+}
+
 // Защита от параллельных запросов на один email внутри процесса
 const otpInFlight = new Set();
 
@@ -116,6 +126,7 @@ async function checkOtpSendLimits(email, type = "registration") {
 }
 
 // Инвалидирует все прежние коды регистрации, создаёт новый и отправляет на почту.
+// В БД сохраняется только HMAC-SHA256 хэш (code_hash), открытый код отправляется исключительно на email.
 async function issueRegistrationOtp(email) {
   await supabase
     .from("email_verifications")
@@ -125,10 +136,11 @@ async function issueRegistrationOtp(email) {
     .eq("is_used", false);
 
   const code = generateSecureOtp();
+  const codeHash = hashOtpCode(code);
   const { error } = await supabase.from("email_verifications").insert([
     {
       email,
-      code,
+      code_hash: codeHash,
       type: "registration",
       attempts: 0,
       expires_at: new Date(Date.now() + OTP_TTL_MS).toISOString(),
@@ -140,6 +152,7 @@ async function issueRegistrationOtp(email) {
 }
 
 // Инвалидирует все прежние коды сброса пароля, создаёт новый и отправляет на почту.
+// В БД сохраняется только HMAC-SHA256 хэш (code_hash), открытый код отправляется исключительно на email.
 async function issuePasswordResetOtp(email) {
   await supabase
     .from("email_verifications")
@@ -149,10 +162,11 @@ async function issuePasswordResetOtp(email) {
     .eq("is_used", false);
 
   const code = generateSecureOtp();
+  const codeHash = hashOtpCode(code);
   const { error } = await supabase.from("email_verifications").insert([
     {
       email,
-      code,
+      code_hash: codeHash,
       type: "password_reset",
       attempts: 0,
       expires_at: new Date(Date.now() + OTP_TTL_MS).toISOString(),
@@ -405,7 +419,7 @@ export const register = async (req, res) => {
           is_email_verified: false,
         },
       ])
-      .select("id, account_type, email, phone, is_verified, created_at")
+      .select("id, account_type, email, phone, is_verified, created_at, token_version")
       .single();
 
     if (createError || !newUser) {
@@ -552,6 +566,7 @@ export const login = async (req, res) => {
       id: user.id,
       accountType: user.account_type,
       email: user.email,
+      tokenVersion: user.token_version || 0,
     });
 
     return res.json({
@@ -1160,51 +1175,36 @@ export const verifyOtp = async (req, res) => {
       });
     }
 
-    // Защита от брутфорса
-    if (record.attempts >= OTP_MAX_ATTEMPTS) {
-      await supabase.from("email_verifications").update({ is_used: true }).eq("id", record.id);
+    // Атомарный инкремент попыток в БД ДО проверки кода (защита от race condition и брутфорса)
+    const { data: attemptsCount, error: rpcError } = await supabase.rpc("consume_otp_attempt", {
+      p_id: record.id,
+    });
+
+    if (rpcError) {
+      console.error("consume_otp_attempt RPC error:", rpcError);
+    }
+
+    const attempts = typeof attemptsCount === "number" ? attemptsCount : -1;
+
+    // Если функция вернула -1 или attempts > 5: немедленно возвращаем 400 Bad Request
+    if (attempts === -1 || attempts > OTP_MAX_ATTEMPTS) {
       return res.status(400).json({
         success: false,
-        message: "Превышено количество попыток. Запросите новый код",
+        message: "Превышено максимальное число попыток ввода кода (5). Запросите новый код",
       });
     }
 
-    if (!safeCompare(code, record.code)) {
-      // Атомарный инкремент (compare-and-swap по значению attempts):
-      // параллельные запросы не смогут «растянуть» лимит попыток.
-      let newAttempts = record.attempts + 1;
-      const { data: updated } = await supabase
-        .from("email_verifications")
-        .update({ attempts: newAttempts, ...(newAttempts >= OTP_MAX_ATTEMPTS ? { is_used: true } : {}) })
-        .eq("id", record.id)
-        .eq("attempts", record.attempts)
-        .eq("is_used", false)
-        .select("attempts")
-        .maybeSingle();
+    // Сравнение HMAC-SHA256 хэшей через crypto.timingSafeEqual
+    const inputHash = hashOtpCode(code);
+    const expectedHash = record.code_hash || (record.code ? hashOtpCode(record.code) : "");
 
-      if (!updated) {
-        // Гонка: другой параллельный запрос уже изменил счётчик. Перечитываем
-        // актуальное значение и засчитываем свою попытку поверх него.
-        const { data: fresh } = await supabase
-          .from("email_verifications")
-          .select("attempts")
-          .eq("id", record.id)
-          .maybeSingle();
-        newAttempts = Math.max(newAttempts, (fresh?.attempts ?? 0) + 1);
-        await supabase
-          .from("email_verifications")
-          .update({ attempts: newAttempts, ...(newAttempts >= OTP_MAX_ATTEMPTS ? { is_used: true } : {}) })
-          .eq("id", record.id);
-      }
+    const bufInput = Buffer.from(inputHash, "utf8");
+    const bufExpected = Buffer.from(expectedHash, "utf8");
 
-      if (newAttempts >= OTP_MAX_ATTEMPTS) {
-        return res.status(400).json({
-          success: false,
-          message: "Превышено количество попыток. Запросите новый код",
-        });
-      }
+    const isMatch = bufInput.length === bufExpected.length && crypto.timingSafeEqual(bufInput, bufExpected);
 
-      const attemptsLeft = OTP_MAX_ATTEMPTS - newAttempts;
+    if (!isMatch) {
+      const attemptsLeft = Math.max(0, OTP_MAX_ATTEMPTS - attempts);
       return res.status(400).json({
         success: false,
         message: `Неверный код. Осталось попыток: ${attemptsLeft}`,
@@ -1212,8 +1212,7 @@ export const verifyOtp = async (req, res) => {
       });
     }
 
-    // Код верный: «сжигаем» его атомарно (защита от двойного использования
-    // при гонке — выиграет только один запрос).
+    // Код верный: атомарно ставим is_used = true (защита от двойного использования при гонке)
     const { data: consumed } = await supabase
       .from("email_verifications")
       .update({ is_used: true })
@@ -1233,7 +1232,7 @@ export const verifyOtp = async (req, res) => {
       .from("users")
       .update({ is_email_verified: true, updated_at: new Date().toISOString() })
       .eq("email", email)
-      .select("id, account_type, email, phone, is_verified")
+      .select("id, account_type, email, phone, is_verified, token_version")
       .maybeSingle();
 
     if (userError || !user) {
@@ -1254,6 +1253,7 @@ export const verifyOtp = async (req, res) => {
       id: user.id,
       accountType: user.account_type,
       email: user.email,
+      tokenVersion: user.token_version || 0,
     });
 
     return res.json({
@@ -1378,58 +1378,56 @@ export const verifyResetCode = async (req, res) => {
       });
     }
 
-    // Защита от брутфорса
-    if (record.attempts >= OTP_MAX_ATTEMPTS) {
-      await supabase.from("email_verifications").update({ is_used: true }).eq("id", record.id);
+    // Атомарный инкремент попыток в БД ДО проверки кода (защита от race condition и брутфорса)
+    const { data: attemptsCount, error: rpcError } = await supabase.rpc("consume_otp_attempt", {
+      p_id: record.id,
+    });
+
+    if (rpcError) {
+      console.error("consume_otp_attempt RPC error:", rpcError);
+    }
+
+    const attempts = typeof attemptsCount === "number" ? attemptsCount : -1;
+
+    // Если функция вернула -1 или attempts > 5: немедленно возвращаем 400 Bad Request
+    if (attempts === -1 || attempts > OTP_MAX_ATTEMPTS) {
       return res.status(400).json({
         success: false,
-        message: "Превышено количество попыток. Запросите новый код",
+        message: "Превышено максимальное число попыток ввода кода (5). Запросите новый код",
       });
     }
 
-    if (!safeCompare(code, record.code)) {
-      // Атомарный инкремент счётчика попыток
-      let newAttempts = record.attempts + 1;
-      const { data: updated } = await supabase
-        .from("email_verifications")
-        .update({
-          attempts: newAttempts,
-          ...(newAttempts >= OTP_MAX_ATTEMPTS ? { is_used: true } : {}),
-        })
-        .eq("id", record.id)
-        .eq("attempts", record.attempts)
-        .eq("is_used", false)
-        .select("attempts")
-        .maybeSingle();
+    // Сравнение HMAC-SHA256 хэшей через crypto.timingSafeEqual
+    const inputHash = hashOtpCode(code);
+    const expectedHash = record.code_hash || (record.code ? hashOtpCode(record.code) : "");
 
-      if (!updated) {
-        const { data: fresh } = await supabase
-          .from("email_verifications")
-          .select("attempts")
-          .eq("id", record.id)
-          .maybeSingle();
-        newAttempts = Math.max(newAttempts, (fresh?.attempts ?? 0) + 1);
-        await supabase
-          .from("email_verifications")
-          .update({
-            attempts: newAttempts,
-            ...(newAttempts >= OTP_MAX_ATTEMPTS ? { is_used: true } : {}),
-          })
-          .eq("id", record.id);
-      }
+    const bufInput = Buffer.from(inputHash, "utf8");
+    const bufExpected = Buffer.from(expectedHash, "utf8");
 
-      if (newAttempts >= OTP_MAX_ATTEMPTS) {
-        return res.status(400).json({
-          success: false,
-          message: "Превышено количество попыток. Запросите новый код",
-        });
-      }
+    const isMatch = bufInput.length === bufExpected.length && crypto.timingSafeEqual(bufInput, bufExpected);
 
-      const attemptsLeft = OTP_MAX_ATTEMPTS - newAttempts;
+    if (!isMatch) {
+      const attemptsLeft = Math.max(0, OTP_MAX_ATTEMPTS - attempts);
       return res.status(400).json({
         success: false,
         message: `Неверный код. Осталось попыток: ${attemptsLeft}`,
         attemptsLeft,
+      });
+    }
+
+    // При совпадении кода: атомарно ставим is_used = true
+    const { data: consumed } = await supabase
+      .from("email_verifications")
+      .update({ is_used: true })
+      .eq("id", record.id)
+      .eq("is_used", false)
+      .select("id")
+      .maybeSingle();
+
+    if (!consumed) {
+      return res.status(400).json({
+        success: false,
+        message: "Код не найден или срок его действия истек",
       });
     }
 
@@ -1464,7 +1462,7 @@ export const verifyResetCode = async (req, res) => {
  * Требования безопасности:
  * 1. Защита от подмены email (Account Takeover): принимается только при наличии валидного resetToken,
  *    подписанного JWT_SECRET и содержащего { email, codeId, purpose: 'password_reset' }.
- * 2. Защита от повторного использования (Replay Attack): код в email_verifications помечается is_used = true.
+ * 2. Защита от повторного использования (Replay Attack): код в email_verifications помечается reset_completed = true.
  *    Нельзя использовать один и тот же resetToken повторно.
  * 3. Валидация пароля: 6–72 символа, хэширование через bcryptjs (10 раундов).
  */
@@ -1537,7 +1535,9 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    if (codeRecord.is_used) {
+    // Токен действителен, только если код был верифицирован (is_used = true)
+    // и ещё не использовался для финальной установки пароля (reset_completed != true)
+    if (!codeRecord.is_used || codeRecord.reset_completed) {
       return res.status(400).json({
         success: false,
         message: "Этот токен сброса пароля уже был использован",
@@ -1551,12 +1551,12 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    // Атомарно «сжигаем» код в email_verifications (защита от гонки и повторного использования)
+    // Атомарно помечаем reset_completed = true (защита от гонки и Replay Attack)
     const { data: consumedCode, error: consumeError } = await supabase
       .from("email_verifications")
-      .update({ is_used: true })
+      .update({ reset_completed: true })
       .eq("id", decoded.codeId)
-      .eq("is_used", false)
+      .eq("reset_completed", false)
       .select("id")
       .maybeSingle();
 
@@ -1571,16 +1571,27 @@ export const resetPassword = async (req, res) => {
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(newPassword, saltRounds);
 
-    // 5. Обновляем password_hash и помечаем email как подтверждённый
+    // Считываем актуальную версию токена пользователя
+    const { data: userToReset } = await supabase
+      .from("users")
+      .select("id, token_version")
+      .eq("email", decoded.email)
+      .maybeSingle();
+
+    const nextTokenVersion = (userToReset?.token_version || 0) + 1;
+
+    // 5. Обновляем password_hash, инкрементируем token_version (отзыв всех выданных токенов)
+    // и помечаем email как подтверждённый
     const { data: updatedUser, error: updateError } = await supabase
       .from("users")
       .update({
         password_hash: passwordHash,
+        token_version: nextTokenVersion,
         is_email_verified: true,
         updated_at: new Date().toISOString(),
       })
       .eq("email", decoded.email)
-      .select("id, email")
+      .select("id, email, token_version")
       .maybeSingle();
 
     if (updateError || !updatedUser) {
@@ -1600,6 +1611,67 @@ export const resetPassword = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при смене пароля",
+    });
+  }
+};
+
+/**
+ * Завершение всех активных сессий пользователя (POST /api/auth/logout-all)
+ * Инкрементирует token_version в БД, благодаря чему все ранее выданные
+ * JWT-токены пользователя немедленно становятся недействительными.
+ */
+export const logoutAll = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Требуется авторизация",
+      });
+    }
+
+    // Считываем актуальный token_version пользователя из БД
+    const { data: user, error: fetchError } = await supabase
+      .from("users")
+      .select("token_version")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (fetchError || !user) {
+      return res.status(404).json({
+        success: false,
+        message: "Пользователь не найден",
+      });
+    }
+
+    const currentVersion = user.token_version ?? req.user?.token_version ?? 0;
+    const nextVersion = (currentVersion || 0) + 1;
+
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({
+        token_version: nextVersion,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+
+    if (updateError) {
+      console.error("Logout-all update error:", updateError);
+      return res.status(500).json({
+        success: false,
+        message: "Не удалось завершить сессии",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Все активные сессии успешно завершены",
+    });
+  } catch (error) {
+    console.error("Logout-all Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Внутренняя ошибка сервера при завершении сессий",
     });
   }
 };
