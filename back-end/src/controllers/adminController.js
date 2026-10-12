@@ -10,6 +10,8 @@ import {
   listInstagramRequests,
   getInstagramRequestById,
   markInstagramRequestPublished,
+  createInstagramRequest,
+  fetchInstagramRequestsWithDetails,
 } from "../utils/instagramRequests.js";
 
 const PROMOTION_TARIFF_PREFIX = "promo_";
@@ -653,84 +655,7 @@ export const verifyDeveloperAdmin = async (req, res) => {
 // =======================================================
 export const listInstagramRequestsAdmin = async (req, res) => {
   try {
-    const requests = await listInstagramRequests();
-
-    const listingIds = [...new Set(requests.map((r) => r.listingId).filter(Boolean))];
-    const userIds = [...new Set(requests.map((r) => r.userId).filter(Boolean))];
-
-    const [{ data: listingRows }, { data: userRows }, { data: profileRows }] = await Promise.all([
-      listingIds.length > 0
-        ? supabase
-            .from("listings")
-            .select(
-              "id, title, price, currency, property_type, deal_type, region, city, district, address, rooms, area, promotion_status, is_urgent, listing_photos (url, is_main, display_order)"
-            )
-            .in("id", listingIds)
-        : { data: [] },
-      userIds.length > 0
-        ? supabase.from("users").select("id, email, phone").in("id", userIds)
-        : { data: [] },
-      userIds.length > 0
-        ? supabase
-            .from("user_profiles")
-            .select("user_id, first_name, last_name, company_name")
-            .in("user_id", userIds)
-        : { data: [] },
-    ]);
-
-    const listingsById = new Map((listingRows || []).map((l) => [l.id, l]));
-    const usersById = new Map((userRows || []).map((u) => [u.id, u]));
-    const profilesByUserId = new Map((profileRows || []).map((p) => [p.user_id, p]));
-
-    const data = requests.map((request) => {
-      const listing = listingsById.get(request.listingId) || null;
-      const user = usersById.get(request.userId) || null;
-      const profile = profilesByUserId.get(request.userId) || null;
-
-      const mainPhoto = listing?.listing_photos?.length
-        ? [...listing.listing_photos].sort((a, b) => {
-            if (a.is_main !== b.is_main) return a.is_main ? -1 : 1;
-            return (a.display_order ?? 0) - (b.display_order ?? 0);
-          })[0]
-        : null;
-
-      const userName =
-        profile?.company_name ||
-        [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
-        user?.email ||
-        "Пользователь удалён";
-
-      return {
-        id: request.id,
-        status: request.status,
-        createdAt: request.createdAt,
-        publishedAt: request.publishedAt,
-        listing: listing
-          ? {
-              id: listing.id,
-              title: listing.title,
-              price: listing.price,
-              currency: listing.currency,
-              propertyType: listing.property_type,
-              dealType: listing.deal_type,
-              region: listing.region,
-              city: listing.city,
-              district: listing.district,
-              address: listing.address,
-              rooms: listing.rooms,
-              area: listing.area,
-              promotionStatus: listing.promotion_status,
-              isUrgent: listing.is_urgent,
-              image: mainPhoto?.url || null,
-            }
-          : null,
-        user: {
-          name: userName,
-          phone: user?.phone || null,
-        },
-      };
-    });
-
+    const data = await fetchInstagramRequestsWithDetails();
     return res.json({ success: true, data });
   } catch (error) {
     console.error("Admin List Instagram Requests Error:", error);
@@ -748,6 +673,7 @@ export const listInstagramRequestsAdmin = async (req, res) => {
 export const completeInstagramRequestAdmin = async (req, res) => {
   try {
     const { id } = req.params;
+    const adminUserId = req.user?.id;
 
     const existing = await getInstagramRequestById(id);
     if (!existing) {
@@ -757,7 +683,9 @@ export const completeInstagramRequestAdmin = async (req, res) => {
       });
     }
 
-    const updated = await markInstagramRequestPublished(id);
+    const updated = await markInstagramRequestPublished(id, {
+      publishedBy: adminUserId,
+    });
 
     return res.json({
       success: true,
@@ -769,6 +697,46 @@ export const completeInstagramRequestAdmin = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при обновлении заявки",
+    });
+  }
+};
+
+// =======================================================
+// Создать заявку на публикацию в Instagram
+// (POST /api/admin/instagram-requests)
+// =======================================================
+export const createInstagramRequestAdmin = async (req, res) => {
+  try {
+    const { listingId, userId } = req.body;
+    if (!listingId) {
+      return res.status(400).json({
+        success: false,
+        message: "Не указан ID объявления",
+      });
+    }
+
+    const targetUserId = userId || req.user?.id;
+    const request = await createInstagramRequest({
+      listingId,
+      userId: targetUserId,
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: request,
+    });
+  } catch (error) {
+    if (error.status === 409 || error.code === "23505") {
+      return res.status(409).json({
+        success: false,
+        message: "Заявка на это объявление уже подана",
+      });
+    }
+
+    console.error("Admin Create Instagram Request Error:", error);
+    return res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Ошибка сервера при создании заявки",
     });
   }
 };

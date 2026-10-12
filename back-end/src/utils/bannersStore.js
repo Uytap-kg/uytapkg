@@ -1,174 +1,280 @@
-import { randomUUID } from "crypto";
 import { supabase } from "../config/db.js";
-import { APP_SETTINGS_BUCKET } from "./pricingSettings.js";
 
-const BANNERS_OBJECT = "banners.json";
+// Регулярное выражение для валидации UUID v4
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-let cache = null;
-let cacheAt = 0;
-const CACHE_TTL_MS = 10 * 1000;
-
-async function ensureBucket() {
-  const { data: buckets } = await supabase.storage.listBuckets();
-  const exists = (buckets || []).some((b) => b.name === APP_SETTINGS_BUCKET);
-  if (!exists) {
-    await supabase.storage.createBucket(APP_SETTINGS_BUCKET, { public: false });
-  }
+export function isValidUuid(id) {
+  return typeof id === "string" && UUID_REGEX.test(id);
 }
 
-// Читает список баннеров. В обычной работе (GET-запросы) полагается на
-// свежий in-memory кэш этого процесса — он всегда как минимум так же
-// актуален, как последняя запись, сделанная ИМ ЖЕ (см. writeAll). Реальное
-// скачивание из Storage происходит только при "холодном" старте или когда
-// кэш устарел по TTL — специально НЕ форсируем перечитывание на каждой
-// мутации: некоторые бэкенды Storage не гарантируют мгновенный
-// read-after-write, и принудительный re-download сразу после записи может
-// вернуть ещё не устаревшую копию — из-за этого только что созданный
-// баннер мог "потеряться" в собственном ответе на следующий запрос.
-async function readAll() {
-  if (cache && Date.now() - cacheAt < CACHE_TTL_MS) {
-    return cache;
+/**
+ * Преобразует строку из таблицы public.banners (snake_case)
+ * в формат DTO для фронтенда (camelCase).
+ *
+ * Если в записи отсутствуют значения полей (например, при чтении
+ * старых строк или неполных данных), подставляются значения по умолчанию
+ * в строгом соответствии с миграцией 20261012120000_banners_extend.sql.
+ */
+export function mapRowToBanner(row) {
+  if (!row) return null;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date().toISOString();
+
+  const createdAt = row.created_at
+    ? typeof row.created_at === "string"
+      ? row.created_at
+      : new Date(row.created_at).toISOString()
+    : now;
+
+  const updatedAt = row.updated_at
+    ? typeof row.updated_at === "string"
+      ? row.updated_at
+      : new Date(row.updated_at).toISOString()
+    : createdAt;
+
+  let startDate;
+  if (row.start_date) {
+    startDate =
+      typeof row.start_date === "string"
+        ? row.start_date.slice(0, 10)
+        : new Date(row.start_date).toISOString().slice(0, 10);
+  } else {
+    startDate = createdAt ? createdAt.slice(0, 10) : today;
   }
 
-  try {
-    const { data, error } = await supabase.storage
-      .from(APP_SETTINGS_BUCKET)
-      .download(BANNERS_OBJECT);
-
-    if (error || !data) {
-      cache = [];
-      cacheAt = Date.now();
-      return cache;
-    }
-
-    const text = await data.text();
-    const parsed = JSON.parse(text);
-    cache = Array.isArray(parsed) ? parsed : [];
-    cacheAt = Date.now();
-    return cache;
-  } catch (err) {
-    console.error("Не удалось загрузить баннеры, использую пустой список:", err);
-    return [];
+  let endDate = null;
+  if (row.end_date) {
+    endDate =
+      typeof row.end_date === "string"
+        ? row.end_date.slice(0, 10)
+        : new Date(row.end_date).toISOString().slice(0, 10);
   }
+
+  return {
+    id: row.id,
+    title: row.title || "",
+    imageUrl: row.image_url || "",
+    imagePositionX: Number(row.image_position_x ?? 50),
+    imagePositionY: Number(row.image_position_y ?? 50),
+    link: row.link_url || null,
+    startDate,
+    endDate,
+    active:
+      row.is_active !== null && row.is_active !== undefined
+        ? Boolean(row.is_active)
+        : true,
+    viewsCount: Number(row.views_count ?? 0),
+    clicksCount: Number(row.clicks_count ?? 0),
+    createdAt,
+    updatedAt,
+  };
 }
 
-async function writeAll(banners) {
-  await ensureBucket();
-
-  const payload = Buffer.from(JSON.stringify(banners), "utf-8");
-
-  const { error } = await supabase.storage
-    .from(APP_SETTINGS_BUCKET)
-    .upload(BANNERS_OBJECT, payload, {
-      contentType: "application/json",
-      upsert: true,
-      cacheControl: "0",
-    });
+/**
+ * Получить все баннеры для админ-панели (сортировка от новых к старым).
+ */
+export async function listAllBanners() {
+  const { data, error } = await supabase
+    .from("banners")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (error) {
-    throw new Error(error.message || "Не удалось сохранить баннеры");
+    console.error("DB error in listAllBanners:", error.message || error);
+    throw new Error(error.message || "Не удалось загрузить список баннеров");
   }
 
-  cache = banners;
-  cacheAt = Date.now();
-  return banners;
+  return (data || []).map(mapRowToBanner);
 }
 
-// Простая сериализация мутаций в пределах процесса: create/update/delete
-// делают read-modify-write поверх одного JSON-файла, поэтому два
-// одновременных запроса без этого могли бы затереть правки друг друга
-// (classic lost update). Очередь промисов гарантирует, что вторая мутация
-// стартует только после того, как первая полностью прочитала и
-// перезаписала файл.
-let writeQueue = Promise.resolve();
-function withWriteLock(fn) {
-  const run = writeQueue.then(fn, fn);
-  writeQueue = run.then(
-    () => undefined,
-    () => undefined
-  );
-  return run;
-}
-
-// Все баннеры (для админки), отсортированы от новых к старым.
-export async function listAllBanners() {
-  const banners = await readAll();
-  return [...banners].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-}
-
-// Только активные и попадающие в текущий диапазон дат — для публичной страницы.
+/**
+ * Получить список активных баннеров для публичной страницы.
+ *
+ * Бэкенд работает под service_role, поэтому RLS обходится —
+ * фильтрация по is_active и диапазону дат [start_date <= today AND (end_date IS NULL OR end_date >= today)]
+ * выполняется непосредственно в запросе к БД.
+ */
 export async function listActiveBanners() {
-  const banners = await readAll();
   const today = new Date().toISOString().slice(0, 10);
 
-  return banners
-    .filter((b) => {
-      if (!b.active) return false;
-      if (b.startDate && b.startDate > today) return false;
-      if (b.endDate && b.endDate < today) return false;
-      return true;
-    })
-    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  const { data, error } = await supabase
+    .from("banners")
+    .select("*")
+    .eq("is_active", true)
+    .lte("start_date", today)
+    .or(`end_date.is.null,end_date.gte.${today}`)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("DB error in listActiveBanners:", error.message || error);
+    throw new Error(error.message || "Не удалось получить список активных баннеров");
+  }
+
+  return (data || []).map(mapRowToBanner);
 }
 
+/**
+ * Получить баннер по ID.
+ */
 export async function getBannerById(id) {
-  const banners = await readAll();
-  return banners.find((b) => b.id === id) || null;
+  if (!id || !isValidUuid(id)) return null;
+
+  const { data, error } = await supabase
+    .from("banners")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error(`DB error in getBannerById(${id}):`, error.message || error);
+    throw new Error(error.message || "Не удалось получить баннер");
+  }
+
+  return data ? mapRowToBanner(data) : null;
 }
 
+/**
+ * Создать новый баннер.
+ */
 export async function createBanner(data) {
-  return withWriteLock(async () => {
-    const banners = await readAll();
+  const today = new Date().toISOString().slice(0, 10);
 
-    const now = new Date().toISOString();
-    const banner = {
-      id: randomUUID(),
-      title: data.title,
-      imageUrl: data.imageUrl,
-      imagePositionX: data.imagePositionX ?? 50,
-      imagePositionY: data.imagePositionY ?? 50,
-      link: data.link || null,
-      startDate: data.startDate,
-      endDate: data.endDate || null,
-      active: data.active ?? true,
-      createdAt: now,
-      updatedAt: now,
-    };
+  const insertPayload = {
+    title: (data.title || "").trim(),
+    image_url: data.imageUrl,
+    image_position_x: data.imagePositionX ?? 50,
+    image_position_y: data.imagePositionY ?? 50,
+    link_url: data.link || null,
+    start_date: data.startDate || today,
+    end_date: data.endDate || null,
+    is_active: data.active !== undefined ? Boolean(data.active) : true,
+  };
 
-    await writeAll([banner, ...banners]);
-    return banner;
-  });
+  if (data.id && isValidUuid(data.id)) {
+    insertPayload.id = data.id;
+  }
+
+  const { data: createdRow, error } = await supabase
+    .from("banners")
+    .insert(insertPayload)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("DB error in createBanner:", error.message || error);
+    throw new Error(error.message || "Не удалось создать баннер");
+  }
+
+  return mapRowToBanner(createdRow);
 }
 
+/**
+ * Обновить существующий баннер.
+ * Возвращает `{ previous, updated }` или `null`, если баннер не найден.
+ */
 export async function updateBanner(id, data) {
-  return withWriteLock(async () => {
-    const banners = await readAll();
-    const index = banners.findIndex((b) => b.id === id);
-    if (index === -1) return null;
+  if (!id || !isValidUuid(id)) return null;
 
-    const previous = banners[index];
-    const updated = {
-      ...previous,
-      ...data,
-      id: previous.id,
-      createdAt: previous.createdAt,
-      updatedAt: new Date().toISOString(),
-    };
+  const previous = await getBannerById(id);
+  if (!previous) return null;
 
-    const next = [...banners];
-    next[index] = updated;
-    await writeAll(next);
-    return { previous, updated };
-  });
+  const updatePayload = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (data.title !== undefined) updatePayload.title = (data.title || "").trim();
+  if (data.imageUrl !== undefined) updatePayload.image_url = data.imageUrl;
+  if (data.imagePositionX !== undefined) updatePayload.image_position_x = data.imagePositionX;
+  if (data.imagePositionY !== undefined) updatePayload.image_position_y = data.imagePositionY;
+  if (data.link !== undefined) updatePayload.link_url = data.link || null;
+  if (data.startDate !== undefined) updatePayload.start_date = data.startDate;
+  if (data.endDate !== undefined) updatePayload.end_date = data.endDate || null;
+  if (data.active !== undefined) updatePayload.is_active = Boolean(data.active);
+
+  const { data: updatedRow, error } = await supabase
+    .from("banners")
+    .update(updatePayload)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error(`DB error in updateBanner(${id}):`, error.message || error);
+    throw new Error(error.message || "Не удалось обновить баннер");
+  }
+
+  const updated = mapRowToBanner(updatedRow);
+  return { previous, updated };
 }
 
+/**
+ * Удалить баннер по ID.
+ * Возвращает удалённый баннер или `null`, если баннер не найден.
+ */
 export async function deleteBanner(id) {
-  return withWriteLock(async () => {
-    const banners = await readAll();
-    const banner = banners.find((b) => b.id === id);
-    if (!banner) return null;
+  if (!id || !isValidUuid(id)) return null;
 
-    await writeAll(banners.filter((b) => b.id !== id));
-    return banner;
+  const { data: deletedRow, error } = await supabase
+    .from("banners")
+    .delete()
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error(`DB error in deleteBanner(${id}):`, error.message || error);
+    throw new Error(error.message || "Не удалось удалить баннер");
+  }
+
+  return deletedRow ? mapRowToBanner(deletedRow) : null;
+}
+
+/**
+ * Атомарное увеличение счётчика просмотров или кликов через PostgreSQL RPC:
+ * `public.increment_banner_stat(banner_id uuid, stat text)`.
+ *
+ * Допустимые значения stat: 'view' или 'click'.
+ */
+export async function incrementBannerStat(bannerId, stat) {
+  if (!bannerId || !isValidUuid(bannerId)) {
+    throw new Error("Некорректный ID баннера (ожидается UUID)");
+  }
+
+  const normalized = String(stat).toLowerCase();
+  let statParam;
+  if (normalized === "view" || normalized === "views") {
+    statParam = "view";
+  } else if (normalized === "click" || normalized === "clicks") {
+    statParam = "click";
+  } else {
+    throw new Error(`Недопустимый тип метрики: ${stat}. Разрешено: view, click`);
+  }
+
+  const { error } = await supabase.rpc("increment_banner_stat", {
+    banner_id: bannerId,
+    stat: statParam,
   });
+
+  if (error) {
+    console.error(`DB error in incrementBannerStat(${bannerId}, ${statParam}):`, error.message || error);
+    throw new Error(error.message || "Не удалось обновить счётчик баннера");
+  }
+
+  return true;
+}
+
+/**
+ * Увеличить счётчик просмотров баннера на 1.
+ */
+export async function incrementBannerViews(bannerId) {
+  return incrementBannerStat(bannerId, "view");
+}
+
+/**
+ * Увеличить счётчик кликов по баннеру на 1.
+ */
+export async function incrementBannerClicks(bannerId) {
+  return incrementBannerStat(bannerId, "click");
 }

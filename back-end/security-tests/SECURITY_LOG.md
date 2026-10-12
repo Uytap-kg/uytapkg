@@ -656,3 +656,5 @@ uytapkg, во время адверсариального ревью. Все с�
 - 2026-10-09T22:00:10.387Z DELETE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/7c73a12b-0beb-48f2-9acd-88203c9850be.webp (cleanup, test upload item-10)
 - 2026-10-09T22:00:41.155Z CREATE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/1cf40610-08eb-4a6b-a15d-7628f2fc0c2d.webp (test upload item-10)
 - 2026-10-09T22:00:41.393Z DELETE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/1cf40610-08eb-4a6b-a15d-7628f2fc0c2d.webp (cleanup, test upload item-10)
+- 2026-10-09T22:29:10.140Z CREATE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/bf5d6d7b-66ba-4b98-bf47-8937f21052b4.webp (test upload item-10)
+- 2026-10-09T22:29:10.657Z DELETE storage https://kakiuqgjhcunyaxydopx.supabase.co/storage/v1/object/public/avatars/pending/bf5d6d7b-66ba-4b98-bf47-8937f21052b4.webp (cleanup, test upload item-10)

@@ -795,7 +795,11 @@ export const createListing = async (req, res) => {
       try {
         await createInstagramRequest({ listingId: newListing.id, userId });
       } catch (instagramError) {
-        console.error("Instagram Request Create Error:", instagramError);
+        if (instagramError.status === 409 || instagramError.code === "23505") {
+          console.warn("Instagram request already exists for listing:", newListing.id);
+        } else {
+          console.error("Instagram Request Create Error:", instagramError);
+        }
       }
     }
 

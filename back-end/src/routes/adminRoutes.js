@@ -11,6 +11,7 @@ import {
   verifyDeveloperAdmin,
   listInstagramRequestsAdmin,
   completeInstagramRequestAdmin,
+  createInstagramRequestAdmin,
 } from "../controllers/adminController.js";
 import {
   searchUsersByPhone,
@@ -97,6 +98,7 @@ router.put("/developers/:id/verify", authenticateToken, requireAdmin, verifyDeve
 
 // Заявки на публикацию объявлений в Instagram
 router.get("/instagram-requests", authenticateToken, requireAdmin, listInstagramRequestsAdmin);
+router.post("/instagram-requests", authenticateToken, requireAdmin, createInstagramRequestAdmin);
 router.patch(
   "/instagram-requests/:id/complete",
   authenticateToken,

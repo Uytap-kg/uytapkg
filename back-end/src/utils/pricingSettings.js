@@ -1,16 +1,12 @@
 import { supabase } from "../config/db.js";
 
-// Приватный бакет для редактируемых настроек сайта (создаётся автоматически
-// при первом обращении, см. ensureBucket ниже — доступ только через
-// service-role ключ, наружу отдаётся исключительно через контроллер).
+// Константа экспортируется для обратной совместимости
 export const APP_SETTINGS_BUCKET = "app-settings";
-const PRICING_OBJECT = "pricing.json";
 
-// Лимиты тарифа — сколько активных объявлений и платных поднятий
-// (VIP/TOP) включено в тариф. Используются при выдаче дефолтного тарифа
-// (см. services/subscriptionsService.js) и должны совпадать по форме с
-// тем, что редактирует админ в /admin/payments (PricingModal).
-const DEFAULT_PRICING = Object.freeze({
+// Лимиты тарифа и расценки по умолчанию.
+// Используются строго как fallback при первом старте (когда таблицы в БД пусты),
+// а также для нормализации неполных структур.
+export const DEFAULT_PRICING = Object.freeze({
   tariffs: {
     start: { price: 390, activeListings: 5, vipLifts: 1, topLifts: 1 },
     optimal: { price: 790, activeListings: 15, vipLifts: 2, topLifts: 3 },
@@ -41,11 +37,7 @@ const int = (value, fallback) => {
   return Number.isInteger(n) && n >= 0 ? n : fallback;
 };
 
-// Нормализует один тарифный план (price + лимиты). Поддерживает старый
-// формат хранения, где план был просто числом (ценой) — так было до
-// того, как в тарифы добавили лимиты по объявлениям/VIP/TOP, чтобы уже
-// сохранённые в бакете цены не терялись при первом обращении после
-// обновления.
+// Нормализует один тарифный план (price + лимиты)
 function normalizePlan(raw, fallback) {
   if (raw && typeof raw === "object") {
     return {
@@ -64,10 +56,8 @@ function normalizePlan(raw, fallback) {
   };
 }
 
-// Приводит произвольные (в т.ч. повреждённые/неполные) данные к
-// каноническому виду цен — используется и при чтении, и при записи,
-// чтобы в хранилище никогда не оказалось некорректного значения.
-function normalizePricing(raw) {
+// Приводит произвольные данные к каноническому виду цен платформы
+export function normalizePricing(raw) {
   const src = raw && typeof raw === "object" ? raw : {};
   const t = src.tariffs && typeof src.tariffs === "object" ? src.tariffs : {};
   const s = src.services && typeof src.services === "object" ? src.services : {};
@@ -99,64 +89,209 @@ function normalizePricing(raw) {
 
 let cache = null;
 let cacheAt = 0;
-const CACHE_TTL_MS = 15 * 1000;
+const CACHE_TTL_MS = 60 * 1000; // Кэш в памяти до 60 секунд для снижения нагрузки на БД
 
-async function ensureBucket() {
-  const { data: buckets } = await supabase.storage.listBuckets();
-  const exists = (buckets || []).some((b) => b.name === APP_SETTINGS_BUCKET);
-  if (!exists) {
-    await supabase.storage.createBucket(APP_SETTINGS_BUCKET, { public: false });
-  }
+/**
+ * Сброс кэша цен в памяти (для тестов или принудительной инвалидации)
+ */
+export function invalidatePricingCache() {
+  cache = null;
+  cacheAt = 0;
 }
 
-// Возвращает текущие цены тарифов и услуг. При отсутствии файла (первый
-// запуск) или ошибке чтения безопасно откатывается на значения по
-// умолчанию — платежи и публичные страницы не должны падать из-за
-// проблем с настройками.
+/**
+ * Читает актуальные тарифы и цены из таблиц public.tariff_plans и public.service_prices.
+ *
+ * Безопасность платежей:
+ * При сбое БД (ошибка подключения/сетевой таймаут) функция НЕ откатывается молча на дефолты,
+ * а логирует ошибку и выбрасывает исключение — финансовые списания не должны производиться
+ * по дефолтным ценам при сбое БД.
+ *
+ * Исключение: если таблицы успешно опрошены, но в них 0 строк (первый запуск до сидирования),
+ * используются дефолтные значения DEFAULT_PRICING с предупреждением в лог.
+ */
 export async function getPricingSettings() {
   if (cache && Date.now() - cacheAt < CACHE_TTL_MS) {
     return cache;
   }
 
-  try {
-    const { data, error } = await supabase.storage
-      .from(APP_SETTINGS_BUCKET)
-      .download(PRICING_OBJECT);
+  const [{ data: tariffRows, error: tariffsError }, { data: serviceRows, error: servicesError }] =
+    await Promise.all([
+      supabase.from("tariff_plans").select("*"),
+      supabase.from("service_prices").select("*"),
+    ]);
 
-    if (error || !data) {
-      cache = normalizePricing(null);
-      cacheAt = Date.now();
-      return cache;
-    }
-
-    const text = await data.text();
-    cache = normalizePricing(JSON.parse(text));
-    cacheAt = Date.now();
-    return cache;
-  } catch (err) {
-    console.error("Не удалось загрузить настройки цен, использую значения по умолчанию:", err);
-    return normalizePricing(null);
+  if (tariffsError || servicesError) {
+    const err = tariffsError || servicesError;
+    console.error("DB error fetching pricing settings:", err.message || err);
+    throw new Error(`Не удалось загрузить цены из базы данных: ${err.message || err}`);
   }
+
+  const tariffsList = tariffRows || [];
+  const servicesList = serviceRows || [];
+
+  // Если обе таблицы пусты — логируем и используем стартовые значения по умолчанию
+  if (tariffsList.length === 0 && servicesList.length === 0) {
+    console.warn("Таблицы tariff_plans и service_prices пусты, используются начальные значения по умолчанию (DEFAULT_PRICING)");
+    const fallback = normalizePricing(DEFAULT_PRICING);
+    cache = fallback;
+    cacheAt = Date.now();
+    return fallback;
+  }
+
+  const tariffsById = new Map(tariffsList.map((t) => [t.id, t]));
+  const servicesById = new Map(servicesList.map((s) => [s.id, s]));
+
+  const startRow = tariffsById.get("start");
+  const optimalRow = tariffsById.get("optimal");
+  const businessRow = tariffsById.get("business");
+  const devRow = tariffsById.get("developer");
+
+  const rawData = {
+    tariffs: {
+      start: startRow
+        ? {
+            price: startRow.price,
+            activeListings: startRow.active_listings_limit,
+            vipLifts: startRow.vip_boosts_limit,
+            topLifts: startRow.top_boosts_limit,
+          }
+        : undefined,
+      optimal: optimalRow
+        ? {
+            price: optimalRow.price,
+            activeListings: optimalRow.active_listings_limit,
+            vipLifts: optimalRow.vip_boosts_limit,
+            topLifts: optimalRow.top_boosts_limit,
+          }
+        : undefined,
+      business: businessRow
+        ? {
+            price: businessRow.price,
+            activeListings: businessRow.active_listings_limit,
+            vipLifts: businessRow.vip_boosts_limit,
+            topLifts: businessRow.top_boosts_limit,
+          }
+        : undefined,
+      developer: devRow
+        ? {
+            mode: devRow.price_mode,
+            value: devRow.price,
+            activeListings: devRow.active_listings_limit,
+            vipLifts: devRow.vip_boosts_limit,
+            topLifts: devRow.top_boosts_limit,
+          }
+        : undefined,
+    },
+    services: {
+      vip: servicesById.get("vip")?.price,
+      urgent: servicesById.get("urgent")?.price,
+      top: servicesById.get("top")?.price,
+      instagram: servicesById.get("instagram")?.price,
+    },
+  };
+
+  const result = normalizePricing(rawData);
+  cache = result;
+  cacheAt = Date.now();
+  return result;
 }
 
-// Сохраняет новые цены (уже провалидированные zod-схемой на уровне
-// контроллера). Возвращает нормализованный объект, который был записан.
+/**
+ * Сохраняет новые цены тарифов и разовых услуг в таблицы public.tariff_plans
+ * и public.service_prices через операцию upsert по первичному ключу id.
+ * Инвалидирует кэш в памяти.
+ */
 export async function savePricingSettings(pricingInput) {
   const normalized = normalizePricing(pricingInput);
-  const payload = Buffer.from(JSON.stringify(normalized), "utf-8");
+  const now = new Date().toISOString();
 
-  await ensureBucket();
+  const tariffRows = [
+    {
+      id: "start",
+      title: "СТАРТ",
+      price: normalized.tariffs.start.price,
+      price_mode: "numeric",
+      active_listings_limit: normalized.tariffs.start.activeListings,
+      vip_boosts_limit: normalized.tariffs.start.vipLifts,
+      top_boosts_limit: normalized.tariffs.start.topLifts,
+      updated_at: now,
+    },
+    {
+      id: "optimal",
+      title: "ОПТИМАЛЬНЫЙ",
+      price: normalized.tariffs.optimal.price,
+      price_mode: "numeric",
+      active_listings_limit: normalized.tariffs.optimal.activeListings,
+      vip_boosts_limit: normalized.tariffs.optimal.vipLifts,
+      top_boosts_limit: normalized.tariffs.optimal.topLifts,
+      updated_at: now,
+    },
+    {
+      id: "business",
+      title: "БИЗНЕС",
+      price: normalized.tariffs.business.price,
+      price_mode: "numeric",
+      active_listings_limit: normalized.tariffs.business.activeListings,
+      vip_boosts_limit: normalized.tariffs.business.vipLifts,
+      top_boosts_limit: normalized.tariffs.business.topLifts,
+      updated_at: now,
+    },
+    {
+      id: "developer",
+      title: "ЗАСТРОЙЩИК",
+      price:
+        normalized.tariffs.developer.mode === "numeric"
+          ? normalized.tariffs.developer.value
+          : null,
+      price_mode: normalized.tariffs.developer.mode,
+      active_listings_limit: normalized.tariffs.developer.activeListings,
+      vip_boosts_limit: normalized.tariffs.developer.vipLifts,
+      top_boosts_limit: normalized.tariffs.developer.topLifts,
+      updated_at: now,
+    },
+  ];
 
-  const { error } = await supabase.storage
-    .from(APP_SETTINGS_BUCKET)
-    .upload(PRICING_OBJECT, payload, {
-      contentType: "application/json",
-      upsert: true,
-      cacheControl: "0",
-    });
+  const serviceRows = [
+    {
+      id: "vip",
+      title: "VIP",
+      price: normalized.services.vip,
+      price_period: "day",
+      updated_at: now,
+    },
+    {
+      id: "urgent",
+      title: "Срочно",
+      price: normalized.services.urgent,
+      price_period: "day",
+      updated_at: now,
+    },
+    {
+      id: "top",
+      title: "ТОП",
+      price: normalized.services.top,
+      price_period: "day",
+      updated_at: now,
+    },
+    {
+      id: "instagram",
+      title: "Instagram",
+      price: normalized.services.instagram,
+      price_period: "once",
+      updated_at: now,
+    },
+  ];
 
-  if (error) {
-    throw new Error(error.message || "Не удалось сохранить настройки цен");
+  const [{ error: tariffError }, { error: serviceError }] = await Promise.all([
+    supabase.from("tariff_plans").upsert(tariffRows, { onConflict: "id" }),
+    supabase.from("service_prices").upsert(serviceRows, { onConflict: "id" }),
+  ]);
+
+  if (tariffError || serviceError) {
+    const err = tariffError || serviceError;
+    console.error("DB error saving pricing settings:", err.message || err);
+    throw new Error(err.message || "Не удалось сохранить настройки цен в базу данных");
   }
 
   cache = normalized;

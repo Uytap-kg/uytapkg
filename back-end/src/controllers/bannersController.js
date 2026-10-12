@@ -5,6 +5,8 @@ import {
   createBanner as createBannerRecord,
   updateBanner as updateBannerRecord,
   deleteBanner as deleteBannerRecord,
+  incrementBannerViews,
+  incrementBannerClicks,
 } from "../utils/bannersStore.js";
 import {
   uploadBannerImageToStorage,
@@ -204,3 +206,38 @@ export const deleteBanner = async (req, res) => {
     });
   }
 };
+
+// =======================================================
+// Увеличение счётчика просмотров (POST /api/banners/:id/view)
+// =======================================================
+export const trackBannerView = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await incrementBannerViews(id);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Track Banner View Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Не удалось зафиксировать просмотр баннера",
+    });
+  }
+};
+
+// =======================================================
+// Увеличение счётчика кликов (POST /api/banners/:id/click)
+// =======================================================
+export const trackBannerClick = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await incrementBannerClicks(id);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Track Banner Click Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Не удалось зафиксировать клик по баннеру",
+    });
+  }
+};
+

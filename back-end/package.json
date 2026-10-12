@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "admin": "node src/manage_admin.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
