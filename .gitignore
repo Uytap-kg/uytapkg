@@ -3,6 +3,8 @@
 .env.*
 *.env
 back-end.env
+!.env.example
+!**/.env.example
 
 # Зависимости
 node_modules/

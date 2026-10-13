@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
@@ -16,6 +17,8 @@ import lawyersRoutes from "./routes/lawyersRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
 import bannersRoutes from "./routes/bannersRoutes.js";
 import subscriptionsRoutes from "./routes/subscriptionsRoutes.js";
+import { startCronService, stopCronService } from "./services/cronService.js";
+import { supabase } from "./config/db.js";
 
 dotenv.config();
 
@@ -35,14 +38,28 @@ app.use(helmet({ contentSecurityPolicy: false }));
 // Разрешенные CORS источники. ВАЖНО: при деплое на реальный домен
 // добавьте сюда его адрес (https://uytap.kg и т.п.) — иначе фронтенд в
 // проде не сможет достучаться до API из браузера.
-const allowedOrigins = [
+const isProduction = process.env.NODE_ENV === "production";
+const devOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
   "http://localhost:3001",
+];
+const defaultOrigins = [
   "https://uytapkg-kui5.vercel.app",
   "https://uytapkgdep.vercel.app",
   "https://www.uytap.kg",
 ];
+// ALLOWED_ORIGINS="https://a.kg,https://b.kg" полностью заменяет список по умолчанию.
+const envOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+const allowedOrigins =
+  envOrigins.length > 0
+    ? envOrigins
+    : isProduction
+      ? defaultOrigins
+      : [...devOrigins, ...defaultOrigins];
 
 app.use(
   cors({
@@ -71,6 +88,34 @@ app.get("/api/health", (req, res) => {
     time: new Date().toISOString(),
   });
 });
+
+// Readiness: проверяет доступность БД (для мониторинга/балансировщика)
+app.get("/api/health/ready", async (req, res) => {
+  try {
+    const { error } = await supabase.from("users").select("id").limit(1);
+    if (error) throw error;
+    res.json({ status: "ready", time: new Date().toISOString() });
+  } catch (err) {
+    console.error("Readiness check failed:", err?.message || err);
+    res.status(503).json({ status: "unavailable" });
+  }
+});
+
+// Глобальный базовый лимит на весь API (300 запросов/мин с IP). Более строгие
+// лимитеры на чувствительных маршрутах (auth, payments, upload, ai) — в routes/.
+// Хранилище в памяти: корректно для одного процесса (Render/VPS). При запуске
+// нескольких инстансов (pm2 cluster и т.п.) перенесите на Redis-store.
+app.use(
+  "/api",
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.path.startsWith("/health"),
+    message: { success: false, message: "Слишком много запросов. Попробуйте позже." },
+  })
+);
 
 // Регистрация всех роутов API UyTap
 app.use("/api/auth", authRoutes);
@@ -126,7 +171,34 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 UyTap Backend API запущен на порту ${PORT}: http://localhost:${PORT}`);
   console.log(`📡 Готов к приему запросов от Frontend`);
+  startCronService();
+});
+
+// Graceful shutdown: при деплое (Render/systemd шлют SIGTERM) дожидаемся
+// завершения текущих запросов, чтобы не оборвать выдачу оплаченной услуги.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} получен, останавливаем сервер...`);
+  stopCronService();
+  server.close(() => {
+    console.log("Сервер остановлен");
+    process.exit(0);
+  });
+  // Принудительное завершение, если запросы не закрылись за 25 секунд
+  setTimeout(() => process.exit(1), 25000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Promise Rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+  shutdown("uncaughtException");
 });

@@ -4,6 +4,15 @@ import { calculateTariffTotal } from "../constants/tariffs.js";
 import { getPricingSettings } from "../utils/pricingSettings.js";
 import { createPromotionPaymentSchema } from "../utils/validation.js";
 import * as odengi from "../services/odengiService.js";
+
+let odengiClient = odengi;
+export function setOdengiClient(client) {
+  odengiClient = client;
+}
+export function resetOdengiClient() {
+  odengiClient = odengi;
+}
+
 import { activateSubscription, getActiveSubscription } from "../services/subscriptionsService.js";
 import { applyPromotion } from "../services/promotionsService.js";
 import {
@@ -25,6 +34,18 @@ const SERVICE_TITLES = {
   urgent: "Срочная публикация",
   instagram: "Instagram-продвижение",
 };
+
+// Троттлинг синхронного поллинга статуса платежа в O!Dengi (Дефект 2.4)
+export const ODENGI_THROTTLE_MS = 10000; // 10 секунд
+export const providerCheckThrottleMap = new Map();
+export const MAX_THROTTLE_MAP_SIZE = 10000;
+
+export function clearProviderCheckThrottleMap() {
+  providerCheckThrottleMap.clear();
+}
+
+// Время, в течение которого захваченная выдача считается «в работе».
+export const FULFILL_LEASE_MS = 2 * 60 * 1000;
 
 function generateOrderId() {
   return `UT${Date.now()}${crypto.randomBytes(6).toString("hex")}`;
@@ -343,6 +364,41 @@ export async function fulfillPayment(payment) {
     return payment;
   }
 
+  // Атомарный захват выдачи: webhook и поллинг статуса могут прийти
+  // одновременно, и без блокировки услуга выдавалась бы дважды. Условный
+  // UPDATE проходит только у одного вызова; lease протухает, чтобы упавший
+  // посреди выдачи процесс не блокировал платёж навсегда.
+  const leaseCutoff = new Date(Date.now() - FULFILL_LEASE_MS).toISOString();
+  const { data: claimedRow, error: claimError } = await supabase
+    .from("payments")
+    .update({ fulfilling_at: new Date().toISOString() })
+    .eq("id", payment.id)
+    .is("fulfilled_at", null)
+    .or(`fulfilling_at.is.null,fulfilling_at.lt.${leaseCutoff}`)
+    .select()
+    .maybeSingle();
+
+  if (claimError) {
+    if (claimError.code === "42703" || claimError.code === "PGRST204") {
+      console.warn(
+        "⚠️ payments.fulfilling_at отсутствует — примените миграцию 20261013000100_payment_fulfillment_lease.sql. Выдача идёт без блокировки."
+      );
+    } else {
+      console.error("Fulfill Payment claim DB error:", claimError);
+      return payment;
+    }
+  } else if (!claimedRow) {
+    // Другой вызов уже выдаёт эту услугу (или выдал) — не дублируем.
+    const { data: latest } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("id", payment.id)
+      .maybeSingle();
+    return latest || payment;
+  } else {
+    payment = claimedRow;
+  }
+
   const nextAttempts = (payment.fulfill_attempts || 0) + 1;
   const now = new Date().toISOString();
 
@@ -361,6 +417,7 @@ export async function fulfillPayment(payment) {
       .from("payments")
       .update({
         fulfilled_at: now,
+        fulfilling_at: null,
         fulfill_attempts: nextAttempts,
         fulfill_error: null,
         updated_at: now,
@@ -405,6 +462,7 @@ export async function fulfillPayment(payment) {
       .update({
         fulfill_attempts: nextAttempts,
         fulfill_error: errorMessage,
+        fulfilling_at: null,
         updated_at: now,
       })
       .eq("id", payment.id)
@@ -430,7 +488,7 @@ export async function fulfillPayment(payment) {
 //
 // Если платёж уже approved, но ещё не fulfilled (!payment.fulfilled_at),
 // запускает повторную попытку fulfillPayment(payment).
-async function reconcilePaymentStatus(payment) {
+export async function reconcilePaymentStatus(payment) {
   if (payment.status === "approved") {
     if (!payment.fulfilled_at) {
       return await fulfillPayment(payment);
@@ -442,7 +500,25 @@ async function reconcilePaymentStatus(payment) {
     return payment;
   }
 
-  const statusData = await odengi.statusPayment({
+  // Троттлинг синхронного обращения к внешнему шлюзу O!Dengi (Дефект 2.4)
+  const now = Date.now();
+  const lastCheck = providerCheckThrottleMap.get(payment.order_id);
+  if (lastCheck && now - lastCheck < ODENGI_THROTTLE_MS) {
+    return payment;
+  }
+
+  providerCheckThrottleMap.set(payment.order_id, now);
+
+  // Очистка устаревших записей при превышении лимита размера (Memory Leak Protection)
+  if (providerCheckThrottleMap.size > MAX_THROTTLE_MAP_SIZE) {
+    for (const [key, timestamp] of providerCheckThrottleMap.entries()) {
+      if (now - timestamp >= ODENGI_THROTTLE_MS) {
+        providerCheckThrottleMap.delete(key);
+      }
+    }
+  }
+
+  const statusData = await odengiClient.statusPayment({
     invoiceId: payment.invoice_id,
     orderId: payment.order_id,
   });

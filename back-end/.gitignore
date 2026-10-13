@@ -1,5 +1,6 @@
 .env
-schema.sql
-index.js
+.env.*
+!.env.example
 back-end.env
 node_modules/
+*.log

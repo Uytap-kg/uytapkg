@@ -152,7 +152,7 @@ export const getListings = async (req, res) => {
       }
     }
 
-    if (city && city !== "Все") query = query.ilike("city", `%${city}%`);
+    if (city && city !== "Все") query = query.eq("city", city.trim());
     if (district) query = query.ilike("district", `%${district}%`);
 
     // Фильтрация по типу недвижимости и сделки
@@ -168,15 +168,22 @@ export const getListings = async (req, res) => {
     if (rooms && !Number.isNaN(Number(rooms))) query = query.eq("rooms", Number(rooms));
     if (isResort !== undefined) query = query.eq("is_resort", isResort === "true");
 
-    // Пагинация и сортировка
+    // ТЗ Правило (Дефект 1.1): В блок "Популярные" на главной попадают только объявления с фото
+    if (onlyPopular === "true") {
+      query = query.gt("photos_count", 0);
+    }
+
+    // Пагинация и сортировка на уровне БД
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const from = (pageNum - 1) * limitNum;
     const to = from + limitNum - 1;
 
-    query = query
-      .order("created_at", { ascending: false })
-      .range(from, to);
+    let orderedQuery = query.order("priority_rank", { ascending: true });
+    if (typeof orderedQuery?.order === "function") {
+      orderedQuery = orderedQuery.order("created_at", { ascending: false });
+    }
+    query = orderedQuery.range(from, to);
 
     const { data: listings, count, error } = await query;
 
@@ -187,37 +194,29 @@ export const getListings = async (req, res) => {
 
     // Вспомогательная функция приоритета: vip (0) -> urgent (1) -> top (2) -> regular (3)
     const getListingPriority = (item) => {
+      if (item.priority_rank !== undefined && item.priority_rank !== null) return item.priority_rank;
       if (item.promotion_status === "vip") return 0;
       if (item.is_urgent) return 1;
       if (item.promotion_status === "top") return 2;
       return 3;
     };
 
-    // Маскируем истёкший срок и истёкшее продвижение ДО сортировки по приоритету
+    // Маскируем истёкший срок и истёкшее продвижение
     const maskedListings = (listings || []).map(maskExpiredListing);
 
-    // Точная сортировка объявлений по требуемому приоритету
-    let filteredListings = maskedListings.sort((a, b) => {
+    // Поддержка динамически замаскированных записей (или моков тестов)
+    maskedListings.sort((a, b) => {
       const prioA = getListingPriority(a);
       const prioB = getListingPriority(b);
       if (prioA !== prioB) return prioA - prioB;
       return new Date(b.created_at) - new Date(a.created_at);
     });
 
-    // ТЗ Правило: В блок "Популярные" на главной не попадают объявления без фотографий!
-    if (onlyPopular === "true") {
-      filteredListings = filteredListings.filter(
-        (item) => item.listing_photos && item.listing_photos.length > 0
-      );
-    }
-
-    const paginatedListings = filteredListings;
-
     return res.json({
       success: true,
-      data: paginatedListings,
+      data: maskedListings,
       pagination: {
-        total: count ?? filteredListings.length,
+        total: count ?? maskedListings.length,
         page: pageNum,
         limit: limitNum,
       },
@@ -644,6 +643,8 @@ export const createListing = async (req, res) => {
       status: initialStatus,
       promotion_status,
       is_urgent,
+      priority_rank: 3,
+      photos_count: Array.isArray(photos) ? photos.length : 0,
       expires_at: new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString(),
     };
 
@@ -786,6 +787,9 @@ export const createListing = async (req, res) => {
         }
         return res.status(500).json({ success: false, message: "Ошибка сохранения фотографий объявления" });
       }
+
+      await supabase.from("listings").update({ photos_count: photos.length }).eq("id", newListing.id);
+      newListing.photos_count = photos.length;
     }
 
     // Тип размещения "instagram" публикует объявление как обычное (оплата
@@ -1204,6 +1208,11 @@ export const updateListing = async (req, res) => {
           display_order: idx,
         }));
         await supabase.from("listing_photos").insert(photosData);
+      }
+
+      await supabase.from("listings").update({ photos_count: data.photos.length }).eq("id", id);
+      if (updatedListing) {
+        updatedListing.photos_count = data.photos.length;
       }
     }
 

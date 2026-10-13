@@ -15,7 +15,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export async function grantPromotion({ listingId, serviceType, days }) {
   const { data: listing, error } = await supabase
     .from("listings")
-    .select("id, status, user_id")
+    .select("id, status, user_id, promotion_status, is_urgent, promotion_expires_at, urgent_expires_at")
     .eq("id", listingId)
     .maybeSingle();
 
@@ -49,12 +49,31 @@ export async function grantPromotion({ listingId, serviceType, days }) {
     updates.status = "active";
   }
 
-  if (serviceType === "vip" || serviceType === "top") {
-    updates.promotion_status = serviceType;
+  const now = Date.now();
+  const currentPromo = listing.promotion_status;
+  const promoExp = listing.promotion_expires_at ? new Date(listing.promotion_expires_at).getTime() : 0;
+  const urgentExp = listing.urgent_expires_at ? new Date(listing.urgent_expires_at).getTime() : 0;
+  const isVipActive = currentPromo === "vip" && (!listing.promotion_expires_at || promoExp > now);
+  const isUrgentActive = Boolean(listing.is_urgent) && (!listing.urgent_expires_at || urgentExp > now);
+
+  if (serviceType === "vip") {
+    updates.promotion_status = "vip";
     updates.promotion_expires_at = expiresAt;
+    updates.priority_rank = 0;
   } else if (serviceType === "urgent") {
     updates.is_urgent = true;
     updates.urgent_expires_at = expiresAt;
+    updates.priority_rank = isVipActive ? 0 : 1;
+  } else if (serviceType === "top") {
+    updates.promotion_status = "top";
+    updates.promotion_expires_at = expiresAt;
+    if (isVipActive) {
+      updates.priority_rank = 0;
+    } else if (isUrgentActive) {
+      updates.priority_rank = 1;
+    } else {
+      updates.priority_rank = 2;
+    }
   } else {
     console.error("Grant Promotion: unknown serviceType", serviceType);
     return false;

@@ -104,7 +104,9 @@ export const loginLimiter = rateLimit({
   max: 5,
   keyGenerator: (req) => {
     const identifier = typeof req.body?.identifier === "string" ? req.body.identifier.toLowerCase().trim() : "";
-    return identifier || ipKeyGenerator(req);
+    // Ключ «IP + логин»: подбор пароля к одному аккаунту ограничен, но
+    // посторонний не может заблокировать вход жертве со своего IP.
+    return `${ipKeyGenerator(req)}|${identifier}`;
   },
   message: {
     success: false,

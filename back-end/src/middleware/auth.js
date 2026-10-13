@@ -24,6 +24,21 @@ export const generateToken = (payload) => {
   );
 };
 
+// In-memory кэш Auth-middleware (Дефект 2.1)
+export const AUTH_CACHE_TTL_MS = 60 * 1000; // 60 секунд
+export const MAX_AUTH_CACHE_SIZE = 5000;
+export const userAuthCache = new Map();
+
+export function invalidateUserAuthCache(userId) {
+  if (userId) {
+    userAuthCache.delete(String(userId));
+  }
+}
+
+export function clearUserAuthCache() {
+  userAuthCache.clear();
+}
+
 // Middleware для проверки токена доступа
 export const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -60,42 +75,76 @@ export const authenticateToken = (req, res, next) => {
     }
 
     try {
-      // Подтягиваем роль, тип аккаунта и версию токена пользователя из базы данных
-      const { data: dbUser, error: dbError } = await supabase
-        .from("users")
-        .select("role, account_type, token_version")
-        .eq("id", decodedUser.id)
-        .single();
+      const userId = String(decodedUser.id);
+      const now = Date.now();
+      const tokenVersion = decodedUser.tv ?? 0;
 
+      let dbUser = null;
       let userRole = "user";
 
-      if (dbError) {
-        // PGRST204: колонка 'role' отсутствует в БД
-        if (dbError.code === "PGRST204") {
-          console.warn(
-            "⚠️ WARNING: Column 'role' is missing in 'users' table. Please run the following SQL in your Supabase SQL Editor:\n" +
-            "ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('user', 'admin'));"
-          );
-        } else if (dbError.code === "PGRST116") {
-          // PGRST116: запись не найдена
-          return res.status(404).json({
-            success: false,
-            message: "Пользователь не найден в системе.",
+      // 1. Проверяем наличие валидной записи в кэше
+      const cached = userAuthCache.get(userId);
+      if (
+        cached &&
+        now - cached.cachedAt < AUTH_CACHE_TTL_MS &&
+        cached.token_version === tokenVersion
+      ) {
+        dbUser = cached;
+        userRole = cached.role || "user";
+      } else {
+        // 2. Если в кэше нет или версия не совпадает — запрос в БД
+        const { data: fetchedUser, error: dbError } = await supabase
+          .from("users")
+          .select("role, account_type, token_version")
+          .eq("id", decodedUser.id)
+          .single();
+
+        if (dbError) {
+          // PGRST204: колонка 'role' отсутствует в БД
+          if (dbError.code === "PGRST204") {
+            console.warn(
+              "⚠️ WARNING: Column 'role' is missing in 'users' table. Please run the following SQL in your Supabase SQL Editor:\n" +
+              "ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('user', 'admin'));"
+            );
+          } else if (dbError.code === "PGRST116") {
+            // PGRST116: запись не найдена
+            return res.status(404).json({
+              success: false,
+              message: "Пользователь не найден в системе.",
+            });
+          } else {
+            // Другая ошибка базы данных
+            console.error("Database error during user fetch:", dbError);
+            return res.status(500).json({
+              success: false,
+              message: "Ошибка базы данных при проверке пользователя.",
+            });
+          }
+        } else if (fetchedUser) {
+          userRole = fetchedUser.role || "user";
+          dbUser = fetchedUser;
+
+          // Сохраняем пользователя в кэш
+          userAuthCache.set(userId, {
+            role: userRole,
+            account_type: fetchedUser.account_type,
+            token_version: fetchedUser.token_version ?? 0,
+            cachedAt: now,
           });
-        } else {
-          // Другая ошибка базы данных
-          console.error("Database error during user fetch:", dbError);
-          return res.status(500).json({
-            success: false,
-            message: "Ошибка базы данных при проверке пользователя.",
-          });
+
+          // Защита от переполнения памяти
+          if (userAuthCache.size > MAX_AUTH_CACHE_SIZE) {
+            for (const [uid, item] of userAuthCache.entries()) {
+              if (now - item.cachedAt >= AUTH_CACHE_TTL_MS) {
+                userAuthCache.delete(uid);
+              }
+            }
+          }
         }
-      } else if (dbUser) {
-        userRole = dbUser.role || "user";
       }
 
       // Сравниваем версионность токена: если версия в БД не совпадает с версией в токене
-      if (dbUser && dbUser.token_version !== (decodedUser.tv ?? 0)) {
+      if (dbUser && dbUser.token_version !== tokenVersion) {
         return res.status(401).json({
           success: false,
           message: "Сессия отозвана или устарела. Пожалуйста, выполните вход заново",

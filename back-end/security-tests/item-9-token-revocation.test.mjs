@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
 dotenv.config();
 
-import { generateToken, authenticateToken } from "../src/middleware/auth.js";
+import { generateToken, authenticateToken, invalidateUserAuthCache } from "../src/middleware/auth.js";
 import authRoutes from "../src/routes/authRoutes.js";
 import { logoutAll, resetPassword } from "../src/controllers/authController.js";
 import { supabase } from "../src/config/db.js";
@@ -391,6 +391,7 @@ test("Критерий 1 (б): старый access-токен (tv: 0) после
 
     // 2. Имитируем сброс пароля: token_version в БД инкрементируется до 1
     users[0].token_version = 1;
+    invalidateUserAuthCache(user.id);
 
     // 3. После сброса пароля: тот же старый токен даёт 401 Unauthorized
     const postResetCheck = await runAuthMiddleware(oldAccessToken);

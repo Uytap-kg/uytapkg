@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { supabase } from "./config/db.js";
+import { supabase } from "../src/config/db.js";
 
 async function main() {
   const args = process.argv.slice(2);

@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS listings (
     promotion_expires_at TIMESTAMP WITH TIME ZONE,
     is_urgent BOOLEAN DEFAULT FALSE,
     urgent_expires_at TIMESTAMP WITH TIME ZONE,
+    priority_rank INT DEFAULT 3 NOT NULL,
+    photos_count INT DEFAULT 0 NOT NULL,
     views_count INT DEFAULT 0,
     expires_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP + INTERVAL '40 days'),
     
@@ -291,6 +293,69 @@ WHERE features ? 'promotionExpiresAt' AND promotion_expires_at IS NULL;
 UPDATE listings 
 SET urgent_expires_at = (features->>'urgentExpiresAt')::timestamptz
 WHERE features ? 'urgentExpiresAt' AND urgent_expires_at IS NULL;
+
+-- Колонки и индексы приоритета и фотографий (Дефект 1.1)
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS priority_rank INT DEFAULT 3 NOT NULL;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS photos_count INT DEFAULT 0 NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_listings_active_prio ON listings(status, priority_rank ASC, created_at DESC) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_listings_photos_count ON listings(photos_count);
+
+-- Триггер для расчета priority_rank
+CREATE OR REPLACE FUNCTION update_listing_priority_rank()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.promotion_status = 'vip' AND (NEW.promotion_expires_at IS NULL OR NEW.promotion_expires_at > CURRENT_TIMESTAMP) THEN
+    NEW.priority_rank := 0;
+  ELSIF NEW.is_urgent = TRUE AND (NEW.urgent_expires_at IS NULL OR NEW.urgent_expires_at > CURRENT_TIMESTAMP) THEN
+    NEW.priority_rank := 1;
+  ELSIF NEW.promotion_status = 'top' AND (NEW.promotion_expires_at IS NULL OR NEW.promotion_expires_at > CURRENT_TIMESTAMP) THEN
+    NEW.priority_rank := 2;
+  ELSE
+    NEW.priority_rank := 3;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_listing_priority_rank ON listings;
+CREATE TRIGGER trg_listing_priority_rank
+BEFORE INSERT OR UPDATE OF promotion_status, promotion_expires_at, is_urgent, urgent_expires_at
+ON listings
+FOR EACH ROW EXECUTE FUNCTION update_listing_priority_rank();
+
+-- Триггеры для поддержания photos_count
+CREATE OR REPLACE FUNCTION update_listing_photos_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE listings SET photos_count = photos_count + 1 WHERE id = NEW.listing_id;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE listings SET photos_count = GREATEST(0, photos_count - 1) WHERE id = OLD.listing_id;
+    RETURN OLD;
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.listing_id IS DISTINCT FROM NEW.listing_id THEN
+      UPDATE listings SET photos_count = GREATEST(0, photos_count - 1) WHERE id = OLD.listing_id;
+      UPDATE listings SET photos_count = photos_count + 1 WHERE id = NEW.listing_id;
+    END IF;
+    RETURN NEW;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_listing_photos_count ON listing_photos;
+CREATE TRIGGER trg_listing_photos_count
+AFTER INSERT OR DELETE OR UPDATE OF listing_id
+ON listing_photos
+FOR EACH ROW EXECUTE FUNCTION update_listing_photos_count();
+
+-- Оптимизация поиска через триграммные GIN-индексы (Дефект 2.3)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_listings_city_trgm ON listings USING gin (city gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_listings_district_trgm ON listings USING gin (district gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_listings_region_trgm ON listings USING gin (region gin_trgm_ops);
 
 -- ============================================================
 -- Storage (аватарки): создать вручную в Supabase Dashboard

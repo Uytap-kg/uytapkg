@@ -5,7 +5,7 @@ import { supabase } from "../config/db.js";
 import { registerSchema, loginSchema, updateMeSchema, normalizePhone } from "../utils/validation.js";
 import { generateSecureOtp, safeCompare } from "../utils/otp.js";
 import { sendOtpEmail } from "../services/emailService.js";
-import { generateToken } from "../middleware/auth.js";
+import { generateToken, invalidateUserAuthCache } from "../middleware/auth.js";
 import {
   uploadAvatarToStorage,
   removeImageFromStorage,
@@ -85,7 +85,10 @@ const OTP_HOURLY_LIMIT = 5; // не более 5 кодов в час на email
  * Защищает от утечки кодов при чтении БД (коды не хранятся в открытом виде).
  */
 export function hashOtpCode(code) {
-  const secret = process.env.JWT_SECRET || "uytap-secret-key-fallback";
+  const secret = process.env.OTP_SECRET || process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("OTP_SECRET или JWT_SECRET должен быть задан");
+  }
   return crypto.createHmac("sha256", secret).update(String(code)).digest("hex");
 }
 
@@ -427,7 +430,6 @@ export const register = async (req, res) => {
       return res.status(500).json({
         success: false,
         message: "Ошибка сохранения пользователя в базе данных. Проверьте, созданы ли таблицы в БД.",
-        details: createError?.message,
       });
     }
 
@@ -789,7 +791,6 @@ export const updateMe = async (req, res) => {
         return res.status(500).json({
           success: false,
           message: "Не удалось обновить данные пользователя",
-          details: userUpdateError.message,
         });
       }
     }
@@ -898,7 +899,6 @@ export const updateMe = async (req, res) => {
           return res.status(500).json({
             success: false,
             message: "Не удалось обновить профиль",
-            details: profileError.message,
           });
         }
         profile = updatedProfile;
@@ -914,7 +914,6 @@ export const updateMe = async (req, res) => {
           return res.status(500).json({
             success: false,
             message: "Не удалось создать профиль",
-            details: profileError.message,
           });
         }
         profile = insertedProfile;
@@ -937,6 +936,8 @@ export const updateMe = async (req, res) => {
         message: "Не удалось получить обновлённые данные пользователя",
       });
     }
+
+    invalidateUserAuthCache(userId);
 
     return res.json({
       success: true,
@@ -1003,7 +1004,6 @@ export const uploadUserAvatar = async (req, res) => {
       return res.status(500).json({
         success: false,
         message: "Файл загружен, но не удалось сохранить профиль",
-        details: error.message,
       });
     }
 
@@ -1073,7 +1073,6 @@ export const deleteUserAvatar = async (req, res) => {
       return res.status(500).json({
         success: false,
         message: "Не удалось удалить аватар из профиля",
-        details: error.message,
       });
     }
 
@@ -1602,6 +1601,8 @@ export const resetPassword = async (req, res) => {
       });
     }
 
+    invalidateUserAuthCache(updatedUser?.id || userToReset?.id);
+
     return res.json({
       success: true,
       message: "Пароль успешно изменен",
@@ -1662,6 +1663,8 @@ export const logoutAll = async (req, res) => {
         message: "Не удалось завершить сессии",
       });
     }
+
+    invalidateUserAuthCache(userId);
 
     return res.status(200).json({
       success: true,
