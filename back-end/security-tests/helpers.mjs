@@ -1,7 +1,7 @@
 // Общие утилиты для security-тестов (PoC эксплойтов).
-// НИЧЕГО из этого файла не модифицирует код приложения — только помогает
-// тестам общаться с локально поднятым сервером (http://localhost:5000)
-// и с реальной БД Supabase напрямую (для очистки тестовых данных).
+// ИЗОЛЯЦИЯ ОТ БОЕВОЙ БД: Ни один тест не имеет права ходить в боевой Supabase.
+// Для запуска интеграционных тестов требуются переменные окружения:
+// TEST_SUPABASE_URL и TEST_SUPABASE_KEY (только локальный инстанс http://127.0.0.1 или localhost).
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import path from "path";
@@ -14,17 +14,60 @@ dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 export const BASE_URL = process.env.SECURITY_TEST_BASE_URL || "http://localhost:5000";
 
-export const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY,
-  { auth: { persistSession: false, autoRefreshToken: false } }
+export const isTestDbConfigured = Boolean(
+  process.env.TEST_SUPABASE_URL && process.env.TEST_SUPABASE_KEY
 );
+
+export const SKIP_NO_TEST_DB_REASON =
+  "Не заданы TEST_SUPABASE_URL и TEST_SUPABASE_KEY (интеграционный тест изолирован от боевой базы данных)";
+
+/**
+ * Валидация безопасности тестового окружения.
+ * Защищает от случайного указания боевого Supabase в TEST_SUPABASE_URL.
+ */
+export function checkTestDatabaseSafety() {
+  const testUrl = process.env.TEST_SUPABASE_URL;
+  const prodUrl = process.env.SUPABASE_URL;
+
+  if (!testUrl) return;
+
+  const isLocal =
+    testUrl.includes("127.0.0.1") ||
+    testUrl.includes("localhost") ||
+    testUrl.startsWith("http://local");
+
+  if (!isLocal) {
+    if ((prodUrl && testUrl === prodUrl) || testUrl.includes(".supabase.co")) {
+      throw new Error(
+        "КРИТИЧЕСКАЯ ОШИБКА БЕЗОПАСНОСТИ: отказ запускать тесты против боевой БД! TEST_SUPABASE_URL указывает на облачный домен Supabase (*.supabase.co). Разрешены только локальные адреса (http://127.0.0.1 или localhost)."
+      );
+    }
+  }
+}
+
+function initTestSupabaseClient() {
+  if (!isTestDbConfigured) {
+    return null;
+  }
+  checkTestDatabaseSafety();
+  return createClient(
+    process.env.TEST_SUPABASE_URL,
+    process.env.TEST_SUPABASE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+}
+
+export const supabaseAdmin = initTestSupabaseClient();
 
 const LOG_PATH = path.join(__dirname, "SECURITY_LOG.md");
 
 export function logDbOp(entry) {
-  const line = `- ${new Date().toISOString()} ${entry}\n`;
-  fs.appendFileSync(LOG_PATH, line, "utf-8");
+  try {
+    const line = `- ${new Date().toISOString()} ${entry}\n`;
+    fs.appendFileSync(LOG_PATH, line, "utf-8");
+  } catch (e) {
+    // Безопасное игнорирование при отсутствии доступа к файлу
+  }
 }
 
 export async function api(pathname, { method = "GET", token, body, headers = {}, isForm = false } = {}) {
@@ -55,8 +98,6 @@ function randSuffix() {
 
 /**
  * Регистрирует нового тестового пользователя через публичный API.
- * Логирует создание строки в users (email) в SECURITY_LOG.md.
- * Возвращает { token, user, email, phone, password }.
  */
 export async function registerTestUser({ accountType = "personal", prefix = "sectest" } = {}) {
   const suffix = randSuffix();
@@ -85,16 +126,17 @@ export async function registerTestUser({ accountType = "personal", prefix = "sec
     throw new Error(`Failed to register test user: ${status} ${JSON.stringify(body)}`);
   }
 
-  logDbOp(`CREATE users id=${body.user.id} email=${email} (test account, accountType=${accountType})`);
+  logDbOp(`CREATE users id=${body.user?.id} email=${email} (test account, accountType=${accountType})`);
 
   return { token: body.token, user: body.user, email, phone, password };
 }
 
-/** Удаляет тестового пользователя (и связанные строки) напрямую через Supabase (service key). */
+/** 
+ * Удаляет тестового пользователя (и связанные строки) через тестовый Supabase.
+ */
 export async function deleteTestUser(userId) {
-  if (!userId) return;
+  if (!userId || !supabaseAdmin) return;
 
-  // Собираем listing id, чтобы также удалить listing_photos/favorites по ним.
   const { data: listings } = await supabaseAdmin
     .from("listings")
     .select("id")
@@ -118,9 +160,11 @@ export async function deleteTestUser(userId) {
   logDbOp(`DELETE users id=${userId} (cleanup)`);
 }
 
-/** Удаляет отдельное объявление по id (для тестов, создающих листинг вручную). */
+/** 
+ * Удаляет отдельное объявление по id через тестовый Supabase.
+ */
 export async function deleteTestListing(listingId) {
-  if (!listingId) return;
+  if (!listingId || !supabaseAdmin) return;
   await supabaseAdmin.from("listing_photos").delete().eq("listing_id", listingId);
   await supabaseAdmin.from("favorites").delete().eq("listing_id", listingId);
   await supabaseAdmin.from("listings").delete().eq("id", listingId);

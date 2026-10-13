@@ -19,10 +19,13 @@ import bannersRoutes from "./routes/bannersRoutes.js";
 import subscriptionsRoutes from "./routes/subscriptionsRoutes.js";
 import { startCronService, stopCronService } from "./services/cronService.js";
 import { supabase } from "./config/db.js";
+import logger from "./utils/logger.js";
+import requestContext from "./middleware/requestContext.js";
 
 dotenv.config();
 
 const app = express();
+app.use(requestContext);
 // When running behind a proxy (e.g., local dev proxies or hosting), allow
 // express to trust the X-Forwarded-* headers so express-rate-limit can
 // correctly determine the remote IP. See express-rate-limit docs.
@@ -96,7 +99,7 @@ app.get("/api/health/ready", async (req, res) => {
     if (error) throw error;
     res.json({ status: "ready", time: new Date().toISOString() });
   } catch (err) {
-    console.error("Readiness check failed:", err?.message || err);
+    logger.warn("Readiness check failed", { error: err?.message || err });
     res.status(503).json({ status: "unavailable" });
   }
 });
@@ -135,7 +138,11 @@ app.use("/api/subscriptions", subscriptionsRoutes);
 
 // Глобальный обработчик ошибок (включая Multer)
 app.use((err, req, res, next) => {
-  console.error("Unhandled Server Error:", err);
+  logger.error("Unhandled Server Error", {
+    requestId: req?.id,
+    error: err?.message,
+    stack: err?.stack,
+  });
 
   if (err.message === "Origin not allowed by CORS") {
     return res.status(403).json({
@@ -172,8 +179,8 @@ app.use((err, req, res, next) => {
 });
 
 const server = app.listen(PORT, () => {
-  console.log(`🚀 UyTap Backend API запущен на порту ${PORT}: http://localhost:${PORT}`);
-  console.log(`📡 Готов к приему запросов от Frontend`);
+  logger.info(`UyTap Backend API запущен на порту ${PORT}: http://localhost:${PORT}`);
+  logger.info("Готов к приему запросов от Frontend");
   startCronService();
 });
 
@@ -183,10 +190,10 @@ let shuttingDown = false;
 function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`${signal} получен, останавливаем сервер...`);
+  logger.info(`${signal} получен, останавливаем сервер...`);
   stopCronService();
   server.close(() => {
-    console.log("Сервер остановлен");
+    logger.info("Сервер остановлен");
     process.exit(0);
   });
   // Принудительное завершение, если запросы не закрылись за 25 секунд
@@ -196,9 +203,15 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled Promise Rejection:", reason);
+  logger.error("Unhandled Promise Rejection", {
+    reason: reason instanceof Error ? reason.message : reason,
+    stack: reason?.stack,
+  });
 });
 process.on("uncaughtException", (err) => {
-  console.error("Uncaught Exception:", err);
+  logger.error("Uncaught Exception", {
+    error: err?.message,
+    stack: err?.stack,
+  });
   shutdown("uncaughtException");
 });

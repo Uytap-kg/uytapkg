@@ -1,0 +1,12 @@
+.env*
+back-end.env
+node_modules
+security-tests
+scripts
+*.csv
+*.pdf
+.git
+.github
+npm-debug.log*
+.DS_Store
+Thumbs.db

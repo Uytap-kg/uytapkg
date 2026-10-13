@@ -345,57 +345,26 @@ export const register = async (req, res) => {
         return res.status(429).json({ success: false, message: limit.message });
       }
 
-      const { data: takenOver, error: takeoverError } = await supabase
-        .from("users")
-        .update({
-          account_type: accountType,
-          phone: formattedPhone,
-          password_hash: passwordHash,
-          is_email_verified: false,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingByEmail.id)
-        .eq("is_email_verified", false)
-        .select("id, account_type, email, phone")
-        .maybeSingle();
+      const profileUpdate = buildProfileData(existingByEmail.id, validationResult.data);
 
-      if (takeoverError || !takenOver) {
-        console.error("Error updating unverified user:", takeoverError);
+      const { data: reclaimedUserId, error: reclaimError } = await supabase.rpc(
+        "reclaim_unverified_user",
+        {
+          p_user_id: existingByEmail.id,
+          p_account_type: accountType,
+          p_phone: formattedPhone,
+          p_password_hash: passwordHash,
+          p_profile_data: profileUpdate,
+        }
+      );
+
+      if (reclaimError || !reclaimedUserId) {
+        console.error("Error updating unverified user via RPC:", reclaimError);
         return res.status(500).json({
           success: false,
           message: "Не удалось обновить регистрацию. Попробуйте позже.",
         });
       }
-
-      const profileUpdate = buildProfileData(takenOver.id, validationResult.data);
-      const { data: existingProfileRow } = await supabase
-        .from("user_profiles")
-        .select("id")
-        .eq("user_id", takenOver.id)
-        .maybeSingle();
-
-      if (existingProfileRow) {
-        // Обнуляем поля прежней регистрации, чтобы не осталось чужих данных
-        const { error } = await supabase
-          .from("user_profiles")
-          .update({
-            first_name: null,
-            last_name: null,
-            company_name: null,
-            inn: null,
-            office_address: null,
-            avatar_url: null,
-            ...profileUpdate,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("user_id", takenOver.id);
-        if (error) console.warn("Warning: Could not update user profile details:", error);
-      } else {
-        const { error } = await supabase.from("user_profiles").insert([profileUpdate]);
-        if (error) console.warn("Warning: Could not create user profile details:", error);
-      }
-
-      await syncDeveloperRecord(takenOver.id, takenOver.account_type, profileUpdate, takenOver.phone, takenOver.email);
 
       const limited = await guardedIssueOtp(normalizedEmail);
       if (limited) {
@@ -409,52 +378,26 @@ export const register = async (req, res) => {
       });
     }
 
-    // 3. Создание записи в таблице `users` (email пока НЕ подтверждён)
-    const { data: newUser, error: createError } = await supabase
-      .from("users")
-      .insert([
-        {
-          account_type: accountType,
-          email: normalizedEmail,
-          phone: formattedPhone,
-          password_hash: passwordHash,
-          is_verified: false,
-          is_email_verified: false,
-        },
-      ])
-      .select("id, account_type, email, phone, is_verified, created_at, token_version")
-      .single();
+    // 3. Создание записи в таблице `users` и профиля в одной транзакции (RPC register_user)
+    const profilePayload = buildProfileData(null, validationResult.data);
 
-    if (createError || !newUser) {
-      console.error("Error inserting user:", createError);
+    const { data: newUserId, error: createError } = await supabase.rpc("register_user", {
+      p_account_type: accountType,
+      p_email: normalizedEmail,
+      p_phone: formattedPhone,
+      p_password_hash: passwordHash,
+      p_profile_data: profilePayload,
+    });
+
+    if (createError || !newUserId) {
+      console.error("Error inserting user via register_user RPC:", createError);
       return res.status(500).json({
         success: false,
         message: "Ошибка сохранения пользователя в базе данных. Проверьте, созданы ли таблицы в БД.",
       });
     }
 
-    // 4. Подготовка данных профиля
-    const profileData = buildProfileData(newUser.id, validationResult.data);
-
-    // 5. Сохранение профиля в `user_profiles`
-    try {
-      const { error } = await supabase
-        .from("user_profiles")
-        .insert([profileData])
-        .select()
-        .single();
-
-      if (error) {
-        console.warn("Warning: Could not create user profile details:", error);
-      }
-    } catch (profileError) {
-      console.warn("Warning: Could not create user profile details:", profileError);
-    }
-
-    // Синхронизируем запись в таблице застройщиков
-    await syncDeveloperRecord(newUser.id, newUser.account_type, profileData, newUser.phone, newUser.email);
-
-    // 6. Генерация и отправка OTP. JWT НЕ выдаётся до подтверждения email.
+    // 4. Генерация и отправка OTP. JWT НЕ выдаётся до подтверждения email.
     const limited = await guardedIssueOtp(normalizedEmail);
     if (limited) {
       return res.status(429).json({ success: false, message: limited.message });

@@ -1,7 +1,9 @@
 import { supabase } from "../config/db.js";
+import alerts from "../utils/alerts.js";
 
 // Интервал запуска очистки — раз в 15 минут (Дефект 3.1)
 export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
+export const STUCK_PAYMENT_THRESHOLD_MS = 10 * 60 * 1000; // 10 минут
 
 let maintenanceTimer = null;
 
@@ -10,6 +12,7 @@ let maintenanceTimer = null;
  * 1. Помечает просроченные объявления (expires_at <= NOW() и status = 'active') в status = 'expired'.
  * 2. Сбрасывает просроченные промо-статусы (promotion_status = 'regular', is_urgent = false, priority_rank = 3),
  *    где promotion_expires_at <= NOW() или urgent_expires_at <= NOW().
+ * 3. Проверяет зависшие подтверждённые платежи (status = 'approved' без fulfilled_at старше 10 минут) и шлёт алерт.
  */
 export async function runMaintenanceJob() {
   const nowIso = new Date().toISOString();
@@ -17,9 +20,34 @@ export async function runMaintenanceJob() {
     expiredListingsCount: 0,
     resetPromotionsCount: 0,
     resetUrgentCount: 0,
+    stuckPaymentsCount: 0,
   };
 
   try {
+    // 0. Мониторинг зависших платежей: approved без fulfilled_at старше 10 минут
+    try {
+      const tenMinutesAgo = new Date(Date.now() - STUCK_PAYMENT_THRESHOLD_MS).toISOString();
+      const { data: stuckPayments, error: stuckError } = await supabase
+        .from("payments")
+        .select("id, order_id, amount, status, created_at")
+        .eq("status", "approved")
+        .is("fulfilled_at", null)
+        .lte("created_at", tenMinutesAgo);
+
+      if (stuckError) {
+        console.error("Cron Maintenance: error checking stuck approved payments:", stuckError);
+      } else if (stuckPayments && stuckPayments.length > 0) {
+        summary.stuckPaymentsCount = stuckPayments.length;
+        await alerts.critical("Зависшие подтверждённые платежи без выдачи услуги (>10 мин)", {
+          count: stuckPayments.length,
+          paymentIds: stuckPayments.map((p) => p.id),
+          orderIds: stuckPayments.map((p) => p.order_id),
+        });
+      }
+    } catch (paymentCheckErr) {
+      console.error("Cron Maintenance: payment check error (isolated):", paymentCheckErr?.message || paymentCheckErr);
+    }
+
     // 1. Помечаем просроченные объявления: expires_at <= NOW() и status = 'active'
     const { data: expiredRows, error: expireError } = await supabase
       .from("listings")
