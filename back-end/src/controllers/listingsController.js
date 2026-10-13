@@ -89,7 +89,7 @@ export function canOwnerTransition(fromStatus, toStatus) {
     return { allowed: false, message: "Черновик объявления ожидает оплаты или подтверждения публикации" };
   }
   // Разрешённые переходы владельца:
-  // active <-> hidden, active -> active, hidden -> hidden, draft -> draft, draft -> hidden
+  // active <-> hidden, active -> active, hidden -> hidden, draft -> draft, draft -> hidden, expired -> active
   const allowedTransitions = new Set([
     "active->active",
     "active->hidden",
@@ -97,6 +97,9 @@ export function canOwnerTransition(fromStatus, toStatus) {
     "hidden->hidden",
     "draft->draft",
     "draft->hidden",
+    "expired->active",
+    "expired->hidden",
+    "expired->expired",
   ]);
   const key = `${fromStatus}->${toStatus}`;
   if (allowedTransitions.has(key)) {
@@ -406,7 +409,7 @@ export const getListingById = async (req, res) => {
       .select(`
         *,
         listing_photos (*),
-        users (id, phone, is_verified, account_type, user_profiles (first_name, last_name, company_name, avatar_url, about))
+        users (id, phone, show_phone, is_verified, account_type, user_profiles (first_name, last_name, company_name, avatar_url, about, show_phone))
       `)
       .eq("id", id)
       .single();
@@ -1276,6 +1279,15 @@ export const deleteListing = async (req, res) => {
       return res.status(500).json({ success: false, message: "Ошибка удаления объявления" });
     }
 
+    // Если удалённое объявление было активным и не истёкшим — освобождаем слот в тарифе
+    const isUnexpiredActive =
+      existingListing.status === "active" &&
+      (!existingListing.expires_at || new Date(existingListing.expires_at).getTime() > Date.now());
+
+    if (isUnexpiredActive) {
+      await refundTariffListing(existingListing.user_id, `delete_${id}_${Date.now()}`);
+    }
+
     return res.json({
       success: true,
       message: "Объявление успешно удалено",
@@ -1408,7 +1420,7 @@ export const renewListing = async (req, res) => {
         });
       }
 
-      if (listing.status !== "active" && listing.status !== "hidden") {
+      if (listing.status !== "active" && listing.status !== "hidden" && listing.status !== "expired") {
         return res.status(403).json({
           success: false,
           message: `Переход из статуса "${listing.status}" в "active" запрещён`,

@@ -38,11 +38,14 @@ export default function useAuth() {
 
     loadUser();
 
-    // Listen for manual user updates dispatched from the app
-    const handleUserUpdated = async (e) => {
+    // Listen for manual user updates and auth changes dispatched from the app
+    const handleUserUpdated = async () => {
       try {
         const token = localStorage.getItem("uytap_token");
-        if (!token) return;
+        if (!token) {
+          setUser(null);
+          return;
+        }
         const fresh = await getMe(token);
         setUser(fresh);
         localStorage.setItem("uytap_user", JSON.stringify(fresh));
@@ -51,10 +54,20 @@ export default function useAuth() {
       }
     };
 
+    const handleStorage = (e) => {
+      if (e.key === "uytap_token" || e.key === "uytap_user") {
+        handleUserUpdated();
+      }
+    };
+
     window.addEventListener("uytap:user-updated", handleUserUpdated);
+    window.addEventListener("uytap:auth-changed", handleUserUpdated);
+    window.addEventListener("storage", handleStorage);
 
     return () => {
       window.removeEventListener("uytap:user-updated", handleUserUpdated);
+      window.removeEventListener("uytap:auth-changed", handleUserUpdated);
+      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 

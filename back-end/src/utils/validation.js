@@ -118,6 +118,8 @@ export const updateMeSchema = z.object({
   firstName: z.string().optional().nullable(),
   lastName: z.string().optional().nullable(),
   phone: z.string().min(9, "Номер телефона должен содержать минимум 9 цифр").optional(),
+  showPhone: z.boolean().optional().nullable(),
+  show_phone: z.boolean().optional().nullable(),
   about: z.string().optional().nullable(),
   avatarUrl: z
     .union([trustedImageUrl("Некорректная ссылка на фото"), z.null()])

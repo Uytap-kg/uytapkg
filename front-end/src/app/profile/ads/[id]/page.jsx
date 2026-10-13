@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 
-import { getListingById } from "@/utils/api";
+import { getListingById, updateListing, deleteListing } from "@/utils/api";
 import { mapListingDetail } from "@/utils/mapListingData";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -1060,31 +1060,93 @@ export default function MyProductDetails() {
 
   const handleSave = async (updatedProduct) => {
     try {
-      const updatedImages = updatedProduct.image
-        ? [updatedProduct.image, ...(product.images?.slice(1) || [])]
-        : product.images;
+      const token = localStorage.getItem("uytap_token");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
 
-      setProduct((prev) => ({
-        ...prev,
-        ...updatedProduct,
-        images: updatedImages,
-      }));
+      const priceVal =
+        typeof updatedProduct.price === "string"
+          ? Number(updatedProduct.price.replace(/[^0-9]/g, ""))
+          : Number(updatedProduct.price);
 
-      setCurrentImage(0);
+      const areaVal =
+        typeof updatedProduct.area === "string"
+          ? Number(updatedProduct.area.replace(/[^0-9.]/g, ""))
+          : Number(updatedProduct.area);
+
+      const propertyTypeMapping = {
+        apartment: "apartment",
+        house: "house",
+        land: "land",
+        commercial: "commercial",
+        room: "room",
+        garage: "garage",
+
+        Квартира: "apartment",
+        Дом: "house",
+        Коттедж: "house",
+        Дача: "house",
+        Участок: "land",
+        Коммерция: "commercial",
+        Комнаты: "room",
+        "Паркинг/гараж": "garage",
+      };
+
+      const dealTypeMapping = {
+        sale: "sale",
+        rent: "rent",
+
+        Продажа: "sale",
+        Сдаю: "rent",
+      };
+
+      const payload = {
+        title: updatedProduct.title,
+        description: updatedProduct.description,
+        propertyType: propertyTypeMapping[updatedProduct.type] || "apartment",
+        dealType: dealTypeMapping[updatedProduct.dealType] || "sale",
+        price: Number.isFinite(priceVal) && priceVal > 0 ? priceVal : 1000,
+        area: Number.isFinite(areaVal) && areaVal > 0 ? areaVal : undefined,
+        rooms: updatedProduct.rooms ? Number(updatedProduct.rooms) : undefined,
+        floor: updatedProduct.floors ? Number(updatedProduct.floors) : undefined,
+        address: updatedProduct.address || undefined,
+      };
+
+      const res = await updateListing(token, id, payload);
+      if (res.success && res.data) {
+        const mapped = mapListingDetail(res.data);
+        setProduct(mapped);
+      } else {
+        alert(res?.message || "Ошибка обновления объявления");
+      }
+
       setShowEditModal(false);
     } catch (err) {
       console.error("Ошибка сохранения объявления:", err);
+      alert(err?.message || "Ошибка сохранения объявления");
     }
   };
 
   const handleDelete = async () => {
     try {
-      console.log("Удаление объявления:", product.id);
+      const token = localStorage.getItem("uytap_token");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
 
-      setShowDeleteModal(false);
-      router.push("/profile/ads");
+      const res = await deleteListing(token, id);
+      if (res.success) {
+        setShowDeleteModal(false);
+        router.push("/profile/ads");
+      } else {
+        alert(res?.message || "Ошибка удаления объявления");
+      }
     } catch (err) {
       console.error("Ошибка удаления объявления:", err);
+      alert(err?.message || "Ошибка удаления объявления");
     }
   };
 

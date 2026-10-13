@@ -44,8 +44,8 @@ export default function AdminLayout({ children }) {
         if (cancelled) return;
 
         if (user?.role !== "admin") {
-          clearSession();
-          router.replace("/admin/login");
+          // Do NOT clear session - user is validly logged in, just not an admin
+          router.replace("/");
           return;
         }
 
@@ -53,7 +53,6 @@ export default function AdminLayout({ children }) {
       } catch {
         if (cancelled) return;
 
-        clearSession();
         router.replace("/admin/login");
       } finally {
         if (!cancelled) setChecking(false);

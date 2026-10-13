@@ -564,7 +564,7 @@ export const getMe = async (req, res) => {
 
     const { data: user, error: userError } = await supabase
       .from("users")
-      .select("id, account_type, email, phone, is_verified, role, created_at")
+      .select("id, account_type, email, phone, show_phone, is_verified, role, created_at")
       .eq("id", userId)
       .single();
 
@@ -588,6 +588,7 @@ export const getMe = async (req, res) => {
         accountType: user.account_type,
         email: user.email,
         phone: user.phone,
+        showPhone: Boolean(user.show_phone),
         isVerified: user.is_verified,
         role: user.role || "user",
         profile: formatProfileWithMetadata(profile),
@@ -618,8 +619,11 @@ export const updateMe = async (req, res) => {
       });
     }
 
-    const data = validationResult.data;
-    const hasUserUpdates = data.phone !== undefined || data.accountType !== undefined;
+    const hasUserUpdates =
+      data.phone !== undefined ||
+      data.accountType !== undefined ||
+      data.showPhone !== undefined ||
+      data.show_phone !== undefined;
     const profileFieldKeys = [
       "firstName",
       "lastName",
@@ -718,8 +722,32 @@ export const updateMe = async (req, res) => {
       userUpdates.phone = formattedPhone;
     }
 
+    const targetShowPhone = data.showPhone !== undefined ? data.showPhone : data.show_phone;
+    if (targetShowPhone !== undefined && targetShowPhone !== null) {
+      userUpdates.show_phone = Boolean(targetShowPhone);
+    }
+
     if (data.accountType !== undefined) {
       userUpdates.account_type = data.accountType;
+      if (data.accountType === "developer") {
+        const { data: existingDev } = await supabase
+          .from("developers")
+          .select("id")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (!existingDev) {
+          const devName = data.companyName || currentProfile?.company_name || "Застройщик";
+          await supabase.from("developers").insert({
+            user_id: userId,
+            company_name: devName,
+            logo_url: currentProfile?.avatar_url || null,
+            phone: data.phone || currentUser.phone || null,
+            email: currentUser.email || null,
+            is_verified: false,
+          });
+        }
+      }
     }
 
     if (Object.keys(userUpdates).length > 0) {

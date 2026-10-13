@@ -27,12 +27,14 @@ const buildSearchPrompt = (prompt) => {
   return `Проанализируй текст запроса пользователя и верни только JSON, без пояснений и без markdown. Ответ должен иметь формат:\n{\n  "country": "Турция" или "Кыргызстан" или null,\n  "region": "Бишкек" или "Иссык-Кульская область" или "Турция" или null,\n  "city": "Аланья" или "Анталия" или "Стамбул" или "Ош" или "Бишкек" или null,\n  "district": "название района или улицы" или null,\n  "propertyType": "apartment" | "house" | "land" | "commercial" | "garage" | null,\n  "dealType": "sale" | "rent" | null,\n  "rooms": число или null,\n  "maxPrice": число или null,\n  "currency": "KGS" | "USD" | null\n}\nТекст запроса: "${prompt}"`;
 };
 
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+
 const callGemini = async (prompt) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -167,7 +169,7 @@ export const aiGenerateDescription = async (req, res) => {
     if (apiKey) {
       try {
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

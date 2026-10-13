@@ -1,5 +1,6 @@
 import { supabase } from "../config/db.js";
 import alerts from "../utils/alerts.js";
+import { refundTariffListing } from "./subscriptionsService.js";
 
 // Интервал запуска очистки — раз в 15 минут (Дефект 3.1)
 export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
@@ -57,12 +58,23 @@ export async function runMaintenanceJob() {
       })
       .eq("status", "active")
       .lte("expires_at", nowIso)
-      .select("id");
+      .select("id, user_id");
 
     if (expireError) {
       console.error("Cron Maintenance: error expiring listings:", expireError);
     } else {
       summary.expiredListingsCount = expiredRows?.length || 0;
+      if (expiredRows && expiredRows.length > 0) {
+        for (const row of expiredRows) {
+          if (row.user_id) {
+            try {
+              await refundTariffListing(row.user_id, `expire_${row.id}_${nowIso}`);
+            } catch (refErr) {
+              console.warn("Cron Maintenance: refundTariffListing error:", refErr?.message || refErr);
+            }
+          }
+        }
+      }
     }
 
     // 2. Сбрасываем просроченные промо-статусы promotion_status (vip / top)
