@@ -14,7 +14,7 @@ import {
   removeFavorite,
 } from "@/utils/api";
 
-import { mapListingData } from "@/utils/mapListingData";
+import { mapListingData, formatRegion } from "@/utils/mapListingData";
 
 import ApartmentFilters from "./components/ApartmentFilters/ApartmentFilters";
 import HouseFilters from "./components/HouseFilters/HouseFilters";
@@ -759,6 +759,10 @@ export default function AllProducts() {
       next.district = parsed.district;
     }
 
+    if (parsed.currency) {
+      next.currency = parsed.currency;
+    }
+
     const cityText = String(next.city || "").toLowerCase();
 
     const regionText = String(next.region || "").toLowerCase();
@@ -1047,15 +1051,22 @@ export default function AllProducts() {
           !selectedDeal || itemDeal === selectedDeal.toLowerCase();
 
         /* =================================================
-           CITY
+           CITY & SETTLEMENT
         ================================================= */
 
         const matchesCity = (() => {
-          if (!filters.city || filters.city === "Все") {
+          const targetCityOrSettlement =
+            filters.city && filters.city !== "Все"
+              ? filters.city
+              : filters.settlement && filters.settlement !== "Все"
+                ? filters.settlement
+                : null;
+
+          if (!targetCityOrSettlement) {
             return true;
           }
 
-          const selected = normalizeLocationValue(filters.city);
+          const selected = normalizeLocationValue(targetCityOrSettlement);
 
           const values = [
             item.location,
@@ -1105,6 +1116,96 @@ export default function AllProducts() {
           }
 
           return values.some((value) => value.includes(selected));
+        })();
+
+        /* =================================================
+           REGION
+        ================================================= */
+
+        const matchesRegion = (() => {
+          if (!filters.region) {
+            return true;
+          }
+
+          const selRegion = normalizeLocationValue(filters.region);
+          const selRegionFormatted = normalizeLocationValue(
+            formatRegion(filters.region),
+          );
+          if (!selRegion && !selRegionFormatted) return true;
+
+          const values = [
+            item.region,
+            item.raw?.region,
+            item.location,
+            item.country,
+            item.raw?.country,
+          ]
+            .filter(Boolean)
+            .map(normalizeLocationValue);
+
+          if (selRegion === "turkey" || selRegionFormatted.includes("турци")) {
+            return values.some(
+              (v) => v.includes("turkey") || v.includes("турци"),
+            );
+          }
+
+          if (
+            selRegion === "bishkek" ||
+            selRegionFormatted.includes("бишкек")
+          ) {
+            return values.some(
+              (v) => v.includes("bishkek") || v.includes("бишкек"),
+            );
+          }
+
+          if (
+            selRegion === "issyk_kul" ||
+            isIssykKulValue(selRegion) ||
+            isIssykKulValue(selRegionFormatted)
+          ) {
+            return values.some(
+              (v) =>
+                isIssykKulValue(v) ||
+                v.includes("issyk") ||
+                v.includes("иссык") ||
+                v.includes("ысык"),
+            );
+          }
+
+          return values.some(
+            (v) =>
+              (selRegion && (v.includes(selRegion) || selRegion.includes(v))) ||
+              (selRegionFormatted &&
+                (v.includes(selRegionFormatted) ||
+                  selRegionFormatted.includes(v))),
+          );
+        })();
+
+        /* =================================================
+           DISTRICT
+        ================================================= */
+
+        const matchesDistrict = (() => {
+          if (!filters.district) {
+            return true;
+          }
+
+          const selDistrict = normalizeLocationValue(filters.district);
+          if (!selDistrict) return true;
+
+          const values = [
+            item.district,
+            item.raw?.district,
+            item.address,
+            item.location,
+            item.title,
+          ]
+            .filter(Boolean)
+            .map(normalizeLocationValue);
+
+          return values.some(
+            (v) => v.includes(selDistrict) || selDistrict.includes(v),
+          );
         })();
 
         /* =================================================
@@ -1297,7 +1398,9 @@ export default function AllProducts() {
         return (
           matchesCategory &&
           matchesDeal &&
+          matchesRegion &&
           matchesCity &&
+          matchesDistrict &&
           matchesRooms &&
           matchesPrice &&
           matchesArea &&

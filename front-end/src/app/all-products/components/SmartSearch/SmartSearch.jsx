@@ -637,6 +637,17 @@ function normalizeFilters(aiFilters, originalQuery = "") {
   }
 
   /* -------------------------------------------------------
+     CURRENCY
+  ------------------------------------------------------- */
+
+  if (f.currency) {
+    const rawCurrency = String(f.currency).trim().toUpperCase();
+    if (["USD", "KGS", "EUR"].includes(rawCurrency)) {
+      normalized.currency = rawCurrency;
+    }
+  }
+
+  /* -------------------------------------------------------
      AREA
   ------------------------------------------------------- */
 
@@ -949,7 +960,7 @@ export default function SmartSearch({ onFiltersDetected }) {
           },
         ];
 
-  function useExample(example) {
+  function handleSelectExample(example) {
     setText(example);
     setError("");
   }
@@ -1068,7 +1079,7 @@ export default function SmartSearch({ onFiltersDetected }) {
             <button
               key={example.label}
               type="button"
-              onClick={() => useExample(example.text)}
+              onClick={() => handleSelectExample(example.text)}
             >
               {example.label}
             </button>
