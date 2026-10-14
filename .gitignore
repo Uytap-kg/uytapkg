@@ -1,3 +1,6 @@
+# Папка для очищенных файлов (не коммитится)
+_cleanup/
+
 # Секреты — никогда не коммитить
 .env
 .env.*
@@ -8,16 +11,29 @@ back-end.env
 
 # Зависимости
 node_modules/
+.pnpm-store/
 
-# Сборки
+# Сборки и кэши
 .next/
 dist/
 build/
+.cache/
+.pytest_cache/
+coverage/
 
 # Логи и временные файлы
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tmp
+*.bak
+*.orig
+*~
 .DS_Store
 Thumbs.db
+.temp/
 
 # Локальные scratch/debug-файлы
 **/scratch/
+

@@ -1,6 +1,9 @@
+_cleanup/
 .env
 .env.*
 !.env.example
 back-end.env
 node_modules/
 *.log
+*.tmp
+*.bak

@@ -488,8 +488,15 @@ export async function deleteAvatar(token) {
   return data;
 }
 
-export async function getListingById(id) {
-  const response = await fetch(`${API_URL}/listings/${id}`);
+export async function getListingById(id, token = null) {
+  const headers = {};
+  const authToken =
+    token ||
+    (typeof window !== "undefined" ? localStorage.getItem("uytap_token") : null);
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+  const response = await fetch(`${API_URL}/listings/${id}`, { headers });
   return response.json();
 }
 

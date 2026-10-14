@@ -52,7 +52,11 @@ export default function StepImage({ form, updateForm, onNext }) {
     if (available <= 0) return;
 
     const filesToAdd = selectedFiles
-      .filter((file) => file.type.startsWith("image/"))
+      .filter((file) => {
+        if (file.type && file.type.toLowerCase().startsWith("image/")) return true;
+        const ext = file.name?.split(".").pop()?.toLowerCase();
+        return ["jpg", "jpeg", "png", "webp", "gif"].includes(ext);
+      })
       .slice(0, available);
 
     const newImages = filesToAdd.map((file) => ({

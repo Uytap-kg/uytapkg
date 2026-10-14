@@ -15,19 +15,19 @@ const targetApiUrl = normalizedBackendUrl.endsWith("/api")
  * Безопасно игнорирует отсутствие переменных, чтобы сборка не падала.
  */
 function getSupabaseRemotePattern() {
-  const customHostname = process.env.NEXT_PUBLIC_SUPABASE_HOSTNAME;
+  const customHostname = process.env.SUPABASE_HOSTNAME || process.env.NEXT_PUBLIC_SUPABASE_HOSTNAME;
   if (customHostname) {
     const pattern = {
-      protocol: (process.env.NEXT_PUBLIC_SUPABASE_PROTOCOL || "https").replace(":", ""),
+      protocol: (process.env.SUPABASE_PROTOCOL || process.env.NEXT_PUBLIC_SUPABASE_PROTOCOL || "https").replace(":", ""),
       hostname: customHostname,
     };
-    if (process.env.NEXT_PUBLIC_SUPABASE_PORT) {
-      pattern.port = process.env.NEXT_PUBLIC_SUPABASE_PORT;
+    if (process.env.SUPABASE_PORT || process.env.NEXT_PUBLIC_SUPABASE_PORT) {
+      pattern.port = process.env.SUPABASE_PORT || process.env.NEXT_PUBLIC_SUPABASE_PORT;
     }
     return pattern;
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (supabaseUrl) {
     try {
       const parsed = new URL(supabaseUrl);
@@ -68,6 +68,14 @@ const nextConfig = {
     // используемые в коде (см. mapListingData.js, mapComplexData.js и т.д.).
     remotePatterns: [
       ...(supabasePattern ? [supabasePattern] : []),
+      {
+        protocol: "https",
+        hostname: "kakiuqgjhcunyaxydopx.supabase.co",
+      },
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+      },
       {
         protocol: "https",
         hostname: "images.unsplash.com",

@@ -409,12 +409,15 @@ export const getListingById = async (req, res) => {
       .select(`
         *,
         listing_photos (*),
-        users (id, phone, show_phone, is_verified, account_type, user_profiles (first_name, last_name, company_name, avatar_url, about, show_phone))
+        users (id, phone, show_phone, is_verified, account_type, user_profiles (first_name, last_name, company_name, avatar_url, about))
       `)
       .eq("id", id)
       .single();
 
     if (error || !listing) {
+      if (error) {
+        console.error("Get Listing By ID DB Error:", error);
+      }
       return res.status(404).json({ success: false, message: "Объявление не найдено" });
     }
 
