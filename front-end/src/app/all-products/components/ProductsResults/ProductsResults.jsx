@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -19,6 +19,9 @@ export default function ProductsResults({
 
   hasFilters,
   onReset,
+
+  searchQuery,
+  onClearSearchQuery,
 }) {
   const { t } = useLanguage();
 
@@ -38,6 +41,22 @@ export default function ProductsResults({
 
           <small>{t("productsResults.header.count")}</small>
         </div>
+
+        {searchQuery && (
+          <div className={styles.activeSearchBadge}>
+            <span>
+              {t("productsResults.activeSearch", "Поиск")}: &laquo;{searchQuery}&raquo;
+            </span>
+            <button
+              type="button"
+              onClick={onClearSearchQuery}
+              title={t("productsResults.clearSearch", "Сбросить поиск")}
+              aria-label={t("productsResults.clearSearch", "Сбросить поиск")}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* =================================================

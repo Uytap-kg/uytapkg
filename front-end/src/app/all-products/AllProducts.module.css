@@ -895,6 +895,45 @@
   font-weight: 600;
 }
 
+.activeSearchBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 6px 14px;
+
+  border-radius: 999px;
+  border: 1px solid rgba(72, 61, 246, 0.22);
+  background: rgba(72, 61, 246, 0.07);
+
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.activeSearchBadge button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 18px;
+  height: 18px;
+  padding: 0;
+
+  border: none;
+  border-radius: 50%;
+  background: rgba(72, 61, 246, 0.15);
+  color: var(--accent);
+
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.activeSearchBadge button:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* =========================================================
    RESULTS GRID
 ========================================================= */

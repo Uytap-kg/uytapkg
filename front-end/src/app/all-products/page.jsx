@@ -105,6 +105,7 @@ const DEFAULT_FILTERS = {
   region: "",
   country: "",
   district: "",
+  searchQuery: "",
 
   currency: "USD",
 
@@ -233,6 +234,7 @@ const ignoredUrlKeys = [
   "beachDistanceTo",
 
   "urgentOnly",
+  "searchQuery",
 
   ...arrayFeatureKeys,
 ];
@@ -282,6 +284,17 @@ function normalizeLocationValue(value) {
     .replace(/ё/g, "е")
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ");
+}
+
+function getWordStem(word) {
+  const clean = String(word || "")
+    .toLowerCase()
+    .replace(/[^a-zа-яёөүң0-9]/g, "");
+  if (clean.length <= 3) return clean;
+  return clean.replace(
+    /(ый|ий|ое|ее|ая|яя|ые|ие|ом|ем|ым|им|ой|ей|ам|ям|ах|ях|ов|ев|ей|ок|ек|ул|у|ю|а|я|е|о|ы|и|дор|дөр|тор|төр|лор|лөр|дар|дер)$/g,
+    "",
+  );
 }
 
 function isIssykKulValue(value) {
@@ -549,6 +562,8 @@ export default function AllProducts() {
 
       district: searchParams.get("district") || "",
 
+      searchQuery: searchParams.get("searchQuery") || "",
+
       currency: searchParams.get("currency") || "USD",
 
       priceFrom: searchParams.get("priceFrom") || "",
@@ -606,6 +621,7 @@ export default function AllProducts() {
       nextFilters[key] = value;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFilters(nextFilters);
   }, [searchParams]);
 
@@ -662,6 +678,10 @@ export default function AllProducts() {
 
     if (nextFilters.district) {
       params.set("district", nextFilters.district);
+    }
+
+    if (nextFilters.searchQuery) {
+      params.set("searchQuery", nextFilters.searchQuery);
     }
 
     if (nextFilters.currency) {
@@ -757,6 +777,12 @@ export default function AllProducts() {
 
     if (parsed.district) {
       next.district = parsed.district;
+    }
+
+    if (parsed.searchQuery !== undefined && parsed.searchQuery !== null) {
+      next.searchQuery = String(parsed.searchQuery);
+    } else {
+      next.searchQuery = "";
     }
 
     if (parsed.currency) {
@@ -1199,12 +1225,77 @@ export default function AllProducts() {
             item.address,
             item.location,
             item.title,
+            item.description,
           ]
             .filter(Boolean)
             .map(normalizeLocationValue);
 
-          return values.some(
-            (v) => v.includes(selDistrict) || selDistrict.includes(v),
+          if (
+            values.some(
+              (v) => v.includes(selDistrict) || selDistrict.includes(v),
+            )
+          ) {
+            return true;
+          }
+
+          const selTokens = selDistrict
+            .split(/[\s,.-]+/)
+            .map(getWordStem)
+            .filter((s) => s.length >= 3);
+
+          if (selTokens.length === 0) return false;
+
+          const allValueWords = values
+            .join(" ")
+            .split(/[\s,.-]+/)
+            .map(getWordStem)
+            .filter(Boolean);
+
+          return selTokens.every((token) =>
+            allValueWords.some((w) => w.includes(token) || token.includes(w)),
+          );
+        })();
+
+        /* =================================================
+           KEYWORD / SEARCH QUERY (e.g. "студия", "евродвушка")
+        ================================================= */
+
+        const matchesSearchQuery = (() => {
+          if (!filters.searchQuery || !String(filters.searchQuery).trim()) {
+            return true;
+          }
+
+          const rawQuery = String(filters.searchQuery).trim().toLowerCase();
+          const queryTokens = rawQuery
+            .split(/[\s,.-]+/)
+            .map(getWordStem)
+            .filter((s) => s.length >= 3);
+
+          if (queryTokens.length === 0) {
+            return true;
+          }
+
+          const haystack = [
+            item.title,
+            item.description,
+            item.address,
+            item.district,
+            item.location,
+            item.type,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+
+          const haystackWords = haystack
+            .split(/[\s,.-]+/)
+            .map(getWordStem)
+            .filter(Boolean);
+
+          return queryTokens.every(
+            (token) =>
+              haystack.includes(token) ||
+              haystackWords.some((w) => w.includes(token) || token.includes(w)),
           );
         })();
 
@@ -1404,7 +1495,8 @@ export default function AllProducts() {
           matchesRooms &&
           matchesPrice &&
           matchesArea &&
-          matchesBeach
+          matchesBeach &&
+          matchesSearchQuery
         );
       })
       .sort((a, b) => {
@@ -1435,7 +1527,7 @@ export default function AllProducts() {
 
   const showBeachDistance = useMemo(
     () => isIssykKulLocation(filters),
-    [filters.city, filters.region, filters.country, filters.district],
+    [filters],
   );
 
   /* =======================================================
@@ -1460,6 +1552,7 @@ export default function AllProducts() {
     filters.propertyType !== "apartment" ||
     filters.dealType !== "sale" ||
     filters.city !== "Все" ||
+    Boolean(filters.searchQuery) ||
     Boolean(filters.priceFrom) ||
     Boolean(filters.priceTo) ||
     Boolean(filters.areaFrom) ||
@@ -1473,6 +1566,7 @@ export default function AllProducts() {
           "dealType",
           "city",
           "currency",
+          "searchQuery",
           "priceFrom",
           "priceTo",
           "areaFrom",
@@ -1548,6 +1642,8 @@ export default function AllProducts() {
           onFavoriteClick={handleFavoriteClick}
           hasFilters={hasFilters}
           onReset={resetFilters}
+          searchQuery={filters.searchQuery}
+          onClearSearchQuery={() => updateFilter("searchQuery", "")}
         />
       </div>
     </main>

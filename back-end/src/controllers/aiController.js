@@ -49,39 +49,47 @@ const buildSearchPrompt = (prompt) => {
   "maxPrice": number | null,
   "currency": "USD" | "KGS" | null,
   "minArea": number | null,
-  "maxArea": number | null
+  "maxArea": number | null,
+  "searchQuery": string | null
 }
 
-Правила:
-1. Регионы Кыргызстана:
-   - Бишкек -> region: "BISHKEK", city: "Бишкек"
-   - Иссык-Куль, Каракол, Чолпон-Ата, Бостери, Балыкчы -> region: "ISSYK_KUL"
-   - Ош, Ошская область -> region: "OSH"
-   - Чуй, Чуйская область, Токмок, Кант, Кара-Балта, Сокулук -> region: "CHUY"
-   - Джалал-Абад -> region: "JALAL_ABAD"
-   - Нарын -> region: "NARYN"
-   - Талас -> region: "TALAS"
-   - Баткен -> region: "BATKEN"
-2. Турция:
-   - Аланья, Анталия, Стамбул, Мерсин, Измир, Турция -> country: "turkey", region: "TURKEY"
-3. Типы недвижимости (включая кыргызские термины):
-   - "квартира", "батир" -> "apartment"
-   - "дом", "үй" -> "house"
-   - "коттедж" -> "cottage"
-   - "участок", "жер", "жер тилкеси" -> "land"
-   - "коммерция", "офис", "склад", "магазин" -> "commercial"
-   - "комната", "бөлмө" -> "room"
-   - "гараж", "паркинг" -> "parking"
-4. Тип сделки:
-   - "аренда", "снять", "ижара", "ижарага", "алам" -> "rent"
-   - "купить", "покупка", "продажа", "сатуу", "сатам", "сатып алам" -> "sale"
-5. Цена и валюта:
+Правила анализа:
+1. Исправление опечаток:
+   - Пользователь может писать с опечатками (например, "стулия" -> "студия", "миркорайон" -> "микрорайон", "уентральном" -> "Центр"). Исправляй их автоматически.
+2. Многоязычность (кыргызский и русский языки):
+   - "жер уй", "жер үй", "үй" -> propertyType: "house"
+   - "батир" -> propertyType: "apartment"
+   - "жер", "жер тилкеси" -> propertyType: "land"
+   - "комната", "бөлмө" -> propertyType: "room"
+   - "ижара", "ижарага", "алам" -> dealType: "rent"
+   - "сатуу", "сатам", "сатып алам" -> dealType: "sale"
    - "сом", "сомго", "сомдон" -> currency: "KGS"
-   - "$", "доллар", "usd", "бакс" или Турция -> currency: "USD"
-   - Если валюта не указана: для аренды > 5000 -> "KGS", для покупки или сумм < 5000 -> "USD"
-   - Числа "от X" -> minPrice: X, "до Y" -> maxPrice: Y
-6. Площадь:
-   - В сотках ("6 соток") -> 1 сотка = 100 м² (6 соток = 600 м²) или указать площадь
+3. Специфические ключевые слова (searchQuery):
+   - Если запрос содержит ключевые слова или концепции, которые авторы пишут в заголовках или описаниях (например: "студия", "евродвушка", "пентхаус", "с ремонтом", "евроремонт", "панорамные окна", "с бассейном", "в рассрочку"), помести их очищенную нормализованную форму в "searchQuery" (например, "студия").
+   - Для "студия": propertyType: "apartment", searchQuery: "студия".
+4. Районы (канонизация):
+   - Районы приводи к их каноническим названиям в именительном падеже:
+     - "в центре", "в центральном районе", "центр" -> district: "Центр"
+     - "южный микрорайон", "южные микрорайоны", "в южной части" -> district: "Южные микрорайоны"
+     - "джал", "в джале" -> district: "Джал"
+     - "асанбай" -> district: "Асанбай"
+     - "тунгуч" -> district: "Тунгуч"
+     - "кок-жар" -> district: "Кок-Жар"
+     - "ахунбаева" -> district: "Ахунбаева"
+5. Площадь ("квадрат", "соток"):
+   - "110 квадрат", "110 кв", "110 м2" -> площадь в м²: minArea: 100, maxArea: 120 (диапазон вокруг указанной площади).
+   - "от 50 до 80 кв" -> minArea: 50, maxArea: 80.
+   - "6 соток" -> minArea: 600, maxArea: 600.
+6. Регионы и города:
+   - Если указан микрорайон Бишкека (Южные микрорайоны, Джал, Центр, Асанбай и т.д.), автоматически: region: "BISHKEK", city: "Бишкек".
+   - Иссык-Куль, Каракол, Чолпон-Ата, Бостери, Балыкчы -> region: "ISSYK_KUL".
+   - Ош -> region: "OSH", city: "Ош".
+   - Чуй, Токмок, Кант, Кара-Балта, Сокулук -> region: "CHUY".
+   - Аланья, Анталия, Стамбул, Мерсин -> country: "turkey", region: "TURKEY".
+7. Цены и валюта:
+   - "от 20 000 долларов до 80000" -> minPrice: 20000, maxPrice: 80000, currency: "USD".
+   - "$" или "доллар" или "usd" -> currency: "USD".
+   - "сом" -> currency: "KGS".
 
 Текст запроса: "${prompt}"`;
 };
@@ -142,7 +150,23 @@ const callGemini = async (prompt) => {
 };
 
 const fallbackParse = (prompt) => {
-  const lower = prompt.toLowerCase().replace(/ё/g, "е");
+  let lower = prompt.toLowerCase().replace(/ё/g, "е");
+
+  // Fix common typos in Russian/Kyrgyz
+  lower = lower
+    .replace(/стули\w*/g, "студия")
+    .replace(/миркорайон\w*/g, "микрорайон")
+    .replace(/уентральн\w*/g, "центральн");
+
+  // Specific search keywords (features that live in descriptions/titles)
+  let searchQuery = null;
+  if (lower.includes("студи")) {
+    searchQuery = "студия";
+  } else if (lower.includes("евродвушк")) {
+    searchQuery = "евродвушка";
+  } else if (lower.includes("пентхаус")) {
+    searchQuery = "пентхаус";
+  }
 
   // Country & Region detection
   const isTurkey =
@@ -163,7 +187,7 @@ const fallbackParse = (prompt) => {
     lower.includes("каракол") ||
     lower.includes("балыкчы");
 
-  const isOsh = lower.includes("ош");
+  const isOsh = lower.includes("ош") && !lower.includes("хорош");
   const isBishkek = lower.includes("бишкек");
   const isChuy =
     lower.includes("чуй") ||
@@ -242,30 +266,73 @@ const fallbackParse = (prompt) => {
     city = "Баткен";
   }
 
-  // District
+  // District (Canonical naming for Bishkek)
   let district = null;
-  const districtMatches = [
-    { key: "джал", val: "Джал" },
-    { key: "асанбай", val: "Асанбай" },
-    { key: "центр", val: "Центр" },
-    { key: "тунгуч", val: "Тунгуч" },
-    { key: "кок-жар", val: "Кок-Жар" },
-    { key: "ахунбаев", val: "Ахунбаева" },
-    { key: "магистрал", val: "Магистраль" },
-    { key: "улан", val: "Улан" },
-    { key: "восток-5", val: "Восток-5" },
-    { key: "аламедин", val: "Аламедин" },
-  ];
-  for (const dm of districtMatches) {
-    if (lower.includes(dm.key)) {
-      district = dm.val;
-      break;
+  if (
+    lower.includes("южн") &&
+    (lower.includes("микрорайон") ||
+      lower.includes("мкр") ||
+      lower.includes("част"))
+  ) {
+    district = "Южные микрорайоны";
+    if (!region) {
+      region = "BISHKEK";
+      city = "Бишкек";
+      country = "kyrgyzstan";
+    }
+  } else if (lower.includes("центр") || lower.includes("центральн")) {
+    district = "Центр";
+    if (!region && !isTurkey) {
+      region = "BISHKEK";
+      city = "Бишкек";
+      country = "kyrgyzstan";
+    }
+  } else if (lower.includes("джал")) {
+    district = "Джал";
+    if (!region) {
+      region = "BISHKEK";
+      city = "Бишкек";
+      country = "kyrgyzstan";
+    }
+  } else if (lower.includes("асанбай")) {
+    district = "Асанбай";
+    if (!region) {
+      region = "BISHKEK";
+      city = "Бишкек";
+      country = "kyrgyzstan";
+    }
+  } else if (lower.includes("тунгуч")) {
+    district = "Тунгуч";
+    if (!region) {
+      region = "BISHKEK";
+      city = "Бишкек";
+      country = "kyrgyzstan";
+    }
+  } else if (lower.includes("кок-жар") || lower.includes("кок жар")) {
+    district = "Кок-Жар";
+    if (!region) {
+      region = "BISHKEK";
+      city = "Бишкек";
+      country = "kyrgyzstan";
+    }
+  } else if (lower.includes("ахунбаев")) {
+    district = "Ахунбаева";
+    if (!region) {
+      region = "BISHKEK";
+      city = "Бишкек";
+      country = "kyrgyzstan";
     }
   }
 
-  // Property Type
+  // Property Type (including Kyrgyz: жер уй / жер үй = house, батир = apartment, жер = land)
   let propertyType = null;
-  if (lower.includes("дом") || lower.includes("үй") || lower.includes("уй")) {
+  if (
+    lower.includes("жер уй") ||
+    lower.includes("жер үй") ||
+    /(?:^|[^\wа-яёөүң])(жер\s*[үу]й|үй|уй|дом\w*)(?=[^\wа-яёөүң]|$)/i.test(
+      lower,
+    )
+  ) {
     propertyType = "house";
   } else if (lower.includes("коттедж")) {
     propertyType = "cottage";
@@ -280,20 +347,22 @@ const fallbackParse = (prompt) => {
     propertyType = "commercial";
   } else if (lower.includes("гараж") || lower.includes("паркинг")) {
     propertyType = "parking";
-  } else if (lower.includes("комнат") || lower.includes("бөлмө")) {
-    if (lower.includes("квартир") || lower.includes("батир")) {
-      propertyType = "apartment";
-    } else if (lower.includes("комната") || lower.includes("комнату")) {
-      propertyType = "room";
-    } else {
-      propertyType = "apartment";
-    }
+  } else if (
+    lower.includes("комната") ||
+    lower.includes("комнату") ||
+    lower.includes("бөлмө")
+  ) {
+    propertyType =
+      lower.includes("квартир") || lower.includes("батир")
+        ? "apartment"
+        : "room";
   } else if (
     lower.includes("квартир") ||
     lower.includes("батир") ||
     lower.includes("однушк") ||
     lower.includes("двушк") ||
-    lower.includes("трешк")
+    lower.includes("трешк") ||
+    lower.includes("студи")
   ) {
     propertyType = "apartment";
   }
@@ -318,14 +387,14 @@ const fallbackParse = (prompt) => {
     dealType = "sale";
   }
 
-  // Rooms (careful not to confuse with price)
+  // Rooms
   let rooms = null;
   if (
     lower.includes("1 комн") ||
     lower.includes("1-комн") ||
     lower.includes("1 бөлмө") ||
     lower.includes("однушк") ||
-    /\b1\s*(к|комн|комнат)/.test(lower)
+    /\b1\s*(?:-?комнат\w*|комн\w*|к\b|бөлмө\w*)/.test(lower)
   ) {
     rooms = 1;
   } else if (
@@ -333,7 +402,7 @@ const fallbackParse = (prompt) => {
     lower.includes("2-комн") ||
     lower.includes("2 бөлмө") ||
     lower.includes("двушк") ||
-    /\b2\s*(к|комн|комнат)/.test(lower)
+    /\b2\s*(?:-?комнат\w*|комн\w*|к\b|бөлмө\w*)/.test(lower)
   ) {
     rooms = 2;
   } else if (
@@ -341,7 +410,7 @@ const fallbackParse = (prompt) => {
     lower.includes("3-комн") ||
     lower.includes("3 бөлмө") ||
     lower.includes("трешк") ||
-    /\b3\s*(к|комн|комнат)/.test(lower)
+    /\b3\s*(?:-?комнат\w*|комн\w*|к\b|бөлмө\w*)/.test(lower)
   ) {
     rooms = 3;
   } else if (
@@ -349,7 +418,7 @@ const fallbackParse = (prompt) => {
     lower.includes("4-комн") ||
     lower.includes("4 бөлмө") ||
     lower.includes("4+") ||
-    /\b4\s*(к|комн|комнат)/.test(lower)
+    /\b4\s*(?:-?комнат\w*|комн\w*|к\b|бөлмө\w*)/.test(lower)
   ) {
     rooms = "4+";
   }
@@ -367,16 +436,35 @@ const fallbackParse = (prompt) => {
     currency = "USD";
   }
 
-  // Price - exclude room counts to prevent room number being matched as price
+  // Area (квадрат, соток, м2)
+  let minArea = null;
+  let maxArea = null;
+  const areaRangeMatch = lower.match(
+    /(?:от\s*)?(\d+)\s*(?:до|-)\s*(\d+)\s*(?:квадрат|кв|м2|м²)/,
+  );
+  if (areaRangeMatch) {
+    minArea = Number(areaRangeMatch[1]);
+    maxArea = Number(areaRangeMatch[2]);
+  } else {
+    const singleAreaMatch = lower.match(/(\d+)\s*(?:квадрат|кв\s*м|м2|м²)/);
+    if (singleAreaMatch) {
+      const val = Number(singleAreaMatch[1]);
+      minArea = Math.round(val * 0.9);
+      maxArea = Math.round(val * 1.1);
+    }
+  }
+
+  // Price
   const cleanedForPrice = lower
     .replace(/[1-4]\s*(-комнатн\w*|комнатн\w*|комн\w*|к\b|бөлмө\w*)/g, " ")
-    .replace(/однушк\w*|двушк\w*|трешк\w*/g, " ");
+    .replace(/однушк\w*|двушк\w*|трешк\w*/g, " ")
+    .replace(/(\d+)\s*(?:квадрат|кв|м2|м²|соток)/g, " ");
 
   let minPrice = null;
   let maxPrice = null;
 
   const rangePriceMatch = cleanedForPrice.match(
-    /от\s*(\d+[\s\d]*)\s*до\s*(\d+[\s\d]*)/,
+    /от\s*(\d+[\s\d]*)\s*(?:доллар\w*|\$|usd|сом\w*|kgs|евро|eur)?\s*(?:до|-)\s*(\d+[\s\d]*)/i,
   );
   if (rangePriceMatch) {
     minPrice = Number(rangePriceMatch[1].replace(/\s/g, ""));
@@ -388,13 +476,18 @@ const fallbackParse = (prompt) => {
     if (minMatch) {
       minPrice = Number(minMatch[1].replace(/\s/g, ""));
     }
-    const numbers = cleanedForPrice.match(/\b\d{2,10}\b/g);
-    if (numbers && numbers.length > 0) {
-      const candidates = numbers
-        .map((n) => Number(n.replace(/\s/g, "")))
-        .filter((n) => n >= 50);
-      if (candidates.length > 0) {
-        maxPrice = candidates[candidates.length - 1];
+    const maxMatch = cleanedForPrice.match(/(?:до|дегенде|чейин)\s*(\d+[\s\d]*)/);
+    if (maxMatch) {
+      maxPrice = Number(maxMatch[1].replace(/\s/g, ""));
+    } else {
+      const numbers = cleanedForPrice.match(/\b\d{2,10}\b/g);
+      if (numbers && numbers.length > 0) {
+        const candidates = numbers
+          .map((n) => Number(n.replace(/\s/g, "")))
+          .filter((n) => n >= 50);
+        if (candidates.length > 0) {
+          maxPrice = candidates[candidates.length - 1];
+        }
       }
     }
   }
@@ -416,6 +509,9 @@ const fallbackParse = (prompt) => {
         : dealType === "rent" && maxPrice && maxPrice > 5000
           ? "KGS"
           : "USD"),
+    minArea,
+    maxArea,
+    searchQuery,
   };
 };
 

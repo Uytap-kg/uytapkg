@@ -618,6 +618,25 @@ function normalizeFilters(aiFilters, originalQuery = "") {
   }
 
   /* -------------------------------------------------------
+     SEARCH QUERY (keywords like "студия", "евродвушка")
+  ------------------------------------------------------- */
+
+  if (f.searchQuery) {
+    normalized.searchQuery = cleanValue(f.searchQuery);
+  }
+
+  if (!normalized.searchQuery && originalQuery) {
+    const qLower = originalQuery.toLowerCase();
+    if (qLower.includes("студи") || qLower.includes("стули")) {
+      normalized.searchQuery = "студия";
+    } else if (qLower.includes("евродвушк")) {
+      normalized.searchQuery = "евродвушка";
+    } else if (qLower.includes("пентхаус")) {
+      normalized.searchQuery = "пентхаус";
+    }
+  }
+
+  /* -------------------------------------------------------
      PRICE
   ------------------------------------------------------- */
 
@@ -744,6 +763,7 @@ export default function SmartSearch({ onFiltersDetected }) {
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSupported(false);
       return;
     }

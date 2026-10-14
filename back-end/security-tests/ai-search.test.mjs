@@ -90,3 +90,64 @@ test("AI Search: распознавание локации Турции и ва�
   assert.equal(resp?.filters?.currency, "USD");
   assert.equal(resp?.filters?.maxPrice, 75000);
 });
+
+test("AI Search: стулия в бишкеке от 20 000 долларов до 80000 2 комнатный (опечатка, диапазон цен, валюта, комнаты, searchQuery)", async () => {
+  const { req, res } = createMockReqRes({
+    prompt: "стулия в бишкеке от 20 000 долларов до 80000 2 комнатный",
+  });
+  await aiSearch(req, res);
+
+  assert.equal(res.getStatusCode(), 200);
+  const resp = res.getResponse();
+  assert.equal(resp?.success, true);
+  assert.equal(resp?.filters?.propertyType, "apartment");
+  assert.equal(resp?.filters?.city, "Бишкек");
+  assert.equal(resp?.filters?.rooms, 2);
+  assert.equal(resp?.filters?.minPrice, 20000);
+  assert.equal(resp?.filters?.maxPrice, 80000);
+  assert.equal(resp?.filters?.currency, "USD");
+  assert.equal(resp?.filters?.searchQuery, "студия");
+});
+
+test("AI Search: жер уй 110 квадрат южный миркорайон (кыргызча дом, площадь, канонический район с опечаткой)", async () => {
+  const { req, res } = createMockReqRes({
+    prompt: "жер уй 110 квадрат южный миркорайон",
+  });
+  await aiSearch(req, res);
+
+  assert.equal(res.getStatusCode(), 200);
+  const resp = res.getResponse();
+  assert.equal(resp?.success, true);
+  assert.equal(resp?.filters?.propertyType, "house");
+  assert.equal(resp?.filters?.city, "Бишкек");
+  assert.equal(resp?.filters?.district, "Южные микрорайоны");
+  assert.ok(resp?.filters?.minArea > 0, "minArea должен быть вычислен");
+  assert.ok(resp?.filters?.maxArea > 0, "maxArea должен быть вычислен");
+});
+
+test("AI Search: студия в бишкеке (извлечение searchQuery и города)", async () => {
+  const { req, res } = createMockReqRes({
+    prompt: "студия в бишкеке",
+  });
+  await aiSearch(req, res);
+
+  assert.equal(res.getStatusCode(), 200);
+  const resp = res.getResponse();
+  assert.equal(resp?.success, true);
+  assert.equal(resp?.filters?.propertyType, "apartment");
+  assert.equal(resp?.filters?.city, "Бишкек");
+  assert.equal(resp?.filters?.searchQuery, "студия");
+});
+
+test("AI Search: объявление в бишкеке в центральном районе (канонизация района)", async () => {
+  const { req, res } = createMockReqRes({
+    prompt: "объявление в бишкеке в центральном районе",
+  });
+  await aiSearch(req, res);
+
+  assert.equal(res.getStatusCode(), 200);
+  const resp = res.getResponse();
+  assert.equal(resp?.success, true);
+  assert.equal(resp?.filters?.city, "Бишкек");
+  assert.equal(resp?.filters?.district, "Центр");
+});

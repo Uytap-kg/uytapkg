@@ -160,6 +160,7 @@ export function mapListingData(item) {
 
     id: item.id,
     title: item.title || "Без названия",
+    description: item.description || "",
     type: propertyTypeMapping[item.property_type] || "Другое",
     dealType: item.deal_type === "sale" ? "Продажа" : "Сниму в аренду",
     status: item.promotion_status === "vip"
