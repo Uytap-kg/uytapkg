@@ -1,17 +1,17 @@
 # ============================================================================
 # Multi-stage Dockerfile для UyTap Backend
-# Базовый образ: node:20-alpine
+# Базовый образ: node:22-alpine
 # ============================================================================
 
 # Шаг 1: Установка только production-зависимостей
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 # Шаг 2: Финальный образ для запуска
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production \
