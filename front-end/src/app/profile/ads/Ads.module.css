@@ -511,6 +511,27 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
+.badgeVip {
+  background: linear-gradient(135deg, #fff9df, #f3df91) !important;
+  color: #795600 !important;
+  border: 1px solid #dfbb42 !important;
+  box-shadow: 0 4px 12px rgba(180, 137, 21, 0.22);
+}
+
+.badgeUrgent {
+  background: linear-gradient(135deg, #fff0ef, #ffc8c4) !important;
+  color: #b42318 !important;
+  border: 1px solid #ef7770 !important;
+  box-shadow: 0 4px 12px rgba(180, 35, 24, 0.18);
+}
+
+.badgeTop {
+  background: linear-gradient(135deg, #eef4ff, #c9dcff) !important;
+  color: #1747a6 !important;
+  border: 1px solid #7ca7f8 !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
 .statusActive {
   background: rgba(27, 166, 91, 0.94);
   color: #ffffff;

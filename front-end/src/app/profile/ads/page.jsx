@@ -14,6 +14,9 @@ import {
   UserRoundArrowLeft,
   Rocket,
   RotateCw,
+  Crown,
+  Zap,
+  TrendingUp,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -66,10 +69,12 @@ export default function Ads() {
     const propertyTypeMapping = {
       apartment: "apartment",
       house: "house",
+      cottage: "cottage",
       land: "land",
       commercial: "commercial",
       room: "room",
       garage: "garage",
+      parking: "garage",
     };
 
     const statusMapping = {
@@ -99,10 +104,42 @@ export default function Ads() {
       ? "expired"
       : statusMapping[listing.status] || "active";
 
+    const promoStatus = String(
+      listing.promotion_status ??
+        listing.promotionStatus ??
+        listing.raw?.promotion_status ??
+        "",
+    )
+      .trim()
+      .toLowerCase();
+
+    const isVip =
+      ["vip", "premium"].includes(promoStatus) ||
+      listing.isVip === true ||
+      listing.is_vip === true;
+
+    const isUrgent =
+      ["urgent", "срочно"].includes(promoStatus) ||
+      listing.isUrgent === true ||
+      listing.is_urgent === true;
+
+    const isTop =
+      !isVip &&
+      (["top", "топ"].includes(promoStatus) ||
+        listing.isTop === true ||
+        listing.is_top === true);
+
+    const rawPropertyType = listing.property_type || listing.propertyType || "";
+    const resolvedType =
+      propertyTypeMapping[rawPropertyType] ||
+      (typeof rawPropertyType === "string" && rawPropertyType.trim()
+        ? rawPropertyType.trim()
+        : "other");
+
     return {
       id: listing.id,
       title: listing.title || "",
-      type: propertyTypeMapping[listing.property_type] || "other",
+      type: resolvedType,
       location: formatListingLocation(listing),
       region: listing.region || "",
       city: listing.city || "",
@@ -116,6 +153,10 @@ export default function Ads() {
         mainPhoto ||
         "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?q=80&w=400",
       status: computedStatus,
+      promotionStatus: promoStatus || "regular",
+      isVip,
+      isUrgent,
+      isTop,
       expiresAt,
       daysLeft,
       isExpired,
@@ -130,7 +171,12 @@ export default function Ads() {
   }, []);
 
   const translatePropertyType = (type) => {
-    return t(`ads.propertyTypes.${type}`);
+    if (!type) return "";
+    const translated = t(`ads.propertyTypes.${type}`);
+    if (translated && translated !== `ads.propertyTypes.${type}`) {
+      return translated;
+    }
+    return type;
   };
 
   const translateStatus = (status) => {
@@ -534,9 +580,32 @@ export default function Ads() {
                   <div className={styles.imageOverlay} />
 
                   <div className={styles.badges}>
-                    <span className={styles.typeBadge}>
-                      {translatePropertyType(item.type)}
-                    </span>
+                    {item.isVip && (
+                      <span className={`${styles.statusBadge} ${styles.badgeVip}`}>
+                        <Crown size={13} />
+                        VIP
+                      </span>
+                    )}
+
+                    {item.isUrgent && (
+                      <span className={`${styles.statusBadge} ${styles.badgeUrgent}`}>
+                        <Zap size={13} />
+                        {language === "ky" ? "Шашылыш" : "Срочно"}
+                      </span>
+                    )}
+
+                    {item.isTop && (
+                      <span className={`${styles.statusBadge} ${styles.badgeTop}`}>
+                        <TrendingUp size={13} />
+                        TOP
+                      </span>
+                    )}
+
+                    {item.type && (
+                      <span className={styles.typeBadge}>
+                        {translatePropertyType(item.type)}
+                      </span>
+                    )}
 
                     {item.isExpired ? (
                       <span

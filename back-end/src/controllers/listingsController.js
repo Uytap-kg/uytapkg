@@ -1156,6 +1156,30 @@ export const updateListing = async (req, res) => {
       if (data.promotion_expires_at !== undefined) updates.promotion_expires_at = data.promotion_expires_at;
       if (data.urgentExpiresAt !== undefined) updates.urgent_expires_at = data.urgentExpiresAt;
       if (data.urgent_expires_at !== undefined) updates.urgent_expires_at = data.urgent_expires_at;
+
+      // Если админ выставляет vip или top без указания срока, гарантируем 30 дней, чтобы не срабатывал сброс
+      if (
+        (updates.promotion_status === "vip" || updates.promotion_status === "top") &&
+        updates.promotion_expires_at === undefined &&
+        (!existingListing.promotion_expires_at ||
+          new Date(existingListing.promotion_expires_at).getTime() <= Date.now())
+      ) {
+        updates.promotion_expires_at = new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000,
+        ).toISOString();
+      }
+
+      // Если админ выставляет срочно без указания срока, гарантируем 30 дней
+      if (
+        updates.is_urgent === true &&
+        updates.urgent_expires_at === undefined &&
+        (!existingListing.urgent_expires_at ||
+          new Date(existingListing.urgent_expires_at).getTime() <= Date.now())
+      ) {
+        updates.urgent_expires_at = new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000,
+        ).toISOString();
+      }
     } else {
       // Для не-admin гарантируем, что серверные колонки сроков продвижения не перезаписываются
       delete updates.promotion_expires_at;

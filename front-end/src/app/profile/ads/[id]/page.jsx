@@ -43,6 +43,7 @@ import {
   CircleDollarSign,
   CheckCircle2,
   AlertCircle,
+  TrendingUp,
 } from "lucide-react";
 
 // Те же подписи, что и в списке "Мои объявления" (see profile/ads/page.jsx
@@ -1237,18 +1238,24 @@ export default function MyProductDetails() {
               <div className={styles.imageOverlay} />
 
               <div className={styles.badges}>
-                {product.status === "vip" && (
+                {(product.isVip || product.status === "vip") && (
                   <span className={`${styles.badge} ${styles.vip}`}>
                     <Sparkles size={14} />
                     VIP
                   </span>
                 )}
 
-                {product.status === "urgent" && (
+                {(product.isUrgent || product.status === "urgent") && (
                   <span className={`${styles.badge} ${styles.urgent}`}>
                     <Flame size={14} />
+                    {t("myAdsDetails.badges.urgent", "Срочно")}
+                  </span>
+                )}
 
-                    {t("myAdsDetails.badges.urgent")}
+                {product.isTop && (
+                  <span className={`${styles.badge} ${styles.top}`}>
+                    <TrendingUp size={14} />
+                    TOP
                   </span>
                 )}
 

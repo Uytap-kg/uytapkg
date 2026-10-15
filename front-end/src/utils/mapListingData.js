@@ -134,10 +134,12 @@ export function mapListingData(item) {
   const propertyTypeMapping = {
     apartment: "Квартира",
     house: "Дом",
+    cottage: "Коттедж",
     land: "Участок",
     commercial: "Коммерция",
     room: "Комнаты",
     garage: "Паркинг/гараж",
+    parking: "Паркинг/гараж",
   };
 
   const mainPhoto = item.listing_photos?.find((p) => p.is_main)?.url 
@@ -152,6 +154,15 @@ export function mapListingData(item) {
     ? Math.max(0, Math.ceil((new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24)))
     : 0;
 
+  const rawType = item.property_type || item.propertyType || "";
+  const resolvedType =
+    propertyTypeMapping[rawType] ||
+    (typeof rawType === "string" && rawType.trim() ? rawType.trim() : "") ||
+    "Другое";
+
+  const promoStatus = item.promotion_status || item.promotionStatus || "regular";
+  const isUrgent = Boolean(item.is_urgent ?? item.isUrgent);
+
   return {
     // Характеристики категории (серия, этаж, стены и т.д.) — берём из
     // features первыми, чтобы канонические поля ниже всегда были главнее
@@ -161,13 +172,19 @@ export function mapListingData(item) {
     id: item.id,
     title: item.title || "Без названия",
     description: item.description || "",
-    type: propertyTypeMapping[item.property_type] || "Другое",
+    type: resolvedType,
     dealType: item.deal_type === "sale" ? "Продажа" : "Сниму в аренду",
-    status: item.promotion_status === "vip"
+    status: promoStatus === "vip"
       ? "vip"
-      : (item.is_urgent
+      : (isUrgent
           ? "urgent"
-          : (item.promotion_status === "top" ? "top" : "regular")),
+          : (promoStatus === "top" ? "top" : "regular")),
+    promotion_status: promoStatus,
+    promotionStatus: promoStatus,
+    is_urgent: isUrgent,
+    isUrgent: isUrgent,
+    isVip: promoStatus === "vip" || Boolean(item.isVip ?? item.is_vip),
+    isTop: promoStatus === "top" || Boolean(item.isTop ?? item.is_top),
     location: formattedLocation,
     city: item.city || (item.region === "BISHKEK" || item.region === "bishkek" ? "Бишкек" : ""),
     region: formatRegion(item.region),
@@ -191,10 +208,12 @@ export function mapListingDetail(item) {
   const propertyTypeMapping = {
     apartment: "Квартира",
     house: "Дом",
+    cottage: "Коттедж",
     land: "Участок",
     commercial: "Коммерция",
     room: "Комната",
     garage: "Паркинг/гараж",
+    parking: "Паркинг/гараж",
   };
 
   const dealTypeMapping = {
@@ -270,7 +289,19 @@ export function mapListingDetail(item) {
     floors: item.total_floors || item.floor || 0,
     year: features.year || null,
     beachDistance,
-    status: item.is_urgent ? "urgent" : (item.promotion_status === "vip" ? "vip" : null),
+    status: item.is_urgent
+      ? "urgent"
+      : item.promotion_status === "vip"
+        ? "vip"
+        : item.promotion_status === "top"
+          ? "top"
+          : "regular",
+    promotion_status: item.promotion_status || "regular",
+    promotionStatus: item.promotion_status || "regular",
+    is_urgent: Boolean(item.is_urgent),
+    isUrgent: Boolean(item.is_urgent),
+    isVip: item.promotion_status === "vip" || Boolean(item.is_vip),
+    isTop: item.promotion_status === "top" || Boolean(item.is_top),
     // Реальный статус публикации (active/draft/hidden/moderation) — не
     // путать с полем status выше, которое означает тип продвижения
     // (vip/urgent). Нужен, чтобы страница объявления честно показывала
