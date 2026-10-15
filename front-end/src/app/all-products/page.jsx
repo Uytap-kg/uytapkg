@@ -28,6 +28,7 @@ import ProductsFilters from "./components/ProductsFilters/ProductsFilters";
 import ProductsResults from "./components/ProductsResults/ProductsResults";
 
 import styles from "./AllProducts.module.css";
+import Footer from "@/components/pageComponents/footer/Footer";
 
 /* =========================================================
    CATEGORIES
@@ -480,7 +481,7 @@ export default function AllProducts() {
     document.title =
       "Все объявления по недвижимости в Кыргызстане — Купить и снять | UyTap";
   }, []);
-  
+
   const { t } = useLanguage();
 
   const router = useRouter();
@@ -1646,6 +1647,7 @@ export default function AllProducts() {
           onClearSearchQuery={() => updateFilter("searchQuery", "")}
         />
       </div>
+      <Footer />
     </main>
   );
 }

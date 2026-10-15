@@ -19,9 +19,9 @@
 
   box-sizing: border-box;
 
-  padding: 50px;
+  padding-top: 50px;
 
-  overflow-x: hidden;
+  overflow-x: clip;
 
   background: #f7f7fb;
 
@@ -64,7 +64,7 @@
   z-index: -1;
 
   right: -260px;
-  bottom: -260px;
+  bottom: 0;
 
   width: 600px;
   height: 600px;
