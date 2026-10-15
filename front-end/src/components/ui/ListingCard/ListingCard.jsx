@@ -1,6 +1,8 @@
+"use client";
+
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { MapPin, Heart, Crown, Zap, Check } from "lucide-react";
+import { MapPin, Heart, Crown, Zap, TrendingUp, Check } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 
 import styles from "./ListingCard.module.css";
@@ -19,25 +21,41 @@ export default function ListingCard({
   const router = useRouter();
   const { t, language } = useLanguage();
 
-  // Normalize status values received from the API.
+  // Normalize status values received from the API or mapped listing.
   const status = String(item?.status ?? "")
+    .trim()
+    .toLowerCase();
+
+  const promoStatus = String(
+    item?.promotion_status ??
+      item?.promotionStatus ??
+      item?.raw?.promotion_status ??
+      "",
+  )
     .trim()
     .toLowerCase();
 
   const isVip =
     ["vip", "premium"].includes(status) ||
+    ["vip", "premium"].includes(promoStatus) ||
     item?.isVip === true ||
-    item?.is_vip === true;
+    item?.is_vip === true ||
+    item?.raw?.is_vip === true;
 
   const isUrgent =
     ["urgent", "срочно"].includes(status) ||
+    ["urgent", "срочно"].includes(promoStatus) ||
     item?.isUrgent === true ||
-    item?.is_urgent === true;
+    item?.is_urgent === true ||
+    item?.raw?.is_urgent === true;
 
   const isTop =
-    ["top", "топ"].includes(status) ||
-    item?.isTop === true ||
-    item?.is_top === true;
+    !isVip &&
+    (["top", "топ"].includes(status) ||
+      ["top", "топ"].includes(promoStatus) ||
+      item?.isTop === true ||
+      item?.is_top === true ||
+      item?.raw?.is_top === true);
 
   function openListing() {
     if (!item?.id) return;
@@ -55,10 +73,27 @@ export default function ListingCard({
 
   function getRoomsLabel(rooms) {
     if (language === "ky") {
-      return "бөлмө";
+      return t("listingCard.rooms.one", "бөлмө");
     }
 
-    return rooms === 1 ? "комната" : "комнат";
+    const n = Math.abs(Number(rooms));
+    if (Number.isNaN(n)) {
+      return "";
+    }
+
+    const count = n % 100;
+    const lastDigit = count % 10;
+
+    if (count > 10 && count < 20) {
+      return t("listingCard.rooms.many", "комнат");
+    }
+    if (lastDigit > 1 && lastDigit < 5) {
+      return t("listingCard.rooms.few", "комнаты");
+    }
+    if (lastDigit === 1) {
+      return t("listingCard.rooms.one", "комната");
+    }
+    return t("listingCard.rooms.many", "комнат");
   }
 
   return (
@@ -115,11 +150,15 @@ export default function ListingCard({
 
         {/* STATUS BADGES */}
 
-        <div className={styles.badges}>
+        <div
+          className={`${styles.badges} ${
+            compareMode ? styles.badgesCompare : ""
+          }`}
+        >
           {isVip && (
             <span className={`${styles.status} ${styles.vip}`}>
               <Crown />
-              VIP
+              {t("listingCard.badges.vip", "VIP")}
             </span>
           )}
 
@@ -132,8 +171,8 @@ export default function ListingCard({
 
           {isTop && (
             <span className={`${styles.status} ${styles.top}`}>
-              <Zap />
-              TOP
+              <TrendingUp />
+              {t("listingCard.badges.top", "TOP")}
             </span>
           )}
 
@@ -173,7 +212,10 @@ export default function ListingCard({
         <div className={styles.details}>
           {item.rooms != null && item.rooms !== "" && (
             <span>
-              {item.rooms} {getRoomsLabel(Number(item.rooms))}
+              {typeof item.rooms === "number" ||
+              !Number.isNaN(Number(item.rooms))
+                ? `${item.rooms} ${getRoomsLabel(item.rooms)}`.trim()
+                : String(item.rooms)}
             </span>
           )}
 

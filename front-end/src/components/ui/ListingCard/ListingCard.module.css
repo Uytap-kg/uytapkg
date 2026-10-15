@@ -86,7 +86,7 @@
   flex-wrap: wrap;
   gap: 7px;
 
-  width: max-content;
+  width: auto;
   max-width: calc(100% - 75px);
   min-width: 0;
 
@@ -117,6 +117,8 @@
   line-height: 1.2;
 
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 
   box-shadow: 0 5px 15px rgba(31, 36, 33, 0.12);
 
@@ -539,6 +541,7 @@
    COMPARE MODE — MOVE BADGES
 ========================================================= */
 
+.badgesCompare,
 .image:has(.compareSelect) .badges {
   top: 68px;
 }
@@ -706,6 +709,7 @@
     height: 16px;
   }
 
+  .badgesCompare,
   .image:has(.compareSelect) .badges {
     top: 61px;
   }
@@ -811,6 +815,7 @@
     flex-basis: 25px;
   }
 
+  .badgesCompare,
   .image:has(.compareSelect) .badges {
     top: 57px;
   }
@@ -926,6 +931,7 @@
     height: 15px;
   }
 
+  .badgesCompare,
   .image:has(.compareSelect) .badges {
     top: 51px;
   }
@@ -1049,6 +1055,7 @@
     height: 13px;
   }
 
+  .badgesCompare,
   .image:has(.compareSelect) .badges {
     top: 47px;
   }
