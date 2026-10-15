@@ -1,5 +1,3 @@
-"use client";
-
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MapPin, Heart, Crown, Zap, Check } from "lucide-react";
@@ -21,10 +19,29 @@ export default function ListingCard({
   const router = useRouter();
   const { t, language } = useLanguage();
 
-  const isVip = item?.status === "vip";
-  const isUrgent = item?.status === "urgent";
+  // Normalize status values received from the API.
+  const status = String(item?.status ?? "")
+    .trim()
+    .toLowerCase();
+
+  const isVip =
+    ["vip", "premium"].includes(status) ||
+    item?.isVip === true ||
+    item?.is_vip === true;
+
+  const isUrgent =
+    ["urgent", "срочно"].includes(status) ||
+    item?.isUrgent === true ||
+    item?.is_urgent === true;
+
+  const isTop =
+    ["top", "топ"].includes(status) ||
+    item?.isTop === true ||
+    item?.is_top === true;
 
   function openListing() {
+    if (!item?.id) return;
+
     router.push(`/all-products/${item.id}`);
   }
 
@@ -38,7 +55,7 @@ export default function ListingCard({
 
   function getRoomsLabel(rooms) {
     if (language === "ky") {
-      return rooms === 1 ? "бөлмө" : "бөлмө";
+      return "бөлмө";
     }
 
     return rooms === 1 ? "комната" : "комнат";
@@ -57,7 +74,7 @@ export default function ListingCard({
         <Image
           src={item.image}
           fill
-          alt={item.title}
+          alt={item.title || "Объявление"}
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 400px"
         />
 
@@ -96,7 +113,7 @@ export default function ListingCard({
           </button>
         )}
 
-        {/* BADGES */}
+        {/* STATUS BADGES */}
 
         <div className={styles.badges}>
           {isVip && (
@@ -109,11 +126,18 @@ export default function ListingCard({
           {isUrgent && (
             <span className={`${styles.status} ${styles.urgent}`}>
               <Zap />
-              {t("listingCard.badges.urgent")}
+              {t("listingCard.badges.urgent", "Срочно")}
             </span>
           )}
 
-          <span className={styles.type}>{item.type}</span>
+          {isTop && (
+            <span className={`${styles.status} ${styles.top}`}>
+              <Zap />
+              TOP
+            </span>
+          )}
+
+          {item.type && <span className={styles.type}>{item.type}</span>}
         </div>
 
         {/* FAVORITE */}
@@ -126,12 +150,10 @@ export default function ListingCard({
               ? t("listingCard.favorite.remove")
               : t("listingCard.favorite.add")
           }
+          aria-pressed={isFavorite}
           onClick={(event) => {
             event.stopPropagation();
-
-            if (onFavoriteClick) {
-              onFavoriteClick(item);
-            }
+            onFavoriteClick?.(item);
           }}
         >
           <Heart fill={isFavorite ? "currentColor" : "none"} />
@@ -145,14 +167,13 @@ export default function ListingCard({
 
         <div className={styles.location}>
           <MapPin />
-
           <span>{item.location}</span>
         </div>
 
         <div className={styles.details}>
-          {item.rooms && (
+          {item.rooms != null && item.rooms !== "" && (
             <span>
-              {item.rooms} {getRoomsLabel(item.rooms)}
+              {item.rooms} {getRoomsLabel(Number(item.rooms))}
             </span>
           )}
 
