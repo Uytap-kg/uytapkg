@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { aiSearch } from "../src/controllers/aiController.js";
 
+// Для юнит-тестов отключаем внешние сетевые запросы к Gemini API
+process.env.GEMINI_API_KEY = "";
+
 // Mock helper for Express req/res
 function createMockReqRes(body = {}) {
   const req = { body };

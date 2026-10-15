@@ -17,7 +17,8 @@ import uploadRoutes, {
 import { uploadImage } from "../src/controllers/uploadController.js";
 import { removeImageFromStorage } from "../src/utils/storage.js";
 import { normalizeIp, ipKeyGenerator } from "../src/routes/authRoutes.js";
-import { logDbOp } from "./helpers.mjs";
+import { logDbOp, isTestDbConfigured } from "./helpers.mjs";
+import { supabase } from "../src/config/db.js";
 
 /**
  * Вспомогательная функция для генерации чистого минимального PNG без внешних зависимостей
@@ -656,6 +657,19 @@ test("Критерий 4.4: Валидация типов загрузки ра�
 });
 
 test("Критерий 4.5: Успешная анонимная загрузка изолируется в префиксе pending/ с санитизацией sharp", async () => {
+  const origStorage = supabase.storage;
+  if (!isTestDbConfigured) {
+    supabase.storage = {
+      from: () => ({
+        upload: async (objectPath) => ({ data: { path: objectPath }, error: null }),
+        getPublicUrl: (objectPath) => ({
+          data: { publicUrl: `http://127.0.0.1:54321/storage/v1/object/public/avatars/${objectPath}` },
+        }),
+        remove: async () => ({ data: {}, error: null }),
+      }),
+    };
+  }
+
   const validPng = createMinimalPng(64, 64, [39, 174, 96]);
   let uploadedUrl = null;
 
@@ -690,6 +704,9 @@ test("Критерий 4.5: Успешная анонимная загрузка
     if (uploadedUrl) {
       await removeImageFromStorage(uploadedUrl);
       logDbOp(`DELETE storage ${uploadedUrl} (cleanup, test upload item-10)`);
+    }
+    if (!isTestDbConfigured) {
+      supabase.storage = origStorage;
     }
   }
 });

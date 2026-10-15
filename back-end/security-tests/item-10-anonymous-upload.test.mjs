@@ -14,6 +14,8 @@ import {
   handleAnonymousFileUpload,
 } from "../src/routes/uploadRoutes.js";
 import { uploadImage } from "../src/controllers/uploadController.js";
+import { supabase } from "../src/config/db.js";
+import { isTestDbConfigured } from "./helpers.mjs";
 
 // Хелпер создания валидного минимального PNG
 function makeSolidPng(width = 100, height = 100, rgb = [30, 144, 255]) {
@@ -236,38 +238,56 @@ test("Item 10: Контроллер uploadImage отклоняет MIME-spoofed 
 });
 
 test("Item 10: Санитайзинг и изоляция в avatars/pending/ для валидного изображения", async () => {
-  const png = makeSolidPng(150, 150, [50, 100, 150]);
+  const origStorage = supabase.storage;
+  if (!isTestDbConfigured) {
+    supabase.storage = {
+      from: () => ({
+        upload: async (objectPath) => ({ data: { path: objectPath }, error: null }),
+        getPublicUrl: (objectPath) => ({
+          data: { publicUrl: `http://127.0.0.1:54321/storage/v1/object/public/avatars/${objectPath}` },
+        }),
+      }),
+    };
+  }
 
-  let status = null;
-  let responseData = null;
+  try {
+    const png = makeSolidPng(150, 150, [50, 100, 150]);
 
-  const createRes = () => ({
-    status(s) {
-      status = s;
-      return this;
-    },
-    json(data) {
-      responseData = data;
-      return this;
-    },
-  });
+    let status = null;
+    let responseData = null;
 
-  const validReq = {
-    file: {
-      buffer: png,
-      mimetype: "image/png",
-      originalname: "my-photo.png",
-    },
-    body: { type: "avatar" },
-  };
+    const createRes = () => ({
+      status(s) {
+        status = s;
+        return this;
+      },
+      json(data) {
+        responseData = data;
+        return this;
+      },
+    });
 
-  await uploadImage(validReq, createRes());
-  assert.equal(responseData.success, true, "Валидное изображение должно успешно обрабатываться");
-  assert.ok(responseData.url, "Должен возвращаться публичный URL");
+    const validReq = {
+      file: {
+        buffer: png,
+        mimetype: "image/png",
+        originalname: "my-photo.png",
+      },
+      body: { type: "avatar" },
+    };
 
-  // Изоляция: URL должен указывать на avatars/pending/
-  assert.ok(
-    responseData.url.includes("avatars/pending/") || responseData.url.includes("/pending/"),
-    `URL должен содержать префикс pending/: ${responseData.url}`
-  );
+    await uploadImage(validReq, createRes());
+    assert.equal(responseData.success, true, "Валидное изображение должно успешно обрабатываться");
+    assert.ok(responseData.url, "Должен возвращаться публичный URL");
+
+    // Изоляция: URL должен указывать на avatars/pending/
+    assert.ok(
+      responseData.url.includes("avatars/pending/") || responseData.url.includes("/pending/"),
+      `URL должен содержать префикс pending/: ${responseData.url}`
+    );
+  } finally {
+    if (!isTestDbConfigured) {
+      supabase.storage = origStorage;
+    }
+  }
 });

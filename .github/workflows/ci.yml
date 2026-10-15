@@ -2,35 +2,198 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches:
+      - main
   pull_request:
-    branches: ["**"]
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  backend-ci:
-    name: Backend Test & Security Audit
+  lint-and-audit:
+    name: Lint & Dependency Security Audit
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: back-end
+    timeout-minutes: 8
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Set up Node.js (v20)
-        uses: actions/setup-node@v4
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.1.0
         with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: back-end/package-lock.json
+          node-version-file: ".nvmrc"
 
-      - name: Install dependencies (clean install)
+      # --- Backend Checks ---
+      - name: Cache backend dependencies
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-backend-npm-${{ hashFiles('back-end/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-backend-npm-
+
+      - name: Install backend dependencies
+        working-directory: back-end
         run: npm ci
 
-      - name: Run test suite
-        run: npm test
+      - name: Check backend syntax (Lint)
+        working-directory: back-end
+        run: npm run lint
 
-      - name: Dependency vulnerability audit (high+)
+      - name: Audit backend dependencies (high+)
+        working-directory: back-end
         run: npm audit --omit=dev --audit-level=high
+
+      # --- Frontend Checks ---
+      - name: Cache frontend dependencies
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-frontend-npm-${{ hashFiles('front-end/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-frontend-npm-
+
+      - name: Install frontend dependencies
+        working-directory: front-end
+        run: npm ci
+
+      - name: Run frontend ESLint
+        working-directory: front-end
+        run: npm run lint
+
+      - name: Audit frontend dependencies (high+)
+        working-directory: front-end
+        run: npm audit --omit=dev --audit-level=high
+
+  backend-tests:
+    name: Backend Unit & Security Tests
+    needs: lint-and-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.1.0
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Cache backend dependencies
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-backend-npm-${{ hashFiles('back-end/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-backend-npm-
+
+      - name: Install backend dependencies
+        working-directory: back-end
+        run: npm ci
+
+      - name: Run backend test suite with coverage
+        working-directory: back-end
+        env:
+          NODE_ENV: test
+          PORT: 5000
+          SUPABASE_URL: http://127.0.0.1:54321
+          SUPABASE_KEY: dummy-test-service-role-key-for-unit-tests
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          JWT_SECRET: dummy-test-jwt-secret-at-least-32-chars-long
+          OTP_SECRET: dummy-test-otp-secret-at-least-32-chars-long
+        run: |
+          npm run test:coverage 2>&1 | tee test-results.log
+
+      - name: Upload backend test results artifact
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        if: always()
+        with:
+          name: backend-test-results
+          path: back-end/test-results.log
+          retention-days: 14
+
+  build-frontend:
+    name: Frontend Production Build Verification
+    needs: lint-and-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.1.0
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Cache frontend dependencies
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-frontend-npm-${{ hashFiles('front-end/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-frontend-npm-
+
+      - name: Cache Next.js build cache
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: front-end/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('front-end/package-lock.json') }}-${{ hashFiles('front-end/src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('front-end/package-lock.json') }}-
+
+      - name: Install frontend dependencies
+        working-directory: front-end
+        run: npm ci
+
+      - name: Build Next.js application
+        working-directory: front-end
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NODE_ENV: production
+          NEXT_PUBLIC_API_URL: http://localhost:5000/api
+        run: npm run build
+
+  build-and-scan-docker:
+    name: Backend Docker Build & Vulnerability Scan
+    needs: backend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - name: Build Backend Docker image
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
+        with:
+          context: back-end
+          file: back-end/Dockerfile
+          push: false
+          load: true
+          tags: uytap-backend:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scan on image
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
+        with:
+          image-ref: uytap-backend:ci-${{ github.sha }}
+          format: "table"
+          exit-code: "0"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
