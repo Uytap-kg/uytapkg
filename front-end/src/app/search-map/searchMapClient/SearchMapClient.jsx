@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import L from "leaflet";
 
-import { getListings, getComplexes, getListingById } from "@/utils/api";
+import { getListings, getMapListings, getComplexes, getListingById } from "@/utils/api";
 import { mapListingData } from "@/utils/mapListingData";
 import { mapComplexData } from "@/utils/mapComplexData";
 
@@ -587,9 +587,9 @@ export default function SearchMapClient() {
         setLoadError("");
 
         const [listingsResponse, complexesResponse] = await Promise.all([
-          getListings({
+          getMapListings({
             page: 1,
-            limit: 500,
+            limit: 1000,
           }),
           getComplexes(),
         ]);

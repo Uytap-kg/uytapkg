@@ -7,6 +7,7 @@ import { useRouter, useParams } from "next/navigation";
 import {
   getComplexById,
   getListings,
+  getAllListings,
   updateComplex as updateComplexApi,
   deleteComplex as deleteComplexApi,
 } from "@/utils/api";
@@ -304,10 +305,7 @@ export default function MyComplexDetail() {
         const [complexResponse, listingsResponse] = await Promise.all([
           getComplexById(complexId),
 
-          getListings({
-            page: 1,
-            limit: 200,
-          }),
+          getAllListings(),
         ]);
 
         if (cancelled) return;

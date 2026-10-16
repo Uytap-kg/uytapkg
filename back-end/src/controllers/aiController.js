@@ -94,6 +94,92 @@ const buildSearchPrompt = (prompt) => {
 Текст запроса: "${prompt}"`;
 };
 
+const callClaude = async (prompt) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  if (!apiKey) return null;
+
+  const model = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
+  const baseUrl = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com/v1").replace(/\/+$/, "");
+
+  try {
+    const isChatCompletions =
+      baseUrl.endsWith("/chat/completions") || baseUrl.includes("openrouter.ai/api/v1");
+    const endpoint = isChatCompletions
+      ? baseUrl.endsWith("/chat/completions")
+        ? baseUrl
+        : `${baseUrl}/chat/completions`
+      : `${baseUrl}/messages`;
+
+    const headers = isChatCompletions
+      ? {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        }
+      : {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        };
+
+    const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID;
+    if (workspaceId && !isChatCompletions) {
+      headers["anthropic-workspace-id"] = workspaceId;
+    }
+
+    let response;
+    if (isChatCompletions) {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: buildSearchPrompt(prompt) },
+            { role: "user", content: `Пользовательский запрос: "${prompt}"` },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
+    } else {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model,
+          max_tokens: 800,
+          system: buildSearchPrompt(prompt),
+          messages: [
+            { role: "user", content: `Пользовательский запрос: "${prompt}"` },
+          ],
+        }),
+      });
+    }
+
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => ({}));
+      console.warn(
+        `Claude API warning (${response.status}):`,
+        errBody?.error?.message || errBody?.message || response.statusText,
+      );
+      return null;
+    }
+
+    const data = await response.json();
+    const rawText = isChatCompletions
+      ? data?.choices?.[0]?.message?.content
+      : data?.content?.[0]?.text;
+
+    const parsed = parseJsonFromText(rawText);
+    if (parsed && typeof parsed === "object") {
+      return parsed;
+    }
+  } catch (err) {
+    console.warn("Claude API call failed:", err?.message || err);
+  }
+
+  return null;
+};
+
 const callGemini = async (prompt) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -539,16 +625,53 @@ export const aiSearch = async (req, res) => {
     let filters = null;
     let source = "local-parser";
 
-    try {
-      filters = await callGemini(prompt);
-      if (filters && typeof filters === "object") {
-        source = "gemini-api";
-      } else {
-        filters = null;
+    const preferredProvider = (
+      process.env.AI_PROVIDER ||
+      (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY ? "claude" : "gemini")
+    ).toLowerCase();
+
+    const claudeModelName = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
+
+    if (preferredProvider === "claude" || preferredProvider === "anthropic") {
+      try {
+        filters = await callClaude(prompt);
+        if (filters && typeof filters === "object") {
+          source = claudeModelName;
+        }
+      } catch (claudeError) {
+        console.warn("Claude API call warning:", claudeError?.message || claudeError);
       }
-    } catch (geminiError) {
-      console.warn("Gemini API call warning, fallback to rule parser:", geminiError?.message || geminiError);
-      filters = null;
+
+      if (!filters && process.env.GEMINI_API_KEY) {
+        try {
+          filters = await callGemini(prompt);
+          if (filters && typeof filters === "object") {
+            source = "gemini-api";
+          }
+        } catch (geminiError) {
+          console.warn("Gemini API fallback warning:", geminiError?.message || geminiError);
+        }
+      }
+    } else {
+      try {
+        filters = await callGemini(prompt);
+        if (filters && typeof filters === "object") {
+          source = "gemini-api";
+        }
+      } catch (geminiError) {
+        console.warn("Gemini API call warning:", geminiError?.message || geminiError);
+      }
+
+      if (!filters && (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY)) {
+        try {
+          filters = await callClaude(prompt);
+          if (filters && typeof filters === "object") {
+            source = claudeModelName;
+          }
+        } catch (claudeError) {
+          console.warn("Claude API fallback warning:", claudeError?.message || claudeError);
+        }
+      }
     }
 
     if (!filters) {
@@ -583,16 +706,73 @@ export const aiGenerateDescription = async (req, res) => {
       });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-
+    const claudeKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
     const prompt = `На основе кратких характеристик создай продающее описание недвижимости на русском и кыргызском языках. Верни в формате JSON {"ru": "...", "kg": "..."}. Характеристики: ${details}`;
 
-    if (apiKey) {
+    const preferredProvider = (
+      process.env.AI_PROVIDER ||
+      (claudeKey ? "claude" : "gemini")
+    ).toLowerCase();
+
+    const tryClaudeDescription = async () => {
+      if (!claudeKey) return null;
+      const model = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
+      const baseUrl = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com/v1").replace(/\/+$/, "");
+      const isChatCompletions =
+        baseUrl.endsWith("/chat/completions") || baseUrl.includes("openrouter.ai/api/v1");
+      const endpoint = isChatCompletions
+        ? baseUrl.endsWith("/chat/completions")
+          ? baseUrl
+          : `${baseUrl}/chat/completions`
+        : `${baseUrl}/messages`;
+
+      const headers = isChatCompletions
+        ? { "Content-Type": "application/json", Authorization: `Bearer ${claudeKey}` }
+        : { "Content-Type": "application/json", "x-api-key": claudeKey, "anthropic-version": "2023-06-01" };
+
+      const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID;
+      if (workspaceId && !isChatCompletions) {
+        headers["anthropic-workspace-id"] = workspaceId;
+      }
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(
+          isChatCompletions
+            ? {
+                model,
+                messages: [
+                  { role: "system", content: "Верни результат строго в формате JSON без markdown: {\"ru\": \"...\", \"kg\": \"...\"}" },
+                  { role: "user", content: prompt },
+                ],
+                response_format: { type: "json_object" },
+              }
+            : {
+                model,
+                max_tokens: 1000,
+                system: "Верни результат строго в формате JSON без markdown: {\"ru\": \"...\", \"kg\": \"...\"}",
+                messages: [{ role: "user", content: prompt }],
+              },
+        ),
+      });
+
+      if (!response.ok) return null;
+      const data = await response.json();
+      const rawText = isChatCompletions
+        ? data?.choices?.[0]?.message?.content
+        : data?.content?.[0]?.text;
+      return parseJsonFromText(rawText);
+    };
+
+    const tryGeminiDescription = async () => {
+      if (!geminiKey) return null;
       const candidateModels = getCandidateModels();
       for (const model of candidateModels) {
         try {
           const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -620,13 +800,27 @@ export const aiGenerateDescription = async (req, res) => {
             data?.candidates?.[0]?.content?.parts?.[0]?.text ||
             data?.output?.[0]?.content?.[0]?.text;
           const parsed = parseJsonFromText(rawText);
-          if (parsed) {
-            return res.json({ success: true, generatedText: parsed });
+          if (parsed && (parsed.ru || parsed.kg)) {
+            return parsed;
           }
         } catch (err) {
           console.warn(`Gemini description error with ${model}:`, err?.message || err);
         }
       }
+      return null;
+    };
+
+    let generated = null;
+    if (preferredProvider === "claude" || preferredProvider === "anthropic") {
+      generated = await tryClaudeDescription();
+      if (!generated) generated = await tryGeminiDescription();
+    } else {
+      generated = await tryGeminiDescription();
+      if (!generated) generated = await tryClaudeDescription();
+    }
+
+    if (generated && (generated.ru || generated.kg)) {
+      return res.json({ success: true, generatedText: generated });
     }
 
     return res.json({

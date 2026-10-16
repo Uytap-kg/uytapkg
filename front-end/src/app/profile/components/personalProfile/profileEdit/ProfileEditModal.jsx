@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 
-import { getMe, updateMe } from "@/utils/api";
+import {
+  getMe,
+  updateMe,
+  uploadAvatar as uploadAvatarRequest,
+  deleteAvatar,
+} from "@/utils/api";
 
 import {
   X,
@@ -151,67 +156,6 @@ export default function ProfileEditModal({ user, close }) {
 
   /*
    * =========================================================
-   * URL -> FILE
-   * =========================================================
-   */
-
-  async function fileFromUrl(url, fileName) {
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(t("profileEditModal.errors.imageFetch"));
-    }
-
-    const blob = await response.blob();
-
-    return new File([blob], fileName, {
-      type: blob.type || "image/png",
-    });
-  }
-
-  /*
-   * =========================================================
-   * GET AVATAR FILE
-   * =========================================================
-   */
-
-  async function getAvatarFile() {
-    /*
-     * 1. User removed avatar
-     */
-
-    if (avatarRemoved) {
-      return await fileFromUrl(
-        "/assets/personalImage.png",
-        "personalImage.png",
-      );
-    }
-
-    /*
-     * 2. User selected new avatar
-     */
-
-    if (avatarFile) {
-      return avatarFile;
-    }
-
-    /*
-     * 3. Avatar was not changed
-     */
-
-    if (initialAvatar) {
-      return await fileFromUrl(initialAvatar, "current-avatar.jpg");
-    }
-
-    /*
-     * 4. No avatar initially
-     */
-
-    return await fileFromUrl("/assets/personalImage.png", "personalImage.png");
-  }
-
-  /*
-   * =========================================================
    * SAVE
    * =========================================================
    */
@@ -230,50 +174,24 @@ export default function ProfileEditModal({ user, close }) {
 
       /*
        * -----------------------------------------------------
-       * Avatar
+       * Avatar: обращаемся к серверу только если аватар менялся
        * -----------------------------------------------------
        */
 
-      const finalAvatarFile = await getAvatarFile();
+      let refreshedProfile = {};
 
-      /*
-       * -----------------------------------------------------
-       * FormData
-       * -----------------------------------------------------
-       */
+      if (avatarFile) {
+        const uploadResult = await uploadAvatarRequest(token, avatarFile);
 
-      const form = new FormData();
+        refreshedProfile = uploadResult.profile || {};
+      } else if (
+        avatarRemoved &&
+        initialAvatar &&
+        !initialAvatar.startsWith("/assets/")
+      ) {
+        const deleteResult = await deleteAvatar(token);
 
-      form.append("first_name", firstName.trim());
-
-      form.append("last_name", lastName.trim());
-
-      form.append("phone", phone.trim());
-
-      form.append("about", about.trim());
-
-      form.append("avatar", finalAvatarFile);
-
-      /*
-       * -----------------------------------------------------
-       * Upload profile + avatar
-       * -----------------------------------------------------
-       */
-
-      const response = await fetch("/api/auth/avatar", {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-
-        body: form,
-      });
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || t("profileEditModal.errors.save"));
+        refreshedProfile = deleteResult.profile || {};
       }
 
       /*
@@ -281,8 +199,6 @@ export default function ProfileEditModal({ user, close }) {
        * Saved avatar
        * -----------------------------------------------------
        */
-
-      const refreshedProfile = result.profile || {};
 
       let savedAvatar;
 

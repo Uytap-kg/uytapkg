@@ -15,10 +15,15 @@ import { z } from "zod";
 // Ограничивая допустимые ссылки только нашим Storage-доменом, мы
 // закрываем эту дыру на уровне данных, а не только в next.config.mjs.
 // =======================================================
-const TRUSTED_IMAGE_HOSTS = new Set(
+// host -> протокол, заданный в SUPABASE_URL. Для self-hosted Supabase
+// (http://IP:8000) это http:, для облачного — https:. Другие протоколы
+// и чужие хосты по-прежнему отклоняются.
+const TRUSTED_IMAGE_ORIGINS = new Map(
   [process.env.SUPABASE_URL].filter(Boolean).map((url) => {
     try {
-      return new URL(url).host;
+      const parsed = new URL(url);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+      return [parsed.host, parsed.protocol];
     } catch {
       return null;
     }
@@ -29,7 +34,8 @@ const isTrustedImageUrl = (value) => {
   if (typeof value !== "string") return false;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && TRUSTED_IMAGE_HOSTS.has(url.host);
+    const trustedProtocol = TRUSTED_IMAGE_ORIGINS.get(url.host);
+    return trustedProtocol !== undefined && url.protocol === trustedProtocol;
   } catch {
     return false;
   }

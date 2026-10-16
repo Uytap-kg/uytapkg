@@ -13,6 +13,7 @@ import {
   removeBannerImageFromStorage,
 } from "../utils/storage.js";
 import { bannerSchema, updateBannerSchema } from "../utils/validation.js";
+import { validateImageMagicBytes } from "../middleware/upload.js";
 
 function toPublicBanner(banner) {
   return {
@@ -73,6 +74,13 @@ export const uploadBannerImage = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Файл изображения не найден в запросе",
+      });
+    }
+
+    if (!validateImageMagicBytes(req.file.buffer)) {
+      return res.status(400).json({
+        success: false,
+        message: "Недопустимый формат файла. Разрешены только JPEG, PNG и WebP.",
       });
     }
 

@@ -182,8 +182,8 @@ export async function applyWatermark(buffer, mimetype) {
 
     return pipeline.toBuffer();
   } catch (err) {
-    console.warn("Watermark processing failed, returning original image:", err);
-    return buffer;
+    console.warn("Watermark processing failed:", err);
+    throw err;
   }
 }
 

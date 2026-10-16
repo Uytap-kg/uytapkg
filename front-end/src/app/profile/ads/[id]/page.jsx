@@ -1111,7 +1111,7 @@ export default function MyProductDetails() {
         price: Number.isFinite(priceVal) && priceVal > 0 ? priceVal : 1000,
         area: Number.isFinite(areaVal) && areaVal > 0 ? areaVal : undefined,
         rooms: updatedProduct.rooms ? Number(updatedProduct.rooms) : undefined,
-        floor: updatedProduct.floors ? Number(updatedProduct.floors) : undefined,
+        totalFloors: updatedProduct.floors ? Number(updatedProduct.floors) : undefined,
         address: updatedProduct.address || undefined,
       };
 

@@ -27,10 +27,8 @@ export default function Login() {
   const { t } = useLanguage();
 
   const [accountType, setAccountType] = useState("personal");
-  const [method, setMethod] = useState("phone");
-  const [phoneStep, setPhoneStep] = useState(1);
+  const [method, setMethod] = useState("email");
   const [phone, setPhone] = useState("");
-  const [code, setCode] = useState(["", "", "", ""]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -62,27 +60,48 @@ export default function Login() {
     setPhone(formatPhone(e.target.value));
   };
 
-  const sendCode = () => {
-    const clean = phone.replace(/\D/g, "");
+  const handlePhoneLogin = async (e) => {
+    e.preventDefault();
 
-    if (clean.length !== 12) {
+    setError("");
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length < 9) {
       setError(t("login.invalidPhone"));
       return;
     }
 
-    setError("");
-    setPhoneStep(2);
-  };
+    setLoading(true);
 
-  const changeCode = (value, index) => {
-    if (!/^\d*$/.test(value)) return;
+    try {
+      const data = await loginUser({
+        identifier: cleanPhone,
+        password,
+      });
 
-    const arr = [...code];
-    arr[index] = value;
-    setCode(arr);
+      if (data.token) {
+        document.cookie = `uytap_token=${data.token}; path=/; max-age=${
+          60 * 60 * 24 * 30
+        }`;
 
-    if (value && index < 3) {
-      document.getElementById(`code-${index + 1}`)?.focus();
+        localStorage.setItem("uytap_token", data.token);
+        localStorage.setItem("uytap_user", JSON.stringify(data.user));
+      }
+
+      setSuccess(true);
+
+      setTimeout(() => {
+        router.push("/profile");
+      }, 1000);
+    } catch (err) {
+      if (err?.needVerification && err?.email) {
+        const verifyEmail = String(err.email).trim().toLowerCase();
+        localStorage.setItem("register_email", verifyEmail);
+        router.push(`/auth-code?email=${encodeURIComponent(verifyEmail)}&reason=login`);
+        return;
+      }
+      setError(err.message || t("login.loginError"));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -125,42 +144,6 @@ export default function Login() {
     }
   };
 
-  const handlePhoneLogin = async (e) => {
-    e.preventDefault();
-
-    setError("");
-    setLoading(true);
-
-    try {
-      const fullCode = code.join("");
-
-      const result = await verifyOtpCode(phone.replace(/\D/g, ""), fullCode);
-
-      const token = result?.token || result?.data?.token;
-
-      if (!token || result?.ok === false || result?.success === false) {
-        throw new Error(result?.message || result?.data?.message || t("login.invalidCode"));
-      }
-
-      document.cookie = `uytap_token=${token}; path=/; max-age=${
-        60 * 60 * 24 * 30
-      }`;
-
-      localStorage.setItem("uytap_token", token);
-      localStorage.setItem("uytap_user", JSON.stringify(result.user || result?.data?.user));
-
-      setSuccess(true);
-
-      setTimeout(() => {
-        router.push("/profile");
-      }, 1000);
-    } catch (err) {
-      setError(err.message || t("login.invalidCode"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <main className={styles.page}>
       <motion.section
@@ -190,8 +173,7 @@ export default function Login() {
             className={accountType === "personal" ? styles.activeTab : ""}
             onClick={() => {
               setAccountType("personal");
-              setMethod("phone");
-              setPhoneStep(1);
+              setMethod("email");
               setError("");
             }}
           >
@@ -239,7 +221,6 @@ export default function Login() {
                   }
                   onClick={() => {
                     setMethod("phone");
-                    setPhoneStep(1);
                     setError("");
                   }}
                 >
@@ -298,63 +279,19 @@ export default function Login() {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.25 }}
                   >
-                    {phoneStep === 1 && (
-                      <div className={styles.form}>
-                        <div className={styles.inputBox}>
-                          <Phone />
-
-                          <input
-                            type="tel"
-                            value={phone}
-                            onChange={handlePhone}
-                            placeholder="+996 555 555 555"
-                          />
-                        </div>
-
-                        <button className={styles.submit} onClick={sendCode}>
-                          {t("login.getCode")}
-                          <ArrowRight />
-                        </button>
-                      </div>
-                    )}
-
-                    {phoneStep === 2 && (
-                      <form className={styles.form} onSubmit={handlePhoneLogin}>
-                        <p className={styles.smsInfo}>
-                          {t("login.enterSmsCode")} ({phone})
-                        </p>
-
-                        <div className={styles.codeInputs}>
-                          {code.map((item, index) => (
-                            <input
-                              key={index}
-                              id={`code-${index}`}
-                              value={item}
-                              maxLength={1}
-                              onChange={(e) =>
-                                changeCode(e.target.value, index)
-                              }
-                            />
-                          ))}
-                        </div>
-
-                        <button
-                          className={styles.submit}
-                          type="submit"
-                          disabled={loading}
-                        >
-                          {loading ? t("login.checking") : t("login.login")}
-                        </button>
-
-                        <button
-                          type="button"
-                          className={styles.resend}
-                          onClick={sendCode}
-                        >
-                          {t("login.resendCode")}
-                        </button>
-                      </form>
-                    )}
+                    <PhoneForm
+                      phone={phone}
+                      handlePhone={handlePhone}
+                      password={password}
+                      setPassword={setPassword}
+                      showPassword={showPassword}
+                      setShowPassword={setShowPassword}
+                      remember={remember}
+                      setRemember={setRemember}
+                      handlePhoneLogin={handlePhoneLogin}
+                      loading={loading}
+                      t={t}
+                    />
                   </motion.div>
                 )}
 
@@ -472,6 +409,76 @@ function EmailForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="example@gmail.com"
+          required
+        />
+      </div>
+
+      <div className={styles.inputBox}>
+        <Lock />
+
+        <input
+          type={showPassword ? "text" : "password"}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={t("login.password")}
+          required
+        />
+
+        <button
+          type="button"
+          className={styles.eye}
+          onClick={() => setShowPassword(!showPassword)}
+        >
+          {showPassword ? <EyeOff /> : <Eye />}
+        </button>
+      </div>
+
+      <div className={styles.options}>
+        <label className={styles.remember}>
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+          />
+
+          <span className={styles.check}>{remember && <Check />}</span>
+
+          {t("login.remember")}
+        </label>
+
+        <Link href="/forgot">{t("login.forgotPassword")}</Link>
+      </div>
+
+      <button className={styles.submit} type="submit" disabled={loading}>
+        {loading ? t("login.loggingIn") : t("login.login")}
+      </button>
+    </form>
+  );
+}
+
+function PhoneForm({
+  phone,
+  handlePhone,
+  password,
+  setPassword,
+  showPassword,
+  setShowPassword,
+  remember,
+  setRemember,
+  handlePhoneLogin,
+  loading,
+  t,
+}) {
+  return (
+    <form className={styles.form} onSubmit={handlePhoneLogin}>
+      <div className={styles.inputBox}>
+        <Phone />
+
+        <input
+          type="tel"
+          value={phone}
+          onChange={handlePhone}
+          placeholder="+996 555 555 555"
           required
         />
       </div>

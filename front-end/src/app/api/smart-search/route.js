@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { applyTrustedForwardedFor } from "../_lib/forwardedFor";
 
 let rawBackendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 rawBackendUrl = rawBackendUrl.replace(/\/$/, "");
@@ -19,11 +20,12 @@ export async function POST(request) {
       );
     }
 
+    const headers = new Headers({ "Content-Type": "application/json" });
+    applyTrustedForwardedFor(headers, request);
+
     const upstream = await fetch(`${BACKEND_API_URL}/ai/search`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify({ prompt }),
       signal: AbortSignal.timeout(15000),
     });

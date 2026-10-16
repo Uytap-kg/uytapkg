@@ -108,6 +108,62 @@ export function canOwnerTransition(fromStatus, toStatus) {
   return { allowed: false, message: `Переход из статуса "${fromStatus}" в "${toStatus}" запрещён` };
 }
 
+// Общие серверные фильтры публичной выдачи объявлений (каталог и карта)
+export function applyListingFilters(query, filters = {}) {
+  const {
+    country,
+    region,
+    city,
+    district,
+    propertyType,
+    dealType,
+    rentPeriod,
+    minPrice,
+    maxPrice,
+    rooms,
+    isResort,
+    onlyPopular,
+  } = filters;
+
+  // Фильтрация по региону / городу / району / стране
+  if (country) {
+    const cLower = String(country).toLowerCase();
+    if (cLower === "turkey" || cLower === "турция") {
+      query = query.or("region.ilike.%TURKEY%,region.ilike.%Турция%,city.ilike.%Турция%,city.ilike.%Turkey%");
+    }
+  } else if (region) {
+    const rLower = String(region).toLowerCase();
+    if (rLower === "turkey" || rLower === "турция") {
+      query = query.or("region.ilike.%TURKEY%,region.ilike.%Турция%,city.ilike.%Турция%,city.ilike.%Turkey%");
+    } else {
+      query = query.ilike("region", `%${region}%`);
+    }
+  }
+
+  if (city && city !== "Все") query = query.eq("city", String(city).trim());
+  if (district) query = query.ilike("district", `%${district}%`);
+
+  // Фильтрация по типу недвижимости и сделки
+  if (propertyType) query = query.eq("property_type", propertyType);
+  if (dealType) query = query.eq("deal_type", dealType);
+  if (rentPeriod) query = query.eq("rent_period", rentPeriod);
+
+  // Цена
+  if (minPrice && !Number.isNaN(Number(minPrice))) query = query.gte("price", Number(minPrice));
+  if (maxPrice && !Number.isNaN(Number(maxPrice))) query = query.lte("price", Number(maxPrice));
+
+  // Количественные параметры
+  if (rooms && !Number.isNaN(Number(rooms))) query = query.eq("rooms", Number(rooms));
+  if (isResort !== undefined) query = query.eq("is_resort", isResort === "true");
+
+  // ТЗ Правило (Дефект 1.1): В блок "Популярные" на главной попадают только объявления с фото
+  if (onlyPopular === "true") {
+    query = query.gt("photos_count", 0);
+  }
+
+  return query;
+}
+
 // =======================================================
 // 1. Получение списка объявлений с фильтрами
 // =======================================================
@@ -140,41 +196,20 @@ export const getListings = async (req, res) => {
       .eq("status", "active")
       .gt("expires_at", new Date().toISOString());
 
-    // Фильтрация по региону / городу / району / стране
-    if (country) {
-      const cLower = String(country).toLowerCase();
-      if (cLower === "turkey" || cLower === "турция") {
-        query = query.or("region.ilike.%TURKEY%,region.ilike.%Турция%,city.ilike.%Турция%,city.ilike.%Turkey%");
-      }
-    } else if (region) {
-      const rLower = String(region).toLowerCase();
-      if (rLower === "turkey" || rLower === "турция") {
-        query = query.or("region.ilike.%TURKEY%,region.ilike.%Турция%,city.ilike.%Турция%,city.ilike.%Turkey%");
-      } else {
-        query = query.ilike("region", `%${region}%`);
-      }
-    }
-
-    if (city && city !== "Все") query = query.eq("city", city.trim());
-    if (district) query = query.ilike("district", `%${district}%`);
-
-    // Фильтрация по типу недвижимости и сделки
-    if (propertyType) query = query.eq("property_type", propertyType);
-    if (dealType) query = query.eq("deal_type", dealType);
-    if (rentPeriod) query = query.eq("rent_period", rentPeriod);
-
-    // Цена
-    if (minPrice && !Number.isNaN(Number(minPrice))) query = query.gte("price", Number(minPrice));
-    if (maxPrice && !Number.isNaN(Number(maxPrice))) query = query.lte("price", Number(maxPrice));
-
-    // Количественные параметры
-    if (rooms && !Number.isNaN(Number(rooms))) query = query.eq("rooms", Number(rooms));
-    if (isResort !== undefined) query = query.eq("is_resort", isResort === "true");
-
-    // ТЗ Правило (Дефект 1.1): В блок "Популярные" на главной попадают только объявления с фото
-    if (onlyPopular === "true") {
-      query = query.gt("photos_count", 0);
-    }
+    query = applyListingFilters(query, {
+      country,
+      region,
+      city,
+      district,
+      propertyType,
+      dealType,
+      rentPeriod,
+      minPrice,
+      maxPrice,
+      rooms,
+      isResort,
+      onlyPopular,
+    });
 
     // Пагинация и сортировка на уровне БД
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -185,6 +220,10 @@ export const getListings = async (req, res) => {
     let orderedQuery = query.order("priority_rank", { ascending: true });
     if (typeof orderedQuery?.order === "function") {
       orderedQuery = orderedQuery.order("created_at", { ascending: false });
+    }
+    // Стабильный порядок для постраничной выгрузки (tie-breaker)
+    if (typeof orderedQuery?.order === "function") {
+      orderedQuery = orderedQuery.order("id", { ascending: true });
     }
     query = orderedQuery.range(from, to);
 
@@ -227,6 +266,113 @@ export const getListings = async (req, res) => {
   } catch (error) {
     console.error("Listings Get Error:", error);
     return res.status(500).json({ success: false, message: "Ошибка сервера при поиске объявлений" });
+  }
+};
+
+// =======================================================
+// 1b. Лёгкая выдача для карты (GET /api/listings/map)
+// Только активные объявления с координатами и минимальный набор полей.
+// =======================================================
+const MAP_MAX_LIMIT = 1000;
+
+const parseCoord = (value, min, max) => {
+  if (value === undefined || value === null || value === "") return null;
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < min || num > max) return null;
+  return num;
+};
+
+export const getMapListings = async (req, res) => {
+  try {
+    const {
+      country,
+      region,
+      city,
+      district,
+      propertyType,
+      dealType,
+      rentPeriod,
+      minPrice,
+      maxPrice,
+      rooms,
+      isResort,
+      minLat,
+      maxLat,
+      minLng,
+      maxLng,
+      page = 1,
+      limit = MAP_MAX_LIMIT,
+    } = req.query;
+
+    let query = supabase
+      .from("listings")
+      .select(`
+        id, title, price, currency, property_type, deal_type, rent_period,
+        region, city, district, address, rooms, area, floor, total_floors,
+        latitude, longitude, status, is_urgent, promotion_status, priority_rank,
+        created_at, expires_at,
+        listing_photos (id, url, is_main, display_order),
+        users!inner (id, is_verified, account_type)
+      `, { count: "exact" })
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .not("latitude", "is", null)
+      .not("longitude", "is", null);
+
+    query = applyListingFilters(query, {
+      country,
+      region,
+      city,
+      district,
+      propertyType,
+      dealType,
+      rentPeriod,
+      minPrice,
+      maxPrice,
+      rooms,
+      isResort,
+    });
+
+    // Необязательное ограничение по видимой области карты (bbox)
+    const south = parseCoord(minLat, -90, 90);
+    const north = parseCoord(maxLat, -90, 90);
+    const west = parseCoord(minLng, -180, 180);
+    const east = parseCoord(maxLng, -180, 180);
+    if (south !== null) query = query.gte("latitude", south);
+    if (north !== null) query = query.lte("latitude", north);
+    if (west !== null) query = query.gte("longitude", west);
+    if (east !== null) query = query.lte("longitude", east);
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(MAP_MAX_LIMIT, Math.max(1, parseInt(limit, 10) || MAP_MAX_LIMIT));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
+    const { data: listings, count, error } = await query
+      .order("priority_rank", { ascending: true })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      console.error("Error fetching map listings:", JSON.stringify(error, null, 2) || error);
+      return res.status(500).json({ success: false, message: "Ошибка загрузки объявлений для карты" });
+    }
+
+    const masked = (listings || []).map(maskExpiredListing);
+
+    return res.json({
+      success: true,
+      data: masked,
+      pagination: {
+        total: count ?? masked.length,
+        page: pageNum,
+        limit: limitNum,
+      },
+    });
+  } catch (error) {
+    console.error("Map Listings Get Error:", error);
+    return res.status(500).json({ success: false, message: "Ошибка сервера при загрузке карты" });
   }
 };
 

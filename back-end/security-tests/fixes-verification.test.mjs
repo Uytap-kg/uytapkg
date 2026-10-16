@@ -110,13 +110,29 @@ test("PII Protection: скрытие личных email и phone для акка
   assert.equal(agencyResult.phone, "+996555333444", "Телефон агентства должен отображаться");
 });
 
-// 4. Тестирование устойчивости watermark.js к отсутствию файла логотипа
-test("Watermark: устойчивость к сбоям без вызова аварийного завершения", async () => {
+// 4. Тестирование watermark.js: невалидный буфер выбрасывает ошибку (P1-2), а валидное изображение обрабатывается
+test("Watermark: невалидный буфер выбрасывает ошибку, валидный обрабатывается", async () => {
   const { applyWatermark } = await import("../src/utils/watermark.js");
+  const sharp = (await import("sharp")).default;
   const dummyBuffer = Buffer.from("fake-image-bytes");
 
-  // applyWatermark должен вернуть исходный буфер без генерации необработанного исключения
-  const result = await applyWatermark(dummyBuffer, "image/jpeg");
+  // Невалидный буфер должен отклоняться (P1-2 защита от загрузки произвольных файлов)
+  await assert.rejects(
+    async () => {
+      await applyWatermark(dummyBuffer, "image/jpeg");
+    },
+    /unsupported image format|Input buffer/i,
+    "applyWatermark должен выбрасывать ошибку на невалидный буфер"
+  );
+
+  // Валидный буфер должен успешно обрабатываться
+  const validImage = await sharp({
+    create: { width: 300, height: 300, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } },
+  })
+    .jpeg()
+    .toBuffer();
+
+  const result = await applyWatermark(validImage, "image/jpeg");
   assert.ok(Buffer.isBuffer(result), "Должен возвращаться валидный буфер");
 });
 

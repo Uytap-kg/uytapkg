@@ -9,6 +9,7 @@ import { useLanguage } from "@/context/LanguageContext";
 
 import {
   getListings,
+  getAllListings,
   getFavorites,
   addFavorite,
   removeFavorite,
@@ -910,10 +911,7 @@ export default function AllProducts() {
             : null;
 
         const [listingsResponse, favoritesResponse] = await Promise.all([
-          getListings({
-            page: 1,
-            limit: 500,
-          }),
+          getAllListings(),
 
           token ? getFavorites(token) : Promise.resolve(null),
         ]);
