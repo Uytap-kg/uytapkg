@@ -120,6 +120,13 @@ export const uploadListingPhoto = async (req, res) => {
       });
     }
 
+    if (!validateImageMagicBytes(req.file.buffer)) {
+      return res.status(400).json({
+        success: false,
+        message: "Недопустимый формат файла. Разрешены только форматы JPEG, PNG и WebP.",
+      });
+    }
+
     let watermarkedBuffer;
     try {
       watermarkedBuffer = await applyWatermark(req.file.buffer, req.file.mimetype);
@@ -163,6 +170,13 @@ export const uploadComplexPhoto = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Файл не передан. Ожидается поле формы `file`.",
+      });
+    }
+
+    if (!validateImageMagicBytes(req.file.buffer)) {
+      return res.status(400).json({
+        success: false,
+        message: "Недопустимый формат файла. Разрешены только форматы JPEG, PNG и WebP.",
       });
     }
 

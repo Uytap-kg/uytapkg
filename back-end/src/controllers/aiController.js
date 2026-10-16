@@ -110,14 +110,27 @@ const callClaude = async (prompt) => {
         : `${baseUrl}/chat/completions`
       : `${baseUrl}/messages`;
 
+    const headers = isChatCompletions
+      ? {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        }
+      : {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        };
+
+    const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID;
+    if (workspaceId && !isChatCompletions) {
+      headers["anthropic-workspace-id"] = workspaceId;
+    }
+
     let response;
     if (isChatCompletions) {
       response = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers,
         body: JSON.stringify({
           model,
           messages: [
@@ -130,11 +143,7 @@ const callClaude = async (prompt) => {
     } else {
       response = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
+        headers,
         body: JSON.stringify({
           model,
           max_tokens: 800,
@@ -718,11 +727,18 @@ export const aiGenerateDescription = async (req, res) => {
           : `${baseUrl}/chat/completions`
         : `${baseUrl}/messages`;
 
+      const headers = isChatCompletions
+        ? { "Content-Type": "application/json", Authorization: `Bearer ${claudeKey}` }
+        : { "Content-Type": "application/json", "x-api-key": claudeKey, "anthropic-version": "2023-06-01" };
+
+      const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID;
+      if (workspaceId && !isChatCompletions) {
+        headers["anthropic-workspace-id"] = workspaceId;
+      }
+
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: isChatCompletions
-          ? { "Content-Type": "application/json", Authorization: `Bearer ${claudeKey}` }
-          : { "Content-Type": "application/json", "x-api-key": claudeKey, "anthropic-version": "2023-06-01" },
+        headers,
         body: JSON.stringify(
           isChatCompletions
             ? {

@@ -7,6 +7,7 @@ import { useMemo, useState, useEffect } from "react";
 
 import {
   getListings,
+  getAllListings,
   getFavorites,
   addFavorite,
   removeFavorite,
@@ -236,9 +237,7 @@ export default function IssykKulProducts() {
         const token = localStorage.getItem("uytap_token");
 
         const [listingsResponse, favoritesResponse] = await Promise.all([
-          getListings({
-            page: 1,
-            limit: 100,
+          getAllListings({
             region: "issyk",
           }),
 

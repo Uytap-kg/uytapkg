@@ -24,7 +24,7 @@ export const getImageExtension = (file) => {
  * Анализирует первые байты буфера файла, разрешая только реальные форматы JPEG, PNG, WebP.
  * Не доверяет заголовкам клиента. Файлы с HTML, SVG, exe или невалидными байтами отклоняются.
  */
-export const validateImageMagicBytes = (buffer) => {
+export const validateImageMagicBytes = (buffer, { allowGif = false } = {}) => {
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length < 12) {
     return false;
   }
@@ -56,7 +56,17 @@ export const validateImageMagicBytes = (buffer) => {
     buffer[10] === 0x42 &&
     buffer[11] === 0x50;
 
-  return isJpeg || isPng || isWebp;
+  // GIF: "GIF87a" / "GIF89a" (только если явно разрешено, например для аватаров)
+  const isGif =
+    allowGif &&
+    buffer[0] === 0x47 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x38 &&
+    (buffer[4] === 0x37 || buffer[4] === 0x39) &&
+    buffer[5] === 0x61;
+
+  return isJpeg || isPng || isWebp || isGif;
 };
 
 const createImageFilter = (allowedMime, unsupportedMessage) => (req, file, cb) => {

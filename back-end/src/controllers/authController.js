@@ -6,6 +6,7 @@ import { registerSchema, loginSchema, updateMeSchema, normalizePhone } from "../
 import { generateSecureOtp, safeCompare } from "../utils/otp.js";
 import { sendOtpEmail } from "../services/emailService.js";
 import { generateToken, invalidateUserAuthCache } from "../middleware/auth.js";
+import { validateImageMagicBytes } from "../middleware/upload.js";
 import {
   uploadAvatarToStorage,
   removeImageFromStorage,
@@ -619,6 +620,8 @@ export const updateMe = async (req, res) => {
       });
     }
 
+    const data = validationResult.data;
+
     const hasUserUpdates =
       data.phone !== undefined ||
       data.accountType !== undefined ||
@@ -942,6 +945,13 @@ export const uploadUserAvatar = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Файл аватара не передан. Ожидается поле формы `avatar`.",
+      });
+    }
+
+    if (!validateImageMagicBytes(req.file.buffer, { allowGif: true })) {
+      return res.status(400).json({
+        success: false,
+        message: "Недопустимый формат файла. Разрешены только JPEG, PNG, WebP и GIF.",
       });
     }
 

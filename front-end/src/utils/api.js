@@ -269,6 +269,95 @@ export async function getListings(params = {}) {
   return response.json();
 }
 
+/**
+ * Получение легковесного списка объявлений для карты (GET /api/listings/map).
+ * Содержит только объекты с координатами и минимально необходимые поля для маркеров.
+ */
+export async function getMapListings(params = {}) {
+  const mappedParams = { ...params };
+  if (params.category) {
+    mappedParams.propertyType = params.category;
+    delete mappedParams.category;
+  }
+  if (params.settlement) {
+    mappedParams.city = params.settlement;
+    delete mappedParams.settlement;
+  }
+  if (params.priceFrom) {
+    mappedParams.minPrice = params.priceFrom;
+    delete mappedParams.priceFrom;
+  }
+  if (params.priceTo) {
+    mappedParams.maxPrice = params.priceTo;
+    delete mappedParams.priceTo;
+  }
+  if (params.rentalPeriod) {
+    mappedParams.rentPeriod = params.rentalPeriod;
+    delete mappedParams.rentalPeriod;
+  }
+
+  const query = new URLSearchParams(mappedParams).toString();
+  const response = await fetch(`${API_URL}/listings/map?${query}`);
+  return response.json();
+}
+
+/**
+ * Загрузка всех страниц объявлений без ограничения сервера в 100 записей (P1-3).
+ * Запрашивает первую страницу, узнает total, и если записей > 100, догружает остальные
+ * страницы параллельно порциями по 100 штук (до maxItems).
+ */
+export async function getAllListings(params = {}, maxItems = 2000) {
+  const pageSize = 100;
+  const firstPageRes = await getListings({
+    ...params,
+    page: 1,
+    limit: pageSize,
+  });
+
+  if (!firstPageRes?.success || !Array.isArray(firstPageRes.data)) {
+    return firstPageRes;
+  }
+
+  const items = [...firstPageRes.data];
+  const total = firstPageRes.pagination?.total ?? items.length;
+
+  if (total > items.length && items.length < maxItems) {
+    const totalToFetch = Math.min(total, maxItems);
+    const totalPages = Math.ceil(totalToFetch / pageSize);
+    const pagePromises = [];
+
+    for (let p = 2; p <= totalPages; p++) {
+      pagePromises.push(
+        getListings({
+          ...params,
+          page: p,
+          limit: pageSize,
+        }).catch((err) => {
+          console.error(`Error loading listings page ${p}:`, err);
+          return null;
+        })
+      );
+    }
+
+    const restPages = await Promise.all(pagePromises);
+    for (const pageRes of restPages) {
+      if (pageRes?.success && Array.isArray(pageRes.data)) {
+        items.push(...pageRes.data);
+      }
+    }
+  }
+
+  return {
+    success: true,
+    data: items,
+    pagination: {
+      total: items.length,
+      page: 1,
+      limit: items.length,
+    },
+  };
+}
+
 export async function createListing(token, payload) {
   const response = await fetch(`${API_URL}/listings`, {
     method: "POST",

@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getListings,
+  getMapListings,
   getListingById,
   createListing,
   getMyListings,
@@ -14,6 +15,7 @@ import { authenticateToken } from "../middleware/auth.js";
 const router = express.Router();
 
 router.get("/", getListings);
+router.get("/map", getMapListings);
 router.get("/my", authenticateToken, getMyListings);
 router.get("/:id", getListingById);
 router.post("/", authenticateToken, createListing);

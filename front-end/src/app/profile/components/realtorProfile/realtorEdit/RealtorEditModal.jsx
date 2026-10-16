@@ -18,7 +18,12 @@ import {
 
 import styles from "./RealtorEditModal.module.css";
 
-import { getMe, updateMe } from "@/utils/api";
+import {
+  getMe,
+  updateMe,
+  uploadAvatar as uploadAvatarRequest,
+  deleteAvatar,
+} from "@/utils/api";
 import { useLanguage } from "@/context/LanguageContext";
 
 export default function RealtorEditModal({ user, close }) {
@@ -93,52 +98,6 @@ export default function RealtorEditModal({ user, close }) {
 
   /*
    * =========================================================
-   * URL -> FILE
-   * =========================================================
-   */
-
-  async function fileFromUrl(url, fileName) {
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(t("realtorEditModal.errors.imageFetch"));
-    }
-
-    const blob = await response.blob();
-
-    return new File([blob], fileName, {
-      type: blob.type || "image/png",
-    });
-  }
-
-  /*
-   * =========================================================
-   * GET AVATAR FILE
-   * =========================================================
-   */
-
-  async function getAvatarFile() {
-    // Пользователь удалил фото
-    if (avatarRemoved) {
-      return await fileFromUrl(DEFAULT_AVATAR, "realtorImage.png");
-    }
-
-    // Пользователь выбрал новое фото
-    if (avatarFile) {
-      return avatarFile;
-    }
-
-    // Фото существовало и пользователь его не менял
-    if (initialAvatar) {
-      return await fileFromUrl(initialAvatar, "current-avatar.jpg");
-    }
-
-    // Фото не было вообще
-    return await fileFromUrl(DEFAULT_AVATAR, "realtorImage.png");
-  }
-
-  /*
-   * =========================================================
    * SAVE
    * =========================================================
    */
@@ -156,66 +115,24 @@ export default function RealtorEditModal({ user, close }) {
       }
 
       /*
-       * Получаем финальный avatar file
+       * Аватар: обращаемся к серверу только если он менялся
        */
 
-      const finalAvatarFile = await getAvatarFile();
+      let refreshedProfile = {};
 
-      /*
-       * FormData
-       */
+      if (avatarFile) {
+        const uploadResult = await uploadAvatarRequest(token, avatarFile);
 
-      const formData = new FormData();
+        refreshedProfile = uploadResult.profile || {};
+      } else if (
+        avatarRemoved &&
+        initialAvatar &&
+        !initialAvatar.startsWith("/assets/")
+      ) {
+        const deleteResult = await deleteAvatar(token);
 
-      formData.append("first_name", firstName.trim());
-
-      formData.append("last_name", lastName.trim());
-
-      formData.append("phone", phone.trim());
-
-      formData.append("company_name", companyName.trim());
-
-      formData.append("inn", inn.trim());
-
-      formData.append("website", website.trim());
-
-      formData.append("office_address", officeAddress.trim());
-
-      formData.append("about", about.trim());
-
-      /*
-       * Аватар отправляем ВСЕГДА.
-       */
-
-      formData.append("avatar", finalAvatarFile);
-
-      /*
-       * Отправляем профиль + avatar
-       */
-
-      const response = await fetch("/api/auth/avatar", {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-
-        body: formData,
-      });
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.message || t("realtorEditModal.errors.saveProfile"),
-        );
+        refreshedProfile = deleteResult.profile || {};
       }
-
-      /*
-       * Профиль, который вернул backend
-       */
-
-      const refreshedProfile = result.profile || {};
 
       let savedAvatar;
 

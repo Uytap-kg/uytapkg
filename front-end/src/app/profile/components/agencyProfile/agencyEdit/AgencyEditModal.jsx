@@ -19,7 +19,12 @@ import {
 
 import styles from "./AgencyEditModal.module.css";
 
-import { getMe, updateMe } from "@/utils/api";
+import {
+  getMe,
+  updateMe,
+  uploadAvatar as uploadAvatarRequest,
+  deleteAvatar,
+} from "@/utils/api";
 import { useLanguage } from "@/context/LanguageContext";
 
 export default function AgencyEditModal({ user, close }) {
@@ -121,64 +126,6 @@ export default function AgencyEditModal({ user, close }) {
 
   /*
    * =========================================================
-   * URL -> FILE
-   * =========================================================
-   */
-
-  async function fileFromUrl(url, fileName) {
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(t("agencyEditModal.errors.imageFetch"));
-    }
-
-    const blob = await response.blob();
-
-    return new File([blob], fileName, {
-      type: blob.type || "image/png",
-    });
-  }
-
-  /*
-   * =========================================================
-   * GET LOGO FILE
-   * =========================================================
-   */
-
-  async function getLogoFile() {
-    /*
-     * 1. Пользователь удалил логотип
-     */
-
-    if (logoRemoved) {
-      return await fileFromUrl(DEFAULT_LOGO, "AgencyImage.png");
-    }
-
-    /*
-     * 2. Выбран новый логотип
-     */
-
-    if (logoFile) {
-      return logoFile;
-    }
-
-    /*
-     * 3. Логотип не меняли
-     */
-
-    if (initialLogo && initialLogo !== DEFAULT_LOGO) {
-      return await fileFromUrl(initialLogo, "current-agency-logo.jpg");
-    }
-
-    /*
-     * 4. Логотипа изначально не было
-     */
-
-    return await fileFromUrl(DEFAULT_LOGO, "AgencyImage.png");
-  }
-
-  /*
-   * =========================================================
    * GET TOKEN
    * =========================================================
    */
@@ -212,44 +159,19 @@ export default function AgencyEditModal({ user, close }) {
 
       /*
        * =====================================================
-       * 1. GET LOGO
+       * 1. LOGO: обращаемся к серверу только если логотип менялся
        * =====================================================
        */
 
-      const finalLogoFile = await getLogoFile();
-
-      /*
-       * =====================================================
-       * 2. UPLOAD LOGO
-       * =====================================================
-       */
-
-      const form = new FormData();
-
-      form.append("first_name", directorName.trim());
-
-      form.append("phone", phone.trim());
-
-      form.append("about", about.trim());
-
-      form.append("avatar", finalLogoFile);
-
-      const avatarResponse = await fetch("/api/auth/avatar", {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-
-        body: form,
-      });
-
-      const avatarResult = await avatarResponse.json().catch(() => ({}));
-
-      if (!avatarResponse.ok || !avatarResult.success) {
-        throw new Error(
-          avatarResult.message || t("agencyEditModal.errors.logoSave"),
-        );
+      if (logoFile) {
+        await uploadAvatarRequest(token, logoFile);
+      } else if (
+        logoRemoved &&
+        initialLogo &&
+        initialLogo !== DEFAULT_LOGO &&
+        !initialLogo.startsWith("/assets/")
+      ) {
+        await deleteAvatar(token);
       }
 
       /*
