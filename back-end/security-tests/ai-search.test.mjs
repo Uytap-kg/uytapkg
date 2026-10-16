@@ -154,3 +154,31 @@ test("AI Search: объявление в бишкеке в центрально�
   assert.equal(resp?.filters?.city, "Бишкек");
   assert.equal(resp?.filters?.district, "Центр");
 });
+
+test("AI Search: при выборе провайдера claude без ключа корректно срабатывает fallback", async () => {
+  const origProvider = process.env.AI_PROVIDER;
+  const origKey = process.env.ANTHROPIC_API_KEY;
+  try {
+    process.env.AI_PROVIDER = "claude";
+    delete process.env.ANTHROPIC_API_KEY;
+
+    const { req, res } = createMockReqRes({
+      prompt: "2 комнатная квартира в Бишкеке за 60000$",
+    });
+    await aiSearch(req, res);
+
+    assert.equal(res.getStatusCode(), 200);
+    const resp = res.getResponse();
+    assert.equal(resp?.success, true);
+    assert.equal(resp?.filters?.propertyType, "apartment");
+    assert.equal(resp?.filters?.city, "Бишкек");
+    assert.equal(resp?.filters?.rooms, 2);
+    assert.equal(resp?.filters?.maxPrice, 60000);
+    assert.equal(resp?.filters?.currency, "USD");
+  } finally {
+    process.env.AI_PROVIDER = origProvider;
+    if (origKey !== undefined) {
+      process.env.ANTHROPIC_API_KEY = origKey;
+    }
+  }
+});
