@@ -742,6 +742,10 @@ export default function SmartSearch({ onFiltersDetected }) {
   const { language, t } = useLanguage();
 
   const recognitionRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const mountedRef = useRef(true);
 
   const [supported, setSupported] = useState(true);
   const [listening, setListening] = useState(false);
@@ -750,13 +754,31 @@ export default function SmartSearch({ onFiltersDetected }) {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
 
+  const isKyrgyz = language === "ky";
+
   /* =========================================================
      SPEECH RECOGNITION
+     KY -> ElevenLabs Scribe endpoint
+     RU -> browser SpeechRecognition
   ========================================================= */
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
+    mountedRef.current = true;
+
+    if (typeof window === "undefined") return undefined;
+
+    // Кыргызча үн браузердин SpeechRecognition'уна көз каранды эмес.
+    if (isKyrgyz) {
+      const canRecord =
+        typeof window.MediaRecorder !== "undefined" &&
+        typeof navigator !== "undefined" &&
+        Boolean(navigator.mediaDevices?.getUserMedia);
+
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSupported(canRecord);
+      recognitionRef.current = null;
+
+      return undefined;
     }
 
     const SpeechRecognition =
@@ -765,25 +787,20 @@ export default function SmartSearch({ onFiltersDetected }) {
     if (!SpeechRecognition) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSupported(false);
-      return;
+      recognitionRef.current = null;
+
+      return undefined;
     }
 
     const recognition = new SpeechRecognition();
 
-    /*
-     * ВАЖНО:
-     * язык распознавания меняется вместе с языком интерфейса.
-     *
-     * RU -> русский
-     * KY -> кыргызский
-     */
-    recognition.lang = language === "ky" ? "ky-KG" : "ru-RU";
-
+    recognition.lang = "ru-RU";
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
+      if (!mountedRef.current) return;
       setListening(true);
       setError("");
     };
@@ -797,53 +814,243 @@ export default function SmartSearch({ onFiltersDetected }) {
 
       const value = resultText.trim();
 
-      if (value) {
-        setText(value);
+      if (value && mountedRef.current) {
+        setText(value.slice(0, SAFE_MAX_TEXT_LENGTH));
       }
     };
 
     recognition.onerror = (event) => {
       console.error("Speech recognition error:", event);
 
+      if (!mountedRef.current) return;
+
       setListening(false);
 
-      if (event.error === "not-allowed") {
+      if (
+        event.error === "not-allowed" ||
+        event.error === "service-not-allowed"
+      ) {
         setError(t("smartSearch.errors.microphonePermission"));
-        return;
-      }
-
-      if (event.error === "no-speech") {
+      } else if (event.error === "no-speech") {
         setError(t("smartSearch.errors.noSpeech"));
-        return;
-      }
-
-      if (event.error === "audio-capture") {
+      } else if (event.error === "audio-capture") {
         setError(t("smartSearch.errors.microphoneNotFound"));
-        return;
+      } else {
+        setError(t("smartSearch.errors.voiceRecognition"));
       }
-
-      setError(t("smartSearch.errors.voiceRecognition"));
     };
 
     recognition.onend = () => {
-      setListening(false);
+      if (mountedRef.current) setListening(false);
     };
 
     recognitionRef.current = recognition;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSupported(true);
 
     return () => {
       try {
         recognition.stop();
       } catch {
-        // ignore
+        // Recognition may already be stopped.
       }
 
-      recognitionRef.current = null;
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+      }
     };
-  }, [language, t]);
+  }, [isKyrgyz, t]);
 
   /* =========================================================
-     VOICE
+     KYRGYZ VOICE -> /api/speech-to-text -> TEXT FIELD
+  ========================================================= */
+
+  async function toggleKyrgyzVoice() {
+    if (listening) {
+      const recorder = mediaRecorderRef.current;
+
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      } else {
+        setListening(false);
+      }
+
+      return;
+    }
+
+    let stream;
+
+    try {
+      setError("");
+
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices?.getUserMedia ||
+        typeof MediaRecorder === "undefined"
+      ) {
+        setSupported(false);
+        setError(t("smartSearch.errors.browserNotSupported"));
+        return;
+      }
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      // If the component unmounted or the language changed during permission
+      // request, release the microphone immediately.
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      const preferredMimeTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+      ];
+
+      const supportedMimeType = preferredMimeTypes.find((mimeType) =>
+        MediaRecorder.isTypeSupported?.(mimeType),
+      );
+
+      const recorder = supportedMimeType
+        ? new MediaRecorder(stream, { mimeType: supportedMimeType })
+        : new MediaRecorder(stream);
+
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onerror = (event) => {
+        console.error("MediaRecorder error:", event);
+
+        if (mountedRef.current) {
+          setError(t("smartSearch.errors.voiceRecognition"));
+          setListening(false);
+        }
+
+        mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+      };
+
+      recorder.onstop = async () => {
+        const chunks = [...audioChunksRef.current];
+        audioChunksRef.current = [];
+
+        const mimeType = recorder.mimeType || chunks[0]?.type || "audio/webm";
+        const extension = mimeType.includes("mp4")
+          ? "m4a"
+          : mimeType.includes("ogg")
+            ? "ogg"
+            : "webm";
+
+        const audioBlob = new Blob(chunks, { type: mimeType });
+
+        mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+
+        if (mountedRef.current) setListening(false);
+
+        if (!audioBlob.size) {
+          if (mountedRef.current) {
+            setError(t("smartSearch.errors.noSpeech"));
+          }
+          return;
+        }
+
+        if (!mountedRef.current) return;
+
+        try {
+          setSearching(true);
+          setError("");
+
+          const formData = new FormData();
+          formData.append("audio", audioBlob, `speech.${extension}`);
+
+          const response = await fetch("/api/speech-to-text", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await response.json().catch(() => ({}));
+
+          if (
+            !response.ok ||
+            !data?.success ||
+            !String(data?.text || "").trim()
+          ) {
+            throw new Error(
+              data?.message || t("smartSearch.errors.voiceRecognition"),
+            );
+          }
+
+          const transcript = String(data.text).trim();
+
+          if (transcript.length > SAFE_MAX_TEXT_LENGTH) {
+            throw new Error(t("smartSearch.errors.queryTooLong"));
+          }
+
+          if (mountedRef.current) {
+            setText(transcript);
+            setError("");
+          }
+        } catch (transcriptionError) {
+          console.error("Kyrgyz transcription error:", transcriptionError);
+
+          if (mountedRef.current) {
+            setError(
+              transcriptionError instanceof Error
+                ? transcriptionError.message
+                : t("smartSearch.errors.voiceRecognition"),
+            );
+          }
+        } finally {
+          if (mountedRef.current) setSearching(false);
+        }
+      };
+
+      recorder.start();
+      setListening(true);
+    } catch (voiceError) {
+      console.error("Microphone access error:", voiceError);
+
+      stream?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      mediaRecorderRef.current = null;
+
+      if (mountedRef.current) {
+        setListening(false);
+
+        if (
+          voiceError?.name === "NotAllowedError" ||
+          voiceError?.name === "PermissionDeniedError"
+        ) {
+          setError(t("smartSearch.errors.microphonePermission"));
+        } else if (voiceError?.name === "NotFoundError") {
+          setError(t("smartSearch.errors.microphoneNotFound"));
+        } else {
+          setError(t("smartSearch.errors.voiceRecognition"));
+        }
+      }
+    }
+  }
+
+  /* =========================================================
+     VOICE BUTTON
   ========================================================= */
 
   function toggleVoice() {
@@ -852,16 +1059,23 @@ export default function SmartSearch({ onFiltersDetected }) {
       return;
     }
 
-    if (!recognitionRef.current) {
+    if (isKyrgyz) {
+      void toggleKyrgyzVoice();
+      return;
+    }
+
+    const recognition = recognitionRef.current;
+
+    if (!recognition) {
       setError(t("smartSearch.errors.voiceUnavailable"));
       return;
     }
 
     if (listening) {
       try {
-        recognitionRef.current.stop();
+        recognition.stop();
       } catch {
-        // ignore
+        // Recognition may already be stopped.
       }
 
       setListening(false);
@@ -870,9 +1084,10 @@ export default function SmartSearch({ onFiltersDetected }) {
 
     try {
       setError("");
-      recognitionRef.current.start();
-    } catch (error) {
-      console.error("Speech recognition start error:", error);
+      recognition.start();
+    } catch (voiceError) {
+      console.error("Speech recognition start error:", voiceError);
+      setError(t("smartSearch.errors.voiceRecognition"));
     }
   }
 
@@ -932,12 +1147,12 @@ export default function SmartSearch({ onFiltersDetected }) {
         query: trimmedText,
         filters: normalized,
       });
-    } catch (error) {
-      console.error("Smart search error:", error);
+    } catch (searchError) {
+      console.error("Smart search error:", searchError);
 
       setError(
-        error instanceof Error
-          ? error.message
+        searchError instanceof Error
+          ? searchError.message
           : t("smartSearch.errors.searchFailed"),
       );
     } finally {
@@ -980,8 +1195,8 @@ export default function SmartSearch({ onFiltersDetected }) {
           },
         ];
 
-  function handleSelectExample(example) {
-    setText(example);
+  function handleSelectExample(exampleText) {
+    setText(exampleText);
     setError("");
   }
 
@@ -990,9 +1205,43 @@ export default function SmartSearch({ onFiltersDetected }) {
   ========================================================= */
 
   function clearSearch() {
+    if (listening && isKyrgyz) {
+      const recorder = mediaRecorderRef.current;
+
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      }
+    }
+
     setText("");
     setError("");
   }
+
+  /* =========================================================
+     RELEASE MICROPHONE ON UNMOUNT
+  ========================================================= */
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+
+      try {
+        const recorder = mediaRecorderRef.current;
+
+        if (recorder && recorder.state !== "inactive") {
+          recorder.onstop = null;
+          recorder.stop();
+        }
+      } catch {
+        // Recorder may already be stopped.
+      }
+
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
+    };
+  }, []);
 
   /* =========================================================
      RENDER
@@ -1036,6 +1285,7 @@ export default function SmartSearch({ onFiltersDetected }) {
                 ? t("smartSearch.voice.stop")
                 : t("smartSearch.voice.start")
             }
+            aria-pressed={listening}
           >
             {listening ? <MicOff size={21} /> : <Mic size={21} />}
           </button>
@@ -1055,14 +1305,21 @@ export default function SmartSearch({ onFiltersDetected }) {
       </div>
 
       {listening && (
-        <div className={styles.listeningStatus}>
+        <div
+          className={styles.listeningStatus}
+          role="status"
+          aria-live="polite"
+        >
           <span className={styles.pulse} />
-
           <span>{t("smartSearch.listening")}</span>
         </div>
       )}
 
-      {error && <div className={styles.error}>{error}</div>}
+      {error && (
+        <div className={styles.error} role="alert">
+          {error}
+        </div>
+      )}
 
       {!supported && (
         <div className={styles.browserNotice}>
@@ -1079,13 +1336,11 @@ export default function SmartSearch({ onFiltersDetected }) {
         {searching ? (
           <>
             <Loader2 size={19} className={styles.spinner} />
-
             {t("smartSearch.analyzing")}
           </>
         ) : (
           <>
             <Search size={19} />
-
             {t("smartSearch.searchButton")}
           </>
         )}
@@ -1100,6 +1355,7 @@ export default function SmartSearch({ onFiltersDetected }) {
               key={example.label}
               type="button"
               onClick={() => handleSelectExample(example.text)}
+              disabled={searching || listening}
             >
               {example.label}
             </button>
