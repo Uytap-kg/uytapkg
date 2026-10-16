@@ -29,10 +29,10 @@
   overflow-x: hidden;
 
   background:
-    radial-gradient(circle at 15% 1%, rgba(72, 61, 246, 0.3), transparent 28%),
+    radial-gradient(circle at 15% 1%, rgba(73, 61, 246, 0.696), transparent 25%),
     radial-gradient(
       circle at 10% 60%,
-      rgba(72, 61, 246, 0.045),
+      rgba(147, 140, 238, 0.045),
       transparent 30%
     ),
     var(--bg);
@@ -158,7 +158,7 @@
   border: 1px solid rgba(72, 61, 246, 0.14);
   border-radius: 999px;
 
-  background: rgba(72, 61, 246, 0.06);
+  background: rgba(238, 237, 252, 0.718);
 
   color: var(--purple);
 
@@ -195,7 +195,7 @@
 
   margin: clamp(24px, 3vw, 32px) 0 24px;
 
-  color: var(--text);
+  color: var(--bg);
 
   font-size: 70;
   line-height: 0.91;
@@ -216,7 +216,7 @@
 
   margin: 0;
 
-  color: var(--muted);
+  color: var(--bg);
 
   font-size: clamp(15px, 1.4vw, 19px);
 
@@ -636,7 +636,7 @@
 
   color: var(--text);
 
-  font-size: clamp(38px, 5vw, 70px);
+  font-size: clamp(35px, 6vw, 65px);
 
   line-height: 1;
 
