@@ -1,5 +1,6 @@
 .wrapper {
   position: relative;
+  margin-top: 24px;
   padding: 28px;
   border: 1px solid #e4e3ed;
   border-radius: 22px;
