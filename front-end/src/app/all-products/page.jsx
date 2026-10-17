@@ -30,6 +30,7 @@ import ProductsResults from "./components/ProductsResults/ProductsResults";
 
 import styles from "./AllProducts.module.css";
 import Footer from "@/components/pageComponents/footer/Footer";
+import Header from "@/components/pageComponents/header/Header";
 
 /* =========================================================
    CATEGORIES
@@ -1594,14 +1595,7 @@ export default function AllProducts() {
 
       <header className={styles.header}>
         <div className={styles.headerTop}>
-          <button
-            type="button"
-            className={styles.homeButton}
-            onClick={() => router.push("/")}
-          >
-            <Home size={17} />
-            {t("allProducts.home")}
-          </button>
+          <Header />
 
           <div className={styles.badge}>
             <span />

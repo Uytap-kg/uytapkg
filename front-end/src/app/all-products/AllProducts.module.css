@@ -19,11 +19,20 @@
 
   box-sizing: border-box;
 
-  padding-top: 50px;
+  padding-top: 100px;
 
   overflow-x: clip;
 
-  background: #f7f7fb;
+  background: linear-gradient(
+    to bottom,
+    #1403d4af 0%,
+    #6d61d679 3%,
+    #9289f049 8%,
+    #d8d4fa 16%,
+    #f4f2ff 28%,
+    #ffff 55%,
+    #ffff 100%
+  );
 
   color: var(--text);
 }
@@ -927,7 +936,9 @@
   color: var(--accent);
 
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .activeSearchBadge button:hover {
