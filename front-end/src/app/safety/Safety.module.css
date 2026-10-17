@@ -11,14 +11,16 @@
   padding-top: 130px;
   padding-bottom: 0;
 
-  background:
-    radial-gradient(circle at 8% 5%, rgba(72, 61, 246, 0.09), transparent 28%),
-    radial-gradient(
-      circle at 92% 35%,
-      rgba(72, 61, 246, 0.07),
-      transparent 25%
-    ),
-    #f7f7fb;
+  background: linear-gradient(
+    to bottom,
+    #1403d4af 0%,
+    #493be0a2 3%,
+    #9289f0 8%,
+    #d8d4fa 16%,
+    #f4f2ff 28%,
+    #ffff 55%,
+    #ffff 100%
+  );
 
   color: #171725;
 }
@@ -113,7 +115,7 @@
   border: 1px solid rgba(72, 61, 246, 0.2);
   border-radius: 50px;
 
-  background: rgba(72, 61, 246, 0.07);
+  background: rgba(229, 228, 241, 0.649);
 
   color: #483df6;
 
@@ -138,7 +140,7 @@
 
   margin: 0 0 24px;
 
-  color: #171725;
+  color: #ffff;
 
   font-size: clamp(42px, 6vw, 72px);
   line-height: 1.02;
@@ -153,7 +155,7 @@
 .header h1 span {
   display: inline;
 
-  background: linear-gradient(90deg, #483df6, #756dff, #483df6);
+  background: #ffff;
 
   background-size: 180% auto;
 
@@ -185,7 +187,7 @@
 
   margin: 0 auto;
 
-  color: #646877;
+  color: #ffff;
 
   font-size: 18px;
   line-height: 1.7;

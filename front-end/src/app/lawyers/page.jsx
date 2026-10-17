@@ -256,21 +256,17 @@ export default function Lawyers() {
 
                     <div className={styles.contacts}>
                       {lawyer.phone && (
-                        <a
-                          href={`tel:${lawyer.phone.replace(/\s/g, "")}`}
-                          className={styles.phone}
-                        >
-                          <Phone />
-                          {t("lawyers.list.call")}
-                        </a>
+                        <div className={styles.phoneContact}>
+                          <a className={styles.phone}>
+                            <Phone />
+                            {lawyer.phone}
+                          </a>
+                        </div>
                       )}
 
                       {lawyer.whatsapp && (
                         <a
-                          href={`https://wa.me/${lawyer.whatsapp.replace(
-                            /\D/g,
-                            "",
-                          )}`}
+                          href={`https://wa.me/${lawyer.whatsapp.replace(/\D/g, "")}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className={styles.whatsapp}

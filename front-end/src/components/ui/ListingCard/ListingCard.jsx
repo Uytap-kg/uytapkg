@@ -158,21 +158,21 @@ export default function ListingCard({
           {isVip && (
             <span className={`${styles.status} ${styles.vip}`}>
               <Crown />
-              {t("listingCard.badges.vip", "VIP")}
+              VIP
             </span>
           )}
 
           {isUrgent && (
             <span className={`${styles.status} ${styles.urgent}`}>
               <Zap />
-              {t("listingCard.badges.urgent", "Срочно")}
+              СРОЧНО
             </span>
           )}
 
           {isTop && (
             <span className={`${styles.status} ${styles.top}`}>
               <TrendingUp />
-              {t("listingCard.badges.top", "TOP")}
+              TOP
             </span>
           )}
 
