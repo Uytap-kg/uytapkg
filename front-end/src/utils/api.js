@@ -241,7 +241,7 @@ export async function completePasswordReset(resetToken, newPassword) {
 }
 
 // 6. Поиск и получение объявлений
-export async function getListings(params = {}) {
+export async function getListings(params = {}, options = {}) {
   const mappedParams = { ...params };
   if (params.category) {
     mappedParams.propertyType = params.category;
@@ -259,13 +259,27 @@ export async function getListings(params = {}) {
     mappedParams.maxPrice = params.priceTo;
     delete mappedParams.priceTo;
   }
-  if (params.rentalPeriod) {
+  if (params.rentalPeriod && !Array.isArray(params.rentalPeriod)) {
     mappedParams.rentPeriod = params.rentalPeriod;
     delete mappedParams.rentalPeriod;
   }
 
-  const query = new URLSearchParams(mappedParams).toString();
-  const response = await fetch(`${API_URL}/listings?${query}`);
+  const cleanParams = {};
+  for (const [key, val] of Object.entries(mappedParams)) {
+    if (val === undefined || val === null || val === "") continue;
+    if (Array.isArray(val)) {
+      if (val.length === 0) continue;
+      cleanParams[key] = val.join(",");
+    } else {
+      cleanParams[key] = val;
+    }
+  }
+
+  const query = new URLSearchParams(cleanParams).toString();
+  const response = await fetch(`${API_URL}/listings?${query}`, {
+    signal: options?.signal,
+    ...options,
+  });
   return response.json();
 }
 

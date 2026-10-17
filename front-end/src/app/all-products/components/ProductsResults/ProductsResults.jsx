@@ -10,9 +10,14 @@ import styles from "../../AllProducts.module.css";
 
 export default function ProductsResults({
   loading,
+  loadingMore,
   error,
+  onRetry,
 
   listings,
+  total,
+  hasMore,
+  onLoadMore,
   favIds,
 
   onFavoriteClick,
@@ -26,6 +31,7 @@ export default function ProductsResults({
   const { t } = useLanguage();
 
   const safeListings = Array.isArray(listings) ? listings : [];
+  const displayCount = total !== undefined && total !== null ? total : safeListings.length;
 
   return (
     <>
@@ -37,7 +43,7 @@ export default function ProductsResults({
         <div>
           <span>{t("productsResults.header.eyebrow")}</span>
 
-          <strong>{loading ? "..." : safeListings.length}</strong>
+          <strong>{loading ? "..." : displayCount}</strong>
 
           <small>{t("productsResults.header.count")}</small>
         </div>
@@ -74,23 +80,58 @@ export default function ProductsResults({
           ERROR
       ================================================= */}
 
-      {!loading && error && <div className={styles.error}>{error}</div>}
+      {!loading && error && (
+        <div className={styles.error}>
+          <p>{error}</p>
+          {onRetry && (
+            <button
+              type="button"
+              className={styles.retryButton}
+              onClick={onRetry}
+            >
+              {t("productsResults.retry", "Повторить попытку")}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* =================================================
           RESULTS
       ================================================= */}
 
       {!loading && !error && safeListings.length > 0 && (
-        <section className={styles.grid}>
-          {safeListings.map((item) => (
-            <ListingCard
-              key={item.id}
-              item={item}
-              isFavorite={favIds.has(String(item.id))}
-              onFavoriteClick={onFavoriteClick}
-            />
-          ))}
-        </section>
+        <>
+          <section className={styles.grid}>
+            {safeListings.map((item) => (
+              <ListingCard
+                key={item.id}
+                item={item}
+                isFavorite={favIds.has(String(item.id))}
+                onFavoriteClick={onFavoriteClick}
+              />
+            ))}
+          </section>
+
+          {hasMore && (
+            <div className={styles.loadMoreWrapper}>
+              <button
+                type="button"
+                className={styles.loadMoreButton}
+                onClick={onLoadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? (
+                  <>
+                    <span className={styles.buttonSpinner} />
+                    {t("productsResults.loadingMore", "Загрузка...")}
+                  </>
+                ) : (
+                  t("productsResults.loadMore", "Показать ещё")
+                )}
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* =================================================

@@ -955,6 +955,85 @@
 }
 
 /* =========================================================
+   PAGINATION / LOAD MORE
+========================================================= */
+
+.loadMoreWrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  width: 100%;
+  margin-top: 36px;
+  margin-bottom: 20px;
+}
+
+.loadMoreButton {
+  min-height: 48px;
+
+  padding: 0 32px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  border: 1.5px solid #dedce5;
+  border-radius: 14px;
+
+  background: #fff;
+
+  color: var(--accent);
+
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 750;
+
+  cursor: pointer;
+
+  box-shadow: 0 6px 20px rgba(20, 18, 35, 0.04);
+
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+.loadMoreButton:hover:not(:disabled) {
+  border-color: rgba(72, 61, 246, 0.45);
+
+  background: rgba(72, 61, 246, 0.035);
+
+  transform: translateY(-1px);
+
+  box-shadow: 0 8px 24px rgba(72, 61, 246, 0.1);
+}
+
+.loadMoreButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.loadMoreButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.buttonSpinner {
+  width: 15px;
+  height: 15px;
+
+  border: 2px solid rgba(72, 61, 246, 0.2);
+  border-top-color: var(--accent);
+
+  border-radius: 50%;
+
+  animation: spin 0.75s linear infinite;
+}
+
+/* =========================================================
    LOADING
 ========================================================= */
 
@@ -1022,6 +1101,30 @@
   text-align: center;
 
   overflow-wrap: anywhere;
+}
+
+.retryButton {
+  display: inline-block;
+  margin-top: 14px;
+  padding: 8px 18px;
+
+  border: 1px solid rgba(220, 60, 60, 0.35);
+  border-radius: 9px;
+
+  background: #fff;
+  color: #b55252;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retryButton:hover {
+  background: rgba(220, 60, 60, 0.06);
+  border-color: rgba(220, 60, 60, 0.5);
 }
 
 /* =========================================================

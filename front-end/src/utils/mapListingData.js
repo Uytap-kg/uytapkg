@@ -192,6 +192,7 @@ export function mapListingData(item) {
     address: item.address || "",
     price: `${item.price?.toLocaleString() || 0} ${item.currency === "USD" ? "$" : "сом"}`,
     rawPrice: item.price || 0,
+    currency: item.currency || item.raw?.currency || "USD",
     rawArea: item.area || 0,
     image: mainPhoto,
     likes: 0,

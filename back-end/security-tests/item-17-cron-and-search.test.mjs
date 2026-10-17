@@ -5,7 +5,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { supabase } from "../src/config/db.js";
-import { getListings } from "../src/controllers/listingsController.js";
+import {
+  getListings,
+  getMapListings,
+  applyListingFilters,
+  sanitizeSearchQuery,
+} from "../src/controllers/listingsController.js";
 import {
   runMaintenanceJob,
   startCronService,
@@ -152,4 +157,260 @@ test("Дефект 3.1: startCronService запускает таймер с unre
   assert.equal(typeof timer.unref, "function", "Таймер обязан поддерживать unref()");
 
   stopCronService();
+});
+
+test("Фаза 1: Наличие миграции 20261017000000_search_title_trgm_index.sql с GIN-индексом на title", () => {
+  const migrationPath = path.resolve(
+    __dirname,
+    "../../supabase/migrations/20261017000000_search_title_trgm_index.sql"
+  );
+  assert.ok(fs.existsSync(migrationPath), "Файл миграции для поиска по названию должен существовать");
+
+  const sql = fs.readFileSync(migrationPath, "utf8");
+  assert.ok(sql.includes("pg_trgm"), "Миграция должна проверять расширение pg_trgm");
+  assert.ok(sql.includes("idx_listings_title_trgm"), "Миграция должна содержать idx_listings_title_trgm");
+});
+
+test("Фаза 1: sanitizeSearchQuery корректно обрабатывает все опасные и граничные строки", () => {
+  // 1. Пустая строка и пробелы
+  assert.equal(sanitizeSearchQuery(""), "");
+  assert.equal(sanitizeSearchQuery("   "), "");
+  assert.equal(sanitizeSearchQuery(null), "");
+  assert.equal(sanitizeSearchQuery(undefined), "");
+
+  // 2. Спецсимволы PostgREST: запятая, скобки, точка, двоеточие
+  assert.equal(sanitizeSearchQuery(","), "");
+  assert.equal(sanitizeSearchQuery("()"), "");
+  assert.equal(sanitizeSearchQuery("site.com:80"), "site com 80");
+  assert.equal(sanitizeSearchQuery("field:val,other(val)"), "field val other val");
+
+  // 3. SQL спецсимволы: %, _, кавычки, обратный слэш
+  assert.equal(sanitizeSearchQuery("%"), "");
+  assert.equal(sanitizeSearchQuery("_"), "");
+  assert.equal(sanitizeSearchQuery("100%"), "100");
+  assert.equal(sanitizeSearchQuery("user_name"), "user name");
+  assert.equal(sanitizeSearchQuery('"admin" or \'1\'=\'1\''), "admin or 1 1");
+  assert.equal(sanitizeSearchQuery("path\\to\\file"), "path to file");
+
+  // 4. Ограничение длины 100+ символов
+  const long150 = "а".repeat(150);
+  assert.equal(sanitizeSearchQuery(long150).length, 100);
+
+  // 5. Кириллица
+  assert.equal(sanitizeSearchQuery("Квартира в Бишкеке"), "Квартира в Бишкеке");
+
+  // 6. Кыргызские өүң
+  assert.equal(sanitizeSearchQuery("жер үй 4 бөлмө"), "жер үй 4 бөлмө");
+
+  // 7. Эмодзи
+  assert.equal(sanitizeSearchQuery("🔥 Срочно 🏡 продается"), "Срочно продается");
+});
+
+test("Фаза 1: applyListingFilters безопасно применяет searchQuery и не падает на опасных строках", () => {
+  const orCalls = [];
+  const gteCalls = [];
+  const lteCalls = [];
+  const eqCalls = [];
+
+  const createMockQuery = () => {
+    const q = {
+      or: (val) => {
+        orCalls.push(val);
+        return q;
+      },
+      gte: (col, val) => {
+        gteCalls.push({ col, val });
+        return q;
+      },
+      lte: (col, val) => {
+        lteCalls.push({ col, val });
+        return q;
+      },
+      eq: (col, val) => {
+        eqCalls.push({ col, val });
+        return q;
+      },
+      ilike: () => q,
+      gt: () => q,
+    };
+    return q;
+  };
+
+  // 1. Опасные строки не должны вызывать исключений или накладывать мусорный .or()
+  const dangerousInputs = [
+    "",
+    "   ",
+    ",",
+    "()",
+    "%",
+    "_",
+    "\"'",
+    "\\\\",
+    ":::",
+    "🔥🎉",
+  ];
+
+  for (const dangerous of dangerousInputs) {
+    orCalls.length = 0;
+    const q = createMockQuery();
+    assert.doesNotThrow(() => {
+      applyListingFilters(q, { searchQuery: dangerous });
+    }, `Не должно выбрасывать исключение на "${dangerous}"`);
+    assert.equal(orCalls.length, 0, `На мусорную строку "${dangerous}" .or() не должен вызываться`);
+  }
+
+  // 2. Валидный запрос с кыргызскими буквами и дефисом
+  orCalls.length = 0;
+  const validQuery = createMockQuery();
+  applyListingFilters(validQuery, { searchQuery: "ЖК Ихлас-Центр" });
+  assert.equal(orCalls.length, 1);
+  assert.ok(orCalls[0].includes("ЖК Ихлас-Центр"));
+  assert.ok(orCalls[0].includes("title.ilike."));
+  assert.ok(orCalls[0].includes("district.ilike."));
+  assert.ok(orCalls[0].includes("city.ilike."));
+
+  // 3. Фильтры площади minArea / maxArea
+  gteCalls.length = 0;
+  lteCalls.length = 0;
+  const areaQuery = createMockQuery();
+  applyListingFilters(areaQuery, { minArea: 50, maxArea: 100 });
+  assert.deepEqual(gteCalls.find((c) => c.col === "area"), { col: "area", val: 50 });
+  assert.deepEqual(lteCalls.find((c) => c.col === "area"), { col: "area", val: 100 });
+
+  // 4. Фильтр валюты: без границ цен НЕ фильтрует по currency (Phase 3 ТЗ)
+  eqCalls.length = 0;
+  orCalls.length = 0;
+  const noCurQuery = createMockQuery();
+  applyListingFilters(noCurQuery, {});
+  assert.equal(eqCalls.find((c) => c.col === "currency"), undefined, "Без валюты фильтр currency не накладывается");
+
+  const curOnlyQuery = createMockQuery();
+  applyListingFilters(curOnlyQuery, { currency: "USD" });
+  assert.equal(eqCalls.find((c) => c.col === "currency"), undefined, "Валюта без границ цен не фильтрует объявления");
+
+  const curPriceQuery = createMockQuery();
+  applyListingFilters(curPriceQuery, { currency: "USD", minPrice: 50000 });
+  assert.ok(orCalls.some((c) => c.includes("currency.eq.USD") && c.includes("currency.eq.KGS")), "Валюта с ценой накладывает мультивалютный or-фильтр");
+
+  // 5. Комнаты: числовые значения дают eq, а суффикс '+' даёт gte
+  eqCalls.length = 0;
+  gteCalls.length = 0;
+  const rooms4ExactQuery = createMockQuery();
+  applyListingFilters(rooms4ExactQuery, { rooms: 4 });
+  assert.deepEqual(eqCalls.find((c) => c.col === "rooms"), { col: "rooms", val: 4 });
+  assert.equal(gteCalls.find((c) => c.col === "rooms"), undefined);
+
+  eqCalls.length = 0;
+  gteCalls.length = 0;
+  const rooms4PlusQuery = createMockQuery();
+  applyListingFilters(rooms4PlusQuery, { rooms: "4+" });
+  assert.deepEqual(gteCalls.find((c) => c.col === "rooms"), { col: "rooms", val: 4 });
+  assert.equal(eqCalls.find((c) => c.col === "rooms"), undefined);
+
+  // 6. Детерминированный приоритет параметров и их алиасов
+  gteCalls.length = 0;
+  lteCalls.length = 0;
+  orCalls.length = 0;
+  const aliasQuery = createMockQuery();
+  applyListingFilters(aliasQuery, {
+    minPrice: 1000,
+    priceFrom: 2000,
+    maxPrice: 5000,
+    priceTo: 6000,
+    minArea: 40,
+    areaFrom: 50,
+    maxArea: 90,
+    areaTo: 100,
+    searchQuery: "элитка",
+    query: "вторичка",
+  });
+  // minPrice ?? priceFrom -> 1000
+  assert.deepEqual(gteCalls.find((c) => c.col === "price"), { col: "price", val: 1000 });
+  // maxPrice ?? priceTo -> 5000
+  assert.deepEqual(lteCalls.find((c) => c.col === "price"), { col: "price", val: 5000 });
+  // minArea ?? areaFrom -> 40
+  assert.deepEqual(gteCalls.find((c) => c.col === "area"), { col: "area", val: 40 });
+  // maxArea ?? areaTo -> 90
+  assert.deepEqual(lteCalls.find((c) => c.col === "area"), { col: "area", val: 90 });
+  // searchQuery ?? query -> "элитка"
+  assert.ok(orCalls[0].includes("title.ilike.%элитка%"));
+});
+
+test("Фаза 1: getMapListings корректно сохраняет все фильтры карты и применяет searchQuery", async () => {
+  const origFrom = supabase.from;
+  const calls = {
+    eq: [],
+    gte: [],
+    lte: [],
+    or: [],
+    not: [],
+  };
+
+  const queryChain = {
+    select: () => queryChain,
+    eq: (col, val) => {
+      calls.eq.push({ col, val });
+      return queryChain;
+    },
+    gte: (col, val) => {
+      calls.gte.push({ col, val });
+      return queryChain;
+    },
+    lte: (col, val) => {
+      calls.lte.push({ col, val });
+      return queryChain;
+    },
+    or: (val) => {
+      calls.or.push(val);
+      return queryChain;
+    },
+    not: (col, op, val) => {
+      calls.not.push({ col, op, val });
+      return queryChain;
+    },
+    gt: () => queryChain,
+    order: () => queryChain,
+    range: () => Promise.resolve({ data: [], count: 0, error: null }),
+  };
+
+  supabase.from = () => queryChain;
+
+  try {
+    const res = createMockRes();
+    await getMapListings(
+      {
+        query: {
+          city: "Бишкек",
+          searchQuery: "студия",
+          minPrice: 20000,
+          maxPrice: 60000,
+          minLat: "42.8",
+          maxLat: "42.9",
+          minLng: "74.5",
+          maxLng: "74.7",
+        },
+      },
+      res
+    );
+
+    assert.equal(res.statusCode, 200);
+    // Проверка, что фильтры карты не сломаны:
+    // 1. Координаты (bbox) наложены
+    assert.ok(calls.gte.some((c) => c.col === "latitude" && c.val === 42.8));
+    assert.ok(calls.lte.some((c) => c.col === "latitude" && c.val === 42.9));
+    assert.ok(calls.gte.some((c) => c.col === "longitude" && c.val === 74.5));
+    assert.ok(calls.lte.some((c) => c.col === "longitude" && c.val === 74.7));
+
+    // 2. Город наложен
+    assert.ok(calls.eq.some((c) => c.col === "city" && c.val === "Бишкек"));
+
+    // 3. Цена наложена
+    assert.ok(calls.gte.some((c) => c.col === "price" && c.val === 20000));
+    assert.ok(calls.lte.some((c) => c.col === "price" && c.val === 60000));
+
+    // 4. Поиск по ключевому слову применился безопасно через .or()
+    assert.ok(calls.or.some((val) => val.includes("title.ilike.%студия%")));
+  } finally {
+    supabase.from = origFrom;
+  }
 });

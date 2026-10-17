@@ -2447,6 +2447,9 @@ const ru = {
     },
 
     loading: "Загружаем объявления...",
+    loadMore: "Показать ещё",
+    loadingMore: "Загрузка...",
+    retry: "Повторить попытку",
 
     empty: {
       title: "Ничего не найдено",
@@ -2609,6 +2612,11 @@ const ru = {
     examples: {
       title: "Например:",
     },
+
+    activeFilters: "Распознанные параметры:",
+    resetAll: "Сбросить AI-фильтры",
+    allCategories: "Любая недвижимость",
+    roomsCount: "комн.",
 
     errors: {
       microphonePermission:

@@ -19,6 +19,7 @@ export default function ProductsFilters({
 
   updateUrl,
   handleSmartSearch,
+  handleRemoveSmartFilter,
 
   resetFilters,
   hasFilters,
@@ -36,7 +37,13 @@ export default function ProductsFilters({
       <SearchModeSlider value={searchMode} onChange={setSearchMode} />
 
       {searchMode === "smart" && (
-        <SmartSearch onFiltersDetected={handleSmartSearch} />
+        <SmartSearch
+          onFiltersDetected={handleSmartSearch}
+          activeFilters={filters}
+          onRemoveFilter={handleRemoveSmartFilter}
+          onResetAll={resetFilters}
+          categoryLabels={categoryLabels}
+        />
       )}
 
       {searchMode === "filters" && (
@@ -80,7 +87,10 @@ export default function ProductsFilters({
                     key={category.value}
                     type="button"
                     className={active ? styles.categoryActive : ""}
-                    onClick={() => updateFilter("propertyType", category.value)}
+                    onClick={() => {
+                      updateFilter("propertyType", category.value);
+                      updateUrl({ ...filters, propertyType: category.value });
+                    }}
                   >
                     {category.label}
                   </button>
@@ -100,7 +110,10 @@ export default function ProductsFilters({
               <button
                 type="button"
                 className={filters.dealType === "sale" ? styles.dealActive : ""}
-                onClick={() => updateFilter("dealType", "sale")}
+                onClick={() => {
+                  updateFilter("dealType", "sale");
+                  updateUrl({ ...filters, dealType: "sale" });
+                }}
               >
                 {t("productsFilters.deal.sale")}
               </button>
@@ -108,7 +121,10 @@ export default function ProductsFilters({
               <button
                 type="button"
                 className={filters.dealType === "rent" ? styles.dealActive : ""}
-                onClick={() => updateFilter("dealType", "rent")}
+                onClick={() => {
+                  updateFilter("dealType", "rent");
+                  updateUrl({ ...filters, dealType: "rent" });
+                }}
               >
                 {t("productsFilters.deal.rent")}
               </button>

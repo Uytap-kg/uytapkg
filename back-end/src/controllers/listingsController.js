@@ -8,8 +8,19 @@ import {
 import { removeImageFromStorage } from "../utils/storage.js";
 import { resolvePromotionExpiry, grantPromotion } from "../services/promotionsService.js";
 import { createInstagramRequest } from "../utils/instagramRequests.js";
+import { DEFAULT_USD_TO_KGS } from "../constants/pricing.js";
+import {
+  UI_TO_DB_PROPERTY_TYPE,
+  COTTAGE_HOUSE_TYPE,
+} from "../constants/propertyTypes.js";
+import {
+  FEATURE_KEYS,
+  ARRAY_FILTER_KEYS,
+  sanitizeFeatureValue,
+} from "../constants/features.js";
 import {
   consumeTariffBoost,
+
   refundTariffBoost,
   getActiveListingsLimit,
   getActiveSubscription,
@@ -108,6 +119,37 @@ export function canOwnerTransition(fromStatus, toStatus) {
   return { allowed: false, message: `Переход из статуса "${fromStatus}" в "${toStatus}" запрещён` };
 }
 
+/**
+ * Безопасная санитизация поискового запроса для PostgREST .or() фильтров.
+ *
+ * Требования безопасности:
+ * 1. Ограничение длины (до 100 символов), чтобы избежать перегрузки PostgREST.
+ * 2. Белый список разрешённых символов:
+ *    - Буквы любых алфавитов (\p{L}: кириллица, латиница, кыргызские ө, ү, ң, турецкие ç, ğ и т.д.)
+ *    - Цифры (\p{N})
+ *    - Одиночные пробелы и дефис
+ * 3. Все спецсимволы, ломающие синтаксис PostgREST .or(col.ilike.val,...) или SQL:
+ *    - запятые (,), точки (.), двоеточия (:), круглые/квадратные скобки, кавычки (", '),
+ *    - обратные слэши (\), проценты (%), подчёркивания (_), звёздочки (*), амперсанды, слэши,
+ *    - эмодзи и спец-символы
+ *    заменяются пробелом.
+ * 4. Если после очистки осталась пустая строка — возвращается "" (фильтр не накладывается, 500 не выбрасывается).
+ */
+export function sanitizeSearchQuery(rawQuery, maxLength = 100) {
+  if (!rawQuery || typeof rawQuery !== "string") return "";
+
+  // 1. Ограничение длины
+  const truncated = rawQuery.slice(0, maxLength);
+
+  // 2. Белый список символов: буквы любых алфавитов, цифры, пробел, дефис
+  const whitelisted = truncated.replace(/[^\p{L}\p{N}\s\-]/gu, " ");
+
+  // 3. Сжатие пробелов и trim
+  const normalized = whitelisted.replace(/\s+/g, " ").trim();
+
+  return normalized;
+}
+
 // Общие серверные фильтры публичной выдачи объявлений (каталог и карта)
 export function applyListingFilters(query, filters = {}) {
   const {
@@ -120,12 +162,34 @@ export function applyListingFilters(query, filters = {}) {
     rentPeriod,
     minPrice,
     maxPrice,
+    priceFrom,
+    priceTo,
+    minArea,
+    maxArea,
+    areaFrom,
+    areaTo,
     rooms,
+    currency,
+    searchQuery,
+    query: qParam,
     isResort,
     onlyPopular,
+    urgentOnly,
+    beachDistanceFrom,
+    beachDistanceTo,
   } = filters;
 
-  // Фильтрация по региону / городу / району / стране
+  // 1. Санитизация и серверный поиск по ключевым словам (searchQuery / query)
+  const rawSearch = searchQuery ?? qParam;
+  const cleanSearch = sanitizeSearchQuery(rawSearch);
+  if (cleanSearch) {
+    // В PostgREST .or() синтаксис: col.operator.value,col2.operator.value
+    // cleanSearch содержит ТОЛЬКО безопасные символы из белого списка (буквы, цифры, дефис, пробел).
+    // Поиск по title, district и city — все три поля имеют GIN-триграммные индексы (pg_trgm).
+    query = query.or(`title.ilike.%${cleanSearch}%,district.ilike.%${cleanSearch}%,city.ilike.%${cleanSearch}%`);
+  }
+
+  // 2. Фильтрация по региону / городу / району / стране
   if (country) {
     const cLower = String(country).toLowerCase();
     if (cLower === "turkey" || cLower === "турция") {
@@ -143,17 +207,169 @@ export function applyListingFilters(query, filters = {}) {
   if (city && city !== "Все") query = query.eq("city", String(city).trim());
   if (district) query = query.ilike("district", `%${district}%`);
 
-  // Фильтрация по типу недвижимости и сделки
-  if (propertyType) query = query.eq("property_type", propertyType);
+  // 3. Фильтрация по типу недвижимости (с поддержкой cottage и parking через единые константы)
+  if (propertyType && propertyType !== "all" && propertyType !== "Все") {
+    const cleanType = String(propertyType).trim().toLowerCase();
+    const mappedType = UI_TO_DB_PROPERTY_TYPE[cleanType] || cleanType;
+    if (cleanType === "cottage") {
+      // Вариант Б: cottage хранится как house с features.houseType = 'Коттедж'
+      query = query.eq("property_type", "house").eq("features->>houseType", COTTAGE_HOUSE_TYPE);
+    } else if (cleanType === "house") {
+      // NULL-безопасно: объекты без features->houseType остаются в "Дом"
+      query = query.eq("property_type", "house").or(`features->>houseType.is.null,features->>houseType.neq.${COTTAGE_HOUSE_TYPE}`);
+    } else {
+      query = query.eq("property_type", mappedType);
+    }
+  }
+
   if (dealType) query = query.eq("deal_type", dealType);
   if (rentPeriod) query = query.eq("rent_period", rentPeriod);
 
-  // Цена
-  if (minPrice && !Number.isNaN(Number(minPrice))) query = query.gte("price", Number(minPrice));
-  if (maxPrice && !Number.isNaN(Number(maxPrice))) query = query.lte("price", Number(maxPrice));
+  // 4. Фильтр urgentOnly (срочные объявления: активные и неистёкшие)
+  if (urgentOnly === "true" || urgentOnly === true) {
+    const nowIso = new Date().toISOString();
+    query = query.eq("is_urgent", true).or(`urgent_expires_at.gt.${nowIso},urgent_expires_at.is.null`);
+  }
 
-  // Количественные параметры
-  if (rooms && !Number.isNaN(Number(rooms))) query = query.eq("rooms", Number(rooms));
+  // 5. Цена и валюта (мультивалютный пересчёт без изменения схемы БД)
+  const effectiveMinPrice = Number(minPrice ?? priceFrom);
+  const effectiveMaxPrice = Number(maxPrice ?? priceTo);
+  const hasMin = !Number.isNaN(effectiveMinPrice) && effectiveMinPrice >= 0 && (minPrice !== undefined || priceFrom !== undefined);
+  const hasMax = !Number.isNaN(effectiveMaxPrice) && effectiveMaxPrice >= 0 && (maxPrice !== undefined || priceTo !== undefined);
+  const hasPriceRange = hasMin || hasMax;
+
+  if (hasPriceRange) {
+    const curUpper = currency ? String(currency).trim().toUpperCase() : null;
+    const round2 = (num) => Math.round(num * 100) / 100;
+
+    if (curUpper === "USD" || curUpper === "KGS") {
+      if (curUpper === "USD") {
+        // Пользователь ввёл границы в USD.
+        // Для объявлений в USD: прямое сравнение. Пустая/неизвестная валюта трактуется как USD (item.currency || 'USD').
+        // Для объявлений в KGS: граница в сомах пересчитывается по курсу (price * 87), округляется до 2 знаков.
+        const usdConditions = [];
+        if (hasMin) usdConditions.push(`price.gte.${round2(effectiveMinPrice)}`);
+        if (hasMax) usdConditions.push(`price.lte.${round2(effectiveMaxPrice)}`);
+
+        const kgsConditions = [];
+        if (hasMin) kgsConditions.push(`price.gte.${round2(effectiveMinPrice * DEFAULT_USD_TO_KGS)}`);
+        if (hasMax) kgsConditions.push(`price.lte.${round2(effectiveMaxPrice * DEFAULT_USD_TO_KGS)}`);
+
+        query = query.or(
+          `and(or(currency.eq.USD,currency.is.null),${usdConditions.join(",")}),and(currency.eq.KGS,${kgsConditions.join(",")})`
+        );
+      } else if (curUpper === "KGS") {
+        // Пользователь ввёл границы в KGS.
+        const kgsConditions = [];
+        if (hasMin) kgsConditions.push(`price.gte.${round2(effectiveMinPrice)}`);
+        if (hasMax) kgsConditions.push(`price.lte.${round2(effectiveMaxPrice)}`);
+
+        const usdConditions = [];
+        if (hasMin) usdConditions.push(`price.gte.${round2(effectiveMinPrice / DEFAULT_USD_TO_KGS)}`);
+        if (hasMax) usdConditions.push(`price.lte.${round2(effectiveMaxPrice / DEFAULT_USD_TO_KGS)}`);
+
+        query = query.or(
+          `and(currency.eq.KGS,${kgsConditions.join(",")}),and(or(currency.eq.USD,currency.is.null),${usdConditions.join(",")})`
+        );
+      }
+    } else {
+      // Без currency: прямое сравнение по колонке price (обратная совместимость)
+      if (hasMin) query = query.gte("price", effectiveMinPrice);
+      if (hasMax) query = query.lte("price", effectiveMaxPrice);
+    }
+  }
+
+  // 6. Площадь (поддерживает minArea / areaFrom и maxArea / areaTo)
+  const effectiveMinArea = Number(minArea ?? areaFrom);
+  const effectiveMaxArea = Number(maxArea ?? areaTo);
+  if (!Number.isNaN(effectiveMinArea) && effectiveMinArea > 0 && (minArea !== undefined || areaFrom !== undefined)) {
+    query = query.gte("area", effectiveMinArea);
+  }
+  if (!Number.isNaN(effectiveMaxArea) && effectiveMaxArea > 0 && (maxArea !== undefined || areaTo !== undefined)) {
+    query = query.lte("area", effectiveMaxArea);
+  }
+
+  // 7. Количество комнат (включая "4+" и числовые значения)
+  if (rooms && rooms !== "Все") {
+    const rStr = String(rooms).trim();
+    if (rStr === "4+" || rStr.endsWith("+")) {
+      const base = parseInt(rStr, 10);
+      query = query.gte("rooms", Number.isNaN(base) ? 4 : base);
+    } else {
+      const rNum = Number(rStr);
+      if (!Number.isNaN(rNum) && rNum > 0) {
+        query = query.eq("rooms", rNum);
+      }
+    }
+  }
+
+  // 8. Расстояние до пляжа (resort_filters)
+  if (beachDistanceFrom !== undefined && beachDistanceFrom !== null && beachDistanceFrom !== "") {
+    const bMin = Number(beachDistanceFrom);
+    if (!Number.isNaN(bMin) && bMin >= 0) {
+      query = query.gte("resort_filters->beachDistanceFrom", bMin);
+    }
+  }
+  if (beachDistanceTo !== undefined && beachDistanceTo !== null && beachDistanceTo !== "") {
+    const bMax = Number(beachDistanceTo);
+    if (!Number.isNaN(bMax) && bMax >= 0) {
+      query = query.lte("resort_filters->beachDistanceTo", bMax);
+    }
+  }
+
+  // 9. Характеристики категорий (features JSONB) по белому списку
+  for (const key of FEATURE_KEYS) {
+    if (key === "houseType") continue;
+    const val = filters[key];
+    if (val === undefined || val === null || val === "" || val === "Любой" || val === "Любая" || val === "Любые" || val === "Любое") {
+      continue;
+    }
+
+    if (ARRAY_FILTER_KEYS.has(key)) {
+      const rawArr = Array.isArray(val) ? val : String(val).split(",");
+      const cleanArr = rawArr.map((v) => sanitizeFeatureValue(v)).filter(Boolean);
+      if (cleanArr.length > 0) {
+        query = query.contains("features", { [key]: cleanArr });
+      }
+    } else if (Array.isArray(val) || (typeof val === "string" && val.includes(","))) {
+      const rawArr = Array.isArray(val) ? val : String(val).split(",");
+      const cleanArr = rawArr.map((v) => sanitizeFeatureValue(v)).filter(Boolean);
+      if (cleanArr.length > 0) {
+        if (key === "floor") {
+          const nums = cleanArr.map((v) => parseInt(v, 10)).filter((n) => !Number.isNaN(n));
+          const hasPlus = cleanArr.some((v) => v.includes("+") || v === "10+");
+          if (hasPlus) {
+            query = query.or(`floor.in.(${nums.join(",")}),floor.gte.10,features->>floor.in.(${cleanArr.join(",")})`);
+          } else if (nums.length > 0) {
+            query = query.in("floor", nums);
+          }
+        } else {
+          query = query.in(`features->>${key}`, cleanArr);
+        }
+      }
+    } else {
+      const cleanVal = sanitizeFeatureValue(val);
+      if (cleanVal) {
+        if (key === "floor") {
+          if (cleanVal.includes("+")) {
+            const base = parseInt(cleanVal, 10);
+            const num = Number.isNaN(base) ? 10 : base;
+            query = query.or(`floor.gte.${num},features->>floor.eq.${cleanVal}`);
+          } else {
+            const num = parseInt(cleanVal, 10);
+            if (!Number.isNaN(num)) {
+              query = query.or(`floor.eq.${num},features->>floor.eq.${cleanVal}`);
+            } else {
+              query = query.eq(`features->>${key}`, cleanVal);
+            }
+          }
+        } else {
+          query = query.contains("features", { [key]: cleanVal });
+        }
+      }
+    }
+  }
+
   if (isResort !== undefined) query = query.eq("is_resort", isResort === "true");
 
   // ТЗ Правило (Дефект 1.1): В блок "Популярные" на главной попадают только объявления с фото
@@ -170,18 +386,6 @@ export function applyListingFilters(query, filters = {}) {
 export const getListings = async (req, res) => {
   try {
     const {
-      country,
-      region,
-      city,
-      district,
-      propertyType,
-      dealType,
-      rentPeriod,
-      minPrice,
-      maxPrice,
-      rooms,
-      isResort,
-      onlyPopular, // Флаг для блока популярных объявлений
       page = 1,
       limit = 20,
     } = req.query;
@@ -196,20 +400,7 @@ export const getListings = async (req, res) => {
       .eq("status", "active")
       .gt("expires_at", new Date().toISOString());
 
-    query = applyListingFilters(query, {
-      country,
-      region,
-      city,
-      district,
-      propertyType,
-      dealType,
-      rentPeriod,
-      minPrice,
-      maxPrice,
-      rooms,
-      isResort,
-      onlyPopular,
-    });
+    query = applyListingFilters(query, req.query);
 
     // Пагинация и сортировка на уровне БД
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -294,7 +485,16 @@ export const getMapListings = async (req, res) => {
       rentPeriod,
       minPrice,
       maxPrice,
+      priceFrom,
+      priceTo,
+      minArea,
+      maxArea,
+      areaFrom,
+      areaTo,
       rooms,
+      currency,
+      searchQuery,
+      query: qParam,
       isResort,
       minLat,
       maxLat,
@@ -329,7 +529,16 @@ export const getMapListings = async (req, res) => {
       rentPeriod,
       minPrice,
       maxPrice,
+      priceFrom,
+      priceTo,
+      minArea,
+      maxArea,
+      areaFrom,
+      areaTo,
       rooms,
+      currency,
+      searchQuery,
+      query: qParam,
       isResort,
     });
 
