@@ -13,7 +13,24 @@ import {
   BATKEN_LOCATIONS,
   TURKEY_LOCATIONS,
 } from "../constants/locations.js";
-import { PROPERTY_TYPES, DEAL_TYPES } from "../constants/propertyTypes.js";
+import {
+  buildSystemPrompt,
+  buildCachedSystemBlocks,
+  buildUserMessage,
+} from "../ai/smartSearch.prompt.js";
+import { buildOutputSchema } from "../ai/smartSearch.schema.js";
+import {
+  normalizeSmartSearchResult,
+  emptySmartSearchFilters,
+  AREA_UNIT,
+} from "../ai/smartSearch.normalize.js";
+
+// Числа с единицей площади (для локального парсера): «50 квадратов», «80 м2», «от 80 до 100 кв».
+const AREA_NUMBER_RE = new RegExp(`(?<![\\p{L}\\d.,])\\d+(?:[.,]\\d+)?\\s*${AREA_UNIT}`, "giu");
+const AREA_RANGE_RE = new RegExp(
+  `(?:от\\s*)?\\d+(?:[.,]\\d+)?\\s*(?:до|-|–)\\s*\\d+(?:[.,]\\d+)?\\s*${AREA_UNIT}`,
+  "giu",
+);
 
 dotenv.config();
 
@@ -47,7 +64,7 @@ export const getFromCache = (prompt) => {
   return cached.data;
 };
 
-export const setInCache = (prompt, data, ttlMs = CACHE_TTL_MS) => {
+export const setInCache = (prompt, data, ttlMs = CACHE_TTL_MS, meta = {}) => {
   const key = normalizeCacheKey(prompt);
   if (!key || !data) return;
 
@@ -64,6 +81,7 @@ export const setInCache = (prompt, data, ttlMs = CACHE_TTL_MS) => {
   SEARCH_CACHE.set(key, {
     data,
     expiresAt: Date.now() + ttlMs,
+    degraded: meta.degraded === true, // результат локального парсера (LLM была недоступна)
   });
 };
 
@@ -101,129 +119,99 @@ const getCandidateModels = () => {
   );
 };
 
-const buildSearchPrompt = (prompt) => {
-  return `Ты — AI-ассистент платформы недвижимости UyTap (Кыргызстан и Турция).
-Проанализируй поисковый запрос пользователя на русском или кыргызском языке и извлеки структурированные фильтры.
-Если параметр не указан в запросе, верни null.
 
-Схема ответа (строгий JSON без markdown):
-{
-  "country": "kyrgyzstan" | "turkey" | null,
-  "region": "BISHKEK" | "CHUY" | "OSH" | "ISSYK_KUL" | "JALAL_ABAD" | "NARYN" | "TALAS" | "BATKEN" | "TURKEY" | null,
-  "city": string | null,
-  "district": string | null,
-  "propertyType": "apartment" | "house" | "cottage" | "land" | "commercial" | "room" | "parking" | null,
-  "dealType": "sale" | "rent" | null,
-  "rooms": 1 | 2 | 3 | "4+" | null,
-  "minPrice": number | null,
-  "maxPrice": number | null,
-  "currency": "USD" | "KGS" | null,
-  "minArea": number | null,
-  "maxArea": number | null,
-  "searchQuery": string | null,
-  "beachDistanceFrom": number | null,
-  "beachDistanceTo": number | null,
-  "urgentOnly": boolean | null
-}
+const CLAUDE_TIMEOUT_MS = 8000; // запас на первый запрос со structured outputs (компиляция грамматики схемы)
+const CLAUDE_MAX_TOKENS = 512; // ответ — один маленький JSON (~150 токенов)
+const CLAUDE_RETRY_DELAY_MS = 300;
 
-Правила анализа:
-1. Исправление опечаток:
-   - Пользователь может писать с опечатками (например, "стулия" -> "студия", "миркорайон" -> "микрорайон", "уентральном" -> "Центр"). Исправляй их автоматически.
-2. Многоязычность (кыргызский и русский языки):
-   - "жер уй", "жер үй", "үй" -> propertyType: "house"
-   - "батир" -> propertyType: "apartment"
-   - "жер", "жер тилкеси" -> propertyType: "land"
-   - "комната", "бөлмө" -> propertyType: "room"
-   - "ижара", "ижарага", "алам" -> dealType: "rent"
-   - "сатуу", "сатам", "сатып алам" -> dealType: "sale"
-   - "сом", "сомго", "сомдон" -> currency: "KGS"
-3. Специфические ключевые слова (searchQuery):
-   - В поле "searchQuery" помещай ТОЛЬКО явные имена собственные: название жилого комплекса ("Ихлас", "Авалон", "Victory"), застройщика ("Авангард Стиль", "Эмарк"), конкретной улицы или уникальные типы планировок ("студия", "евродвушка", "пентхаус").
-   - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО помещать в "searchQuery" описательные фразы, качественные/оценочные прилагательные и служебные слова: "с ремонтом", "вид на горы", "арзан", "дешевый", "хороший", "элитный", "чистый", "срочно", "с бассейном", "с газом", "под строительство". Если явного названия ЖК, застройщика, улицы или планировки в запросе нет, верни "searchQuery": null.
-4. Районы (канонизация для Бишкека):
-   - Районы приводи к их каноническим названиям в именительном падеже:
-     - "в центре", "в центральном районе", "центр" -> district: "Центр"
-     - "южный микрорайон", "южные микрорайоны", "в южной части" -> district: "Южные микрорайоны"
-     - "джал", "в джале", "жал", "жалда" -> district: "Джал"
-     - "асанбай" -> district: "Асанбай"
-     - "тунгуч" -> district: "Тунгуч"
-     - "кок-жар", "көк-жар" -> district: "Кок-Жар"
-     - "ахунбаева" -> district: "Ахунбаева"
-5. Площадь ("квадрат", "соток"):
-   - Для квартир и домов площадь указывается в м²: "110 квадрат", "110 кв", "110 м2" -> minArea: 100, maxArea: 120. "от 50 до 80 кв" -> minArea: 50, maxArea: 80.
-   - ВАЖНО: Для земельных участков (propertyType = "land") при упоминании "соток" площадь должна быть СТРОГО В СОТКАХ (НЕ умножать на 100!): "6 соток" -> minArea: 6, maxArea: 6. "от 4 до 10 соток" -> minArea: 4, maxArea: 10.
-6. Регионы и города:
-   - Если указан микрорайон Бишкека (Южные микрорайоны, Джал, Центр, Асанбай и т.д.), автоматически: region: "BISHKEK", city: "Бишкек".
-   - Иссык-Куль, Каракол, Чолпон-Ата, Бостери, Балыкчы -> region: "ISSYK_KUL".
-   - Ош -> region: "OSH", city: "Ош".
-   - Чуй, Токмок, Кант, Кара-Балта, Сокулук -> region: "CHUY".
-   - Аланья, Анталия, Стамбул, Мерсин -> country: "turkey", region: "TURKEY".
-7. Цены и валюта:
-   - "от 20 000 долларов до 80000" -> minPrice: 20000, maxPrice: 80000, currency: "USD".
-   - "$" или "доллар" или "usd" -> currency: "USD".
-   - "сом" или "kgs" -> currency: "KGS".
-8. Тип недвижимости:
-   - Если тип недвижимости в запросе не указан (например, "купить в Оше до 50000$"), верни propertyType: null. НЕ выдумывай тип, если его нет.
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const isRetryableStatus = (status) => status === 429 || status >= 500;
 
-Текст запроса: "${prompt}"`;
-};
-
-const callClaude = async (prompt) => {
+/**
+ * Вызов Claude для разбора запроса умного поиска. Возвращает «сырой» объект модели либо null.
+ * Валидация результата — в normalizeSmartSearchResult (вызывающий код).
+ *
+ * - Structured outputs: output_config.format (json_schema), схема строится из констант.
+ * - Prompt caching: статичный system-блок помечен cache_control (ephemeral).
+ * - Запрос передаётся отдельным блоком <query> (buildUserMessage).
+ * - temperature НЕ передаём: Claude Haiku 5.5 может отвечать 400 на sampling-параметры.
+ * - Один ретрай только при сетевой ошибке / 429 / 5xx. Таймаут не ретраится (иначе > лимита прокси).
+ * - Если API отклонил схему (400), один раз повторяем без output_config: ответ всё равно проходит Zod.
+ */
+export const callClaude = async (query) => {
   const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
   if (!apiKey) return null;
 
   const model = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
   const baseUrl = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com/v1").replace(/\/+$/, "");
 
-  try {
-    const isChatCompletions =
-      baseUrl.endsWith("/chat/completions") || baseUrl.includes("openrouter.ai/api/v1");
-    const endpoint = isChatCompletions
-      ? baseUrl.endsWith("/chat/completions")
-        ? baseUrl
-        : `${baseUrl}/chat/completions`
-      : `${baseUrl}/messages`;
+  const isChatCompletions =
+    baseUrl.endsWith("/chat/completions") || baseUrl.includes("openrouter.ai/api/v1");
+  const endpoint = isChatCompletions
+    ? baseUrl.endsWith("/chat/completions")
+      ? baseUrl
+      : `${baseUrl}/chat/completions`
+    : `${baseUrl}/messages`;
 
-    const headers = isChatCompletions
+  const headers = isChatCompletions
+    ? {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      }
+    : {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      };
+
+  const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID;
+  if (workspaceId && !isChatCompletions) {
+    headers["anthropic-workspace-id"] = workspaceId;
+  }
+
+  const userMessage = buildUserMessage(query);
+  let useStructuredOutput = !isChatCompletions;
+
+  const buildBody = () =>
+    isChatCompletions
       ? {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          model,
+          messages: [
+            { role: "system", content: buildSystemPrompt() },
+            { role: "user", content: userMessage },
+          ],
+          response_format: { type: "json_object" },
         }
       : {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
+          model,
+          max_tokens: CLAUDE_MAX_TOKENS,
+          system: buildCachedSystemBlocks(),
+          messages: [{ role: "user", content: userMessage }],
+          ...(useStructuredOutput
+            ? { output_config: { format: { type: "json_schema", schema: buildOutputSchema() } } }
+            : {}),
         };
 
-    const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID;
-    if (workspaceId && !isChatCompletions) {
-      headers["anthropic-workspace-id"] = workspaceId;
-    }
+  let retriesLeft = 1;
+  const startedAt = Date.now();
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      signal: AbortSignal.timeout(AI_TIMEOUT_MS),
-      body: JSON.stringify(
-        isChatCompletions
-          ? {
-              model,
-              messages: [
-                { role: "system", content: buildSearchPrompt(prompt) },
-                { role: "user", content: `Пользовательский запрос: "${prompt}"` },
-              ],
-              response_format: { type: "json_object" },
-            }
-          : {
-              model,
-              max_tokens: 1000,
-              system: buildSearchPrompt(prompt),
-              messages: [
-                { role: "user", content: `Пользовательский запрос: "${prompt}"` },
-              ],
-            },
-      ),
-    });
+  while (true) {
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        signal: AbortSignal.timeout(CLAUDE_TIMEOUT_MS),
+        body: JSON.stringify(buildBody()),
+      });
+    } catch (err) {
+      const timedOut = err?.name === "TimeoutError" || err?.name === "AbortError";
+      console.warn(`Claude API call failed (${timedOut ? "timeout" : "network"}):`, err?.message || err);
+      if (timedOut || retriesLeft <= 0) return null;
+      retriesLeft -= 1;
+      await sleep(CLAUDE_RETRY_DELAY_MS);
+      continue;
+    }
 
     if (!response.ok) {
       const errBody = await response.json().catch(() => ({}));
@@ -231,23 +219,42 @@ const callClaude = async (prompt) => {
         `Claude API warning (${response.status}):`,
         errBody?.error?.message || errBody?.message || response.statusText,
       );
+
+      if (response.status === 400 && useStructuredOutput) {
+        useStructuredOutput = false; // схема отклонена — один повтор без structured outputs
+        continue;
+      }
+      if (isRetryableStatus(response.status) && retriesLeft > 0) {
+        retriesLeft -= 1;
+        await sleep(CLAUDE_RETRY_DELAY_MS);
+        continue;
+      }
       return null;
     }
 
-    const data = await response.json();
+    const data = await response.json().catch(() => null);
+    if (!data) return null;
+
+    if (data.stop_reason === "max_tokens" || data.stop_reason === "refusal") {
+      console.warn(`Claude API: ответ не использован (stop_reason=${data.stop_reason})`);
+      return null;
+    }
+
+    const usage = data.usage || {};
+    console.info(
+      `[smart-search] claude ok ms=${Date.now() - startedAt} in=${usage.input_tokens ?? "?"} ` +
+        `cache_read=${usage.cache_read_input_tokens ?? 0} cache_write=${usage.cache_creation_input_tokens ?? 0} ` +
+        `out=${usage.output_tokens ?? "?"} structured=${useStructuredOutput}`,
+    );
+
+    // Ищем именно text-блок: перед ним может идти thinking-блок.
     const rawText = isChatCompletions
       ? data?.choices?.[0]?.message?.content
-      : data?.content?.[0]?.text;
+      : data?.content?.find((block) => block?.type === "text")?.text;
 
     const parsed = parseJsonFromText(rawText);
-    if (parsed && typeof parsed === "object") {
-      return parsed;
-    }
-  } catch (err) {
-    console.warn("Claude API call failed:", err?.message || err);
+    return parsed && typeof parsed === "object" ? parsed : null;
   }
-
-  return null;
 };
 
 const callGemini = async (prompt) => {
@@ -265,15 +272,8 @@ const callGemini = async (prompt) => {
           headers: { "Content-Type": "application/json" },
           signal: AbortSignal.timeout(AI_TIMEOUT_MS),
           body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: buildSearchPrompt(prompt),
-                  },
-                ],
-              },
-            ],
+            systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
+            contents: [{ role: "user", parts: [{ text: buildUserMessage(prompt) }] }],
             generationConfig: {
               responseMimeType: "application/json",
             },
@@ -313,183 +313,10 @@ const callGemini = async (prompt) => {
 // =======================================================
 // Валидация и санитизация недоверенного ответа LLM
 // =======================================================
-
-const VALID_COUNTRIES = new Set(["kyrgyzstan", "turkey"]);
-const VALID_REGIONS = new Set([
-  "BISHKEK",
-  "ISSYK_KUL",
-  "CHUY",
-  "OSH",
-  "OSH_CITY",
-  "OSH_REGION",
-  "JALAL_ABAD",
-  "NARYN",
-  "TALAS",
-  "BATKEN",
-  "TURKEY",
-]);
-const VALID_PROPERTY_TYPES = new Set([
-  ...Object.values(PROPERTY_TYPES),
-  "cottage",
-  "parking",
-]);
-const VALID_DEAL_TYPES = new Set(Object.values(DEAL_TYPES));
-const VALID_CURRENCIES = new Set(["USD", "KGS"]);
-const VALID_ROOMS = new Set([1, 2, 3, "4+"]);
-
-export function validateAndSanitizeAIFilters(raw) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return null;
-  }
-
-  // 1. Белый список разрешённых полей (все неизвестные/инъецированные поля отбрасываются)
-  let country = null;
-  if (typeof raw.country === "string") {
-    const c = raw.country.trim().toLowerCase();
-    if (VALID_COUNTRIES.has(c)) {
-      country = c;
-    }
-  }
-
-  let region = null;
-  if (typeof raw.region === "string") {
-    const r = raw.region.trim().toUpperCase();
-    if (VALID_REGIONS.has(r)) {
-      region = r;
-    }
-  }
-
-  let city = null;
-  if (typeof raw.city === "string" && raw.city.trim()) {
-    city = sanitizeSearchQuery(raw.city, 50) || null;
-  }
-
-  let district = null;
-  if (typeof raw.district === "string" && raw.district.trim()) {
-    district = sanitizeSearchQuery(raw.district, 50) || null;
-  }
-
-  let propertyType = null;
-  if (typeof raw.propertyType === "string") {
-    const pt = raw.propertyType.trim().toLowerCase();
-    if (VALID_PROPERTY_TYPES.has(pt)) {
-      propertyType = pt;
-    }
-  }
-
-  let dealType = null;
-  if (typeof raw.dealType === "string") {
-    const dt = raw.dealType.trim().toLowerCase();
-    if (VALID_DEAL_TYPES.has(dt)) {
-      dealType = dt;
-    }
-  }
-
-  let rooms = null;
-  if (raw.rooms !== undefined && raw.rooms !== null) {
-    if (raw.rooms === "4+" || String(raw.rooms).trim() === "4+") {
-      rooms = "4+";
-    } else {
-      const rNum = Number(raw.rooms);
-      if (!Number.isNaN(rNum) && Number.isInteger(rNum)) {
-        if (rNum >= 4) {
-          rooms = "4+";
-        } else if (VALID_ROOMS.has(rNum)) {
-          rooms = rNum;
-        }
-      }
-    }
-  }
-
-  let currency = null;
-  if (typeof raw.currency === "string") {
-    const cur = raw.currency.trim().toUpperCase();
-    if (VALID_CURRENCIES.has(cur)) {
-      currency = cur;
-    }
-  }
-
-  // 2. Числовые диапазоны: неотрицательные, min <= max (при инверсии меняются местами)
-  let minPrice = null;
-  let maxPrice = null;
-  if (raw.minPrice !== undefined && raw.minPrice !== null) {
-    const num = Number(raw.minPrice);
-    if (Number.isFinite(num) && num >= 0) minPrice = num;
-  }
-  if (raw.maxPrice !== undefined && raw.maxPrice !== null) {
-    const num = Number(raw.maxPrice);
-    if (Number.isFinite(num) && num >= 0) maxPrice = num;
-  }
-  if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
-    const temp = minPrice;
-    minPrice = maxPrice;
-    maxPrice = temp;
-  }
-
-  let minArea = null;
-  let maxArea = null;
-  if (raw.minArea !== undefined && raw.minArea !== null) {
-    const num = Number(raw.minArea);
-    if (Number.isFinite(num) && num >= 0) minArea = num;
-  }
-  if (raw.maxArea !== undefined && raw.maxArea !== null) {
-    const num = Number(raw.maxArea);
-    if (Number.isFinite(num) && num >= 0) maxArea = num;
-  }
-  if (minArea !== null && maxArea !== null && minArea > maxArea) {
-    const temp = minArea;
-    minArea = maxArea;
-    maxArea = temp;
-  }
-
-  // 3. Санитизация searchQuery через общий строгий sanitizeSearchQuery
-  let searchQuery = null;
-  if (typeof raw.searchQuery === "string" && raw.searchQuery.trim()) {
-    const clean = sanitizeSearchQuery(raw.searchQuery, 100);
-    searchQuery = clean || null;
-  }
-
-  // 4. Расстояние до моря / пляжа (Турция / курорты)
-  let beachDistanceFrom = null;
-  let beachDistanceTo = null;
-  if (raw.beachDistanceFrom !== undefined && raw.beachDistanceFrom !== null) {
-    const num = Number(raw.beachDistanceFrom);
-    if (Number.isFinite(num) && num >= 0) beachDistanceFrom = num;
-  }
-  if (raw.beachDistanceTo !== undefined && raw.beachDistanceTo !== null) {
-    const num = Number(raw.beachDistanceTo);
-    if (Number.isFinite(num) && num >= 0) beachDistanceTo = num;
-  }
-  if (beachDistanceFrom !== null && beachDistanceTo !== null && beachDistanceFrom > beachDistanceTo) {
-    const temp = beachDistanceFrom;
-    beachDistanceFrom = beachDistanceTo;
-    beachDistanceTo = temp;
-  }
-
-  // 5. Признак "только срочные"
-  let urgentOnly = null;
-  if (raw.urgentOnly !== undefined && raw.urgentOnly !== null) {
-    urgentOnly = Boolean(raw.urgentOnly);
-  }
-
-  return {
-    country,
-    region,
-    city,
-    district,
-    propertyType,
-    dealType,
-    rooms,
-    minPrice,
-    maxPrice,
-    currency,
-    minArea,
-    maxArea,
-    searchQuery,
-    beachDistanceFrom,
-    beachDistanceTo,
-    urgentOnly,
-  };
+// Вся логика — в ai/smartSearch.normalize.js (normalizeSmartSearchResult).
+// Имя сохранено для обратной совместимости с существующими импортами и тестами.
+export function validateAndSanitizeAIFilters(raw, options) {
+  return normalizeSmartSearchResult(raw, options);
 }
 
 export const fallbackParse = (prompt) => {
@@ -579,8 +406,8 @@ export const fallbackParse = (prompt) => {
     lower.includes("каракол") ||
     lower.includes("балыкчы");
 
-  const isOsh = lower.includes("ош") && !lower.includes("хорош");
-  const isBishkek = lower.includes("бишкек");
+  const isOsh = /(?:^|[^\p{L}])ош(?:то|тон|ко|тун|ской|ская|ские|е|а|у)?(?![\p{L}])/iu.test(lower);
+  const isBishkek = lower.includes("бишкек") || lower.includes("бшкек") || lower.includes("bishkek");
   const isChuy =
     lower.includes("чуй") ||
     lower.includes("чүй") ||
@@ -604,7 +431,7 @@ export const fallbackParse = (prompt) => {
     city = lower.includes("алань")
       ? "Аланья"
       : lower.includes("антал")
-        ? "Анталия"
+        ? "Анталья"
         : lower.includes("стамбул")
           ? "Стамбул"
           : lower.includes("мерсин")
@@ -639,11 +466,13 @@ export const fallbackParse = (prompt) => {
         ? "Кант"
         : lower.includes("кара-балта")
           ? "Кара-Балта"
-          : null;
+          : lower.includes("сокулук")
+            ? "Сокулук"
+            : null;
   } else if (isJalalAbad) {
     country = "kyrgyzstan";
     region = "JALAL_ABAD";
-    city = "Джалал-Абад";
+    city = "Жалал-Абад";
   } else if (isNaryn) {
     country = "kyrgyzstan";
     region = "NARYN";
@@ -690,21 +519,21 @@ export const fallbackParse = (prompt) => {
       city = "Бишкек";
       country = "kyrgyzstan";
     }
-  } else if (lower.includes("асанбай")) {
+  } else if (lower.includes("асанба")) {
     district = "Асанбай";
     if (!region) {
       region = "BISHKEK";
       city = "Бишкек";
       country = "kyrgyzstan";
     }
-  } else if (lower.includes("тунгуч")) {
+  } else if (lower.includes("тунгуч") || lower.includes("түнгүч")) {
     district = "Тунгуч";
     if (!region) {
       region = "BISHKEK";
       city = "Бишкек";
       country = "kyrgyzstan";
     }
-  } else if (lower.includes("кок-жар") || lower.includes("кок жар")) {
+  } else if (lower.includes("кок-жар") || lower.includes("кок жар") || lower.includes("көк-жар")) {
     district = "Кок-Жар";
     if (!region) {
       region = "BISHKEK";
@@ -748,6 +577,7 @@ export const fallbackParse = (prompt) => {
     propertyType = "land";
   } else if (
     lower.includes("коммерц") ||
+    lower.includes("коммерч") ||
     lower.includes("офис") ||
     lower.includes("склад") ||
     lower.includes("магазин")
@@ -761,11 +591,14 @@ export const fallbackParse = (prompt) => {
     lower.includes("бөлмө")
   ) {
     propertyType =
-      lower.includes("квартир") || lower.includes("батир")
+      lower.includes("квартир") || lower.includes("квртир") || lower.includes("батир")
         ? "apartment"
         : "room";
   } else if (
     lower.includes("квартир") ||
+    lower.includes("квртир") ||
+    lower.includes("кватир") ||
+    lower.includes("kvartir") ||
     lower.includes("батир") ||
     lower.includes("однушк") ||
     lower.includes("двушк") ||
@@ -775,22 +608,31 @@ export const fallbackParse = (prompt) => {
     propertyType = "apartment";
   }
 
-  // Deal Type
+  // Deal Type ("ижарага алам" -> rent, "сатып алам" / "батир алам" -> sale)
   let dealType = null;
   if (
     lower.includes("аренд") ||
+    lower.includes("arenda") ||
     lower.includes("снять") ||
     lower.includes("сниму") ||
+    lower.includes("сдается") ||
+    lower.includes("посуточн") ||
+    lower.includes("помесячн") ||
+    lower.includes("длительный срок") ||
     lower.includes("ижара") ||
-    lower.includes("алам")
+    lower.includes("жалдайм") ||
+    lower.includes("күнүмдүк")
   ) {
     dealType = "rent";
   } else if (
     lower.includes("куп") ||
+    lower.includes("kupit") ||
     lower.includes("прод") ||
     lower.includes("сатам") ||
     lower.includes("сатуу") ||
-    lower.includes("сатып")
+    lower.includes("сатып") ||
+    lower.includes("сатылат") ||
+    /(?:^|[^\p{L}])алам(?![\p{L}])/iu.test(lower)
   ) {
     dealType = "sale";
   }
@@ -802,7 +644,8 @@ export const fallbackParse = (prompt) => {
     lower.includes("1-комн") ||
     lower.includes("1 бөлмө") ||
     lower.includes("однушк") ||
-    /\b1\s*(?:-?комнат\w*|комн\w*|к\b|бөлмө\w*)/.test(lower)
+    lower.includes("однокомнат") ||
+    /(?:^|[^\p{L}\d])(?:1|бир|одна|одну)\s*(?:-?комнат\p{L}*|комн\p{L}*|komnat\p{L}*|к(?![\p{L}])|бөлмө\p{L}*)/iu.test(lower)
   ) {
     rooms = 1;
   } else if (
@@ -810,7 +653,8 @@ export const fallbackParse = (prompt) => {
     lower.includes("2-комн") ||
     lower.includes("2 бөлмө") ||
     lower.includes("двушк") ||
-    /\b2\s*(?:-?комнат\w*|комн\w*|к\b|бөлмө\w*)/.test(lower)
+    lower.includes("двухкомнат") ||
+    /(?:^|[^\p{L}\d])(?:2|эки|две|двух)\s*(?:-?комнат\p{L}*|комн\p{L}*|komnat\p{L}*|к(?![\p{L}])|бөлмө\p{L}*)/iu.test(lower)
   ) {
     rooms = 2;
   } else if (
@@ -818,7 +662,8 @@ export const fallbackParse = (prompt) => {
     lower.includes("3-комн") ||
     lower.includes("3 бөлмө") ||
     lower.includes("трешк") ||
-    /\b3\s*(?:-?комнат\w*|комн\w*|к\b|бөлмө\w*)/.test(lower)
+    lower.includes("трехкомнат") ||
+    /(?:^|[^\p{L}\d])(?:3|үч|уч|три|трех)\s*(?:-?комнат\p{L}*|комн\p{L}*|komnat\p{L}*|к(?![\p{L}])|бөлмө\p{L}*)/iu.test(lower)
   ) {
     rooms = 3;
   } else if (
@@ -826,18 +671,20 @@ export const fallbackParse = (prompt) => {
     lower.includes("4-комн") ||
     lower.includes("4 бөлмө") ||
     lower.includes("4+") ||
-    /\b4\s*(?:-?комнат\w*|комн\w*|к\b|бөлмө\w*)/.test(lower)
+    /(?:четырех|пяти|шести)комнат/.test(lower) ||
+    /(?:^|[^\p{L}\d])(?:[4-9]|четыре|пять|шесть|төрт|торт|беш|алты)\s*(?:-?комнат\p{L}*|комн\p{L}*|komnat\p{L}*|к(?![\p{L}])|бөлмө\p{L}*)/iu.test(lower)
   ) {
     rooms = "4+";
   }
 
   // Currency
   let currency = null;
-  if (lower.includes("сом") || lower.includes("kgs")) {
+  if (lower.includes("сом") || lower.includes("kgs") || /\bsom\b/.test(lower)) {
     currency = "KGS";
   } else if (
     lower.includes("$") ||
     lower.includes("доллар") ||
+    lower.includes("dollar") ||
     lower.includes("usd") ||
     isTurkey
   ) {
@@ -849,9 +696,9 @@ export const fallbackParse = (prompt) => {
   let maxArea = null;
 
   const sotkaRangeMatch = lower.match(
-    /(?:от\s*)?(\d+)\s*(?:до|-)\s*(\d+)\s*(?:соток|сотки|сот\b)/,
+    /(?:от\s*)?(\d+)\s*(?:до|-)\s*(\d+)\s*(?:соток|сотки|сотых|сот(?![\p{L}]))/iu,
   );
-  const singleSotkaMatch = lower.match(/(\d+)\s*(?:соток|сотки|сот\b)/);
+  const singleSotkaMatch = lower.match(/(\d+)\s*(?:соток|сотки|сотых|сот(?![\p{L}]))/iu);
 
   if (sotkaRangeMatch) {
     minArea = Number(sotkaRangeMatch[1]);
@@ -864,13 +711,13 @@ export const fallbackParse = (prompt) => {
     if (!propertyType) propertyType = "land";
   } else {
     const areaRangeMatch = lower.match(
-      /(?:от\s*)?(\d+)\s*(?:до|-)\s*(\d+)\s*(?:квадрат|кв|м2|м²)/,
+      /(?:от\s*)?(\d+)\s*(?:до|-)\s*(\d+)\s*(?:квадрат|чарчы|кв|м2|м²)/iu,
     );
     if (areaRangeMatch) {
       minArea = Number(areaRangeMatch[1]);
       maxArea = Number(areaRangeMatch[2]);
     } else {
-      const singleAreaMatch = lower.match(/(\d+)\s*(?:квадрат|кв\s*м|м2|м²)/);
+      const singleAreaMatch = lower.match(/(\d+)\s*(?:квадрат|чарчы|кв\s*м|кв(?![\p{L}])|м2|м²)/iu);
       if (singleAreaMatch) {
         const val = Number(singleAreaMatch[1]);
         minArea = Math.round(val * 0.9);
@@ -879,11 +726,40 @@ export const fallbackParse = (prompt) => {
     }
   }
 
-  // Price
+  // Расстояние до пляжа и срочность
+  let beachDistanceTo = null;
+  const beachMetersMatch = lower.match(
+    /(\d+)\s*(?:м(?![\p{L}])|метр\p{L}*)\s*(?:от|до|чейин|аралыкта)?\s*(?:моря|пляж\p{L}*|берег\p{L}*|озер\p{L}*|көл\p{L}*|жээк\p{L}*)|(?:(?:от|до|чейин)\s*(?:моря|пляж\p{L}*|берег\p{L}*|озер\p{L}*|көл\p{L}*|жээк\p{L}*))\s*(\d+)\s*(?:м(?![\p{L}])|метр\p{L}*)/iu,
+  );
+  if (beachMetersMatch) {
+    beachDistanceTo = Number(beachMetersMatch[1] || beachMetersMatch[2]);
+  } else if (
+    lower.includes("первая береговая") ||
+    lower.includes("первой береговой") ||
+    lower.includes("береговой линии") ||
+    lower.includes("первой линии") ||
+    lower.includes("1 линии") ||
+    lower.includes("биринчи жээк")
+  ) {
+    beachDistanceTo = 100;
+  } else if (
+    lower.includes("у моря") ||
+    lower.includes("рядом с пляжем") ||
+    lower.includes("недалеко от пляжа") ||
+    lower.includes("пляжга жакын")
+  ) {
+    beachDistanceTo = 500;
+  }
+
+  // Price (предварительно вырезаем комнаты, этажи, площадь и расстояние до пляжа)
   const cleanedForPrice = lower
-    .replace(/[1-4]\s*(-комнатн\w*|комнатн\w*|комн\w*|к\b|бөлмө\w*)/g, " ")
-    .replace(/однушк\w*|двушк\w*|трешк\w*/g, " ")
-    .replace(/(\d+)\s*(?:квадрат|кв|м2|м²|соток)/g, " ");
+    .replace(/(?:^|[^\p{L}\d])[1-9]\s*(?:-?комнатн\p{L}*|комнат\p{L}*|комн\p{L}*|komnat\p{L}*|к(?![\p{L}])|бөлмө\p{L}*)/giu, " ")
+    .replace(/\b\d+\s*(?:этаж\p{L}*|из\s*\d+)/giu, " ")
+    .replace(/однушк\p{L}*|двушк\p{L}*|трешк\p{L}*/giu, " ")
+    .replace(/(?:до\s*)?\d+\s*(?:м(?![\p{L}])|метр\p{L}*)\s*(?:от|до|чейин|аралыкта)?\s*(?:моря|пляж\p{L}*|берег\p{L}*|озер\p{L}*|көл\p{L}*|жээк\p{L}*)/giu, " ")
+    // Число рядом с единицей площади (в т.ч. диапазон «80 до 100 кв») — не цена.
+    .replace(AREA_RANGE_RE, " ")
+    .replace(AREA_NUMBER_RE, " ");
 
   let minPrice = null;
   let maxPrice = null;
@@ -901,20 +777,37 @@ export const fallbackParse = (prompt) => {
     if (minMatch) {
       minPrice = Number(minMatch[1].replace(/\s/g, ""));
     }
-    const maxMatch = cleanedForPrice.match(/(?:до|дегенде|чейин)\s*(\d+[\s\d]*)/);
+    const maxMatch = cleanedForPrice.match(/(?:до|do|дегенде|чейин)\s*(\d+[\s\d]*)/i);
     if (maxMatch) {
       maxPrice = Number(maxMatch[1].replace(/\s/g, ""));
     } else {
-      const numbers = cleanedForPrice.match(/\b\d{2,10}\b/g);
-      if (numbers && numbers.length > 0) {
-        const candidates = numbers
-          .map((n) => Number(n.replace(/\s/g, "")))
-          .filter((n) => n >= 50);
-        if (candidates.length > 0) {
-          maxPrice = candidates[candidates.length - 1];
-        }
+      // Голое число без единицы цены ценой не считаем (тип числа определяет единица, а не размер):
+      // нужен маркер цены — «за/бюджет/цена» перед числом либо валюта после него.
+      const priced = cleanedForPrice.match(
+        /(?:за|бюджет|цена)\s*(\d+[\s\d]*)|(\d+[\s\d]*?)\s*(?:\$|доллар\w*|dollar\w*|usd|сом\w*|som\b|kgs)/i,
+      );
+      if (priced) {
+        maxPrice = Number((priced[1] || priced[2]).replace(/\s/g, ""));
       }
     }
+  }
+
+  const urgentOnly =
+    lower.includes("срочн") || lower.includes("шашылыш") || lower.includes("тез арада")
+      ? true
+      : null;
+
+  // Запрос явно не о недвижимости (например, «какая погода в Бишкеке») -> все поля null
+  if (
+    /(?:^|[^\p{L}])(?:погод\p{L}*|рецепт\p{L}*|анекдот\p{L}*|курс\s+валют\p{L}*)(?![\p{L}])/iu.test(lower) &&
+    !propertyType &&
+    !dealType &&
+    !rooms &&
+    minPrice === null &&
+    maxPrice === null &&
+    minArea === null
+  ) {
+    return emptySmartSearchFilters();
   }
 
   return {
@@ -937,12 +830,11 @@ export const fallbackParse = (prompt) => {
     minArea,
     maxArea,
     searchQuery,
+    beachDistanceFrom: null,
+    beachDistanceTo,
+    urgentOnly,
   };
 };
-
-// =======================================================
-// Умный Поиск и Генерация Описания с Gemini AI
-// =======================================================
 
 // =======================================================
 // Умный Поиск: вызов LLM с таймаутом, дедупликацией и LRU
@@ -950,87 +842,93 @@ export const fallbackParse = (prompt) => {
 
 export const INFLIGHT_SEARCHES = new Map();
 
-async function executeAiSearch(prompt) {
+const LOCAL_PARSER_SOURCE = "local-parser";
+
+const hasClaudeKey = () => Boolean(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY);
+
+// Единая валидация ответа любого провайдера (LLM или локального парсера): null — ответ непригоден.
+const validateProviderResult = (raw, query) => normalizeSmartSearchResult(raw, { query });
+
+// Текст запроса: управляющие символы -> пробел, схлопнутые пробелы, trim.
+// eslint-disable-next-line no-control-regex
+const cleanPrompt = (value) => value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+
+// Локальный разбор на случай недоступности LLM. Никогда не бросает исключение.
+const safeLocalParse = (prompt) => {
+  try {
+    if (typeof prompt !== "string" || !prompt.trim()) return null;
+    return validateProviderResult(fallbackParse(prompt), prompt);
+  } catch {
+    return null;
+  }
+};
+
+export async function executeAiSearch(prompt) {
+  const startedAt = Date.now();
   const preferredProvider = (
     process.env.AI_PROVIDER ||
-    (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY ? "claude" : "gemini")
+    (hasClaudeKey() ? "claude" : "gemini")
   ).toLowerCase();
 
   const claudeModelName = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
   let filters = null;
-  let source = "local-parser";
+  let source = LOCAL_PARSER_SOURCE;
+
+  const tryProvider = async (providerSource, call, label) => {
+    try {
+      const validated = validateProviderResult(await call(prompt), prompt);
+      if (validated) {
+        filters = validated;
+        source = providerSource;
+      }
+    } catch (providerError) {
+      console.warn(`${label} warning:`, providerError?.message || providerError);
+    }
+  };
+
+  const tryClaude = () => (hasClaudeKey() ? tryProvider(claudeModelName, callClaude, "Claude API call") : null);
+  const tryGemini = () => (process.env.GEMINI_API_KEY ? tryProvider("gemini-api", callGemini, "Gemini API call") : null);
 
   if (preferredProvider === "claude" || preferredProvider === "anthropic") {
-    try {
-      const raw = await callClaude(prompt);
-      const validated = validateAndSanitizeAIFilters(raw);
-      if (validated) {
-        filters = validated;
-        source = claudeModelName;
-      }
-    } catch (claudeError) {
-      console.warn("Claude API call warning:", claudeError?.message || claudeError);
-    }
-
-    if (!filters && process.env.GEMINI_API_KEY) {
-      try {
-        const raw = await callGemini(prompt);
-        const validated = validateAndSanitizeAIFilters(raw);
-        if (validated) {
-          filters = validated;
-          source = "gemini-api";
-        }
-      } catch (geminiError) {
-        console.warn("Gemini API fallback warning:", geminiError?.message || geminiError);
-      }
-    }
+    await tryClaude();
+    if (!filters) await tryGemini();
   } else {
-    try {
-      const raw = await callGemini(prompt);
-      const validated = validateAndSanitizeAIFilters(raw);
-      if (validated) {
-        filters = validated;
-        source = "gemini-api";
-      }
-    } catch (geminiError) {
-      console.warn("Gemini API call warning:", geminiError?.message || geminiError);
-    }
-
-    if (!filters && (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY)) {
-      try {
-        const raw = await callClaude(prompt);
-        const validated = validateAndSanitizeAIFilters(raw);
-        if (validated) {
-          filters = validated;
-          source = claudeModelName;
-        }
-      } catch (claudeError) {
-        console.warn("Claude API fallback warning:", claudeError?.message || claudeError);
-      }
-    }
+    await tryGemini();
+    if (!filters) await tryClaude();
   }
 
   // Если оба внешних LLM провайдера недоступны, вернули невалидный JSON или сработал таймаут:
+  // упрощённый локальный разбор (результат помечается degraded), а если и он не удался — пустые фильтры.
   if (!filters) {
-    const rawFallback = fallbackParse(prompt);
-    filters = validateAndSanitizeAIFilters(rawFallback) || rawFallback;
-    source = "local-parser";
+    filters = safeLocalParse(prompt) || emptySmartSearchFilters();
+    source = LOCAL_PARSER_SOURCE;
   }
+
+  const degraded = source === LOCAL_PARSER_SOURCE;
+
+  // Метрики для мониторинга без текста запроса (только длина и результат).
+  console.info(
+    `[smart-search] source=${source} degraded=${degraded} ms=${Date.now() - startedAt} qlen=${prompt.length}`,
+  );
 
   // Сохраняем в кэш для повторных вызовов (ответы LLM на 30 мин, fallbackParse при сбое LLM максимум на 2 мин)
-  if (filters && typeof filters === "object") {
-    const ttl = source === "local-parser" ? FALLBACK_CACHE_TTL_MS : CACHE_TTL_MS;
-    setInCache(prompt, filters, ttl);
-  }
+  const ttl = degraded ? FALLBACK_CACHE_TTL_MS : CACHE_TTL_MS;
+  setInCache(prompt, filters, ttl, { degraded });
 
-  return { filters, source };
+  return { filters, source, degraded };
 }
 
 export const aiSearch = async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const rawPrompt = req.body?.prompt;
 
-    if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+    if (typeof rawPrompt !== "string" || !rawPrompt.trim()) {
+      return res.status(400).json({ success: false, message: "Введите текстовый или голосовой запрос" });
+    }
+
+    const prompt = cleanPrompt(rawPrompt);
+
+    if (!prompt) {
       return res.status(400).json({ success: false, message: "Введите текстовый или голосовой запрос" });
     }
 
@@ -1048,6 +946,7 @@ export const aiSearch = async (req, res) => {
         success: true,
         filters: cachedFilters,
         source: "cache",
+        degraded: SEARCH_CACHE.get(normalizeCacheKey(prompt))?.degraded === true,
       });
     }
 
@@ -1062,20 +961,22 @@ export const aiSearch = async (req, res) => {
       INFLIGHT_SEARCHES.set(cacheKey, inflightPromise);
     }
 
-    const { filters, source } = await inflightPromise;
+    const { filters, source, degraded } = await inflightPromise;
 
     return res.json({
       success: true,
       filters,
       source,
+      degraded,
     });
   } catch (error) {
-    console.error("AI Search Controller Error:", error);
-    const fallbackFilters = fallbackParse(req.body?.prompt || "");
+    // Пользователю никогда не отдаём стектрейс/500: управляемый результат с признаком degraded.
+    console.error("AI Search Controller Error:", error?.message || error);
     return res.json({
       success: true,
-      filters: fallbackFilters,
-      source: "local-parser",
+      filters: safeLocalParse(req.body?.prompt) || emptySmartSearchFilters(),
+      source: LOCAL_PARSER_SOURCE,
+      degraded: true,
     });
   }
 };

@@ -114,3 +114,18 @@ export const TURKEY_LOCATIONS = [
   "Бодрум",
   "Измир",
 ];
+
+// Единый справочник "регион -> населённые пункты/районы".
+// Используется GET /api/constants и промптом/валидацией умного поиска.
+export const LOCATIONS_BY_REGION = {
+  BISHKEK: BISHKEK_DISTRICTS,
+  ISSYK_KUL: ISSYK_KUL_LOCATIONS,
+  CHUY: CHUY_LOCATIONS,
+  OSH_CITY: OSH_CITY_DISTRICTS,
+  OSH_REGION: OSH_REGION_LOCATIONS,
+  JALAL_ABAD: JALAL_ABAD_LOCATIONS,
+  NARYN: NARYN_LOCATIONS,
+  TALAS: TALAS_LOCATIONS,
+  BATKEN: BATKEN_LOCATIONS,
+  TURKEY: TURKEY_LOCATIONS,
+};

@@ -16,7 +16,7 @@ import { useLanguage } from "@/context/LanguageContext";
 
 import styles from "./SmartSearch.module.css";
 
-const SAFE_MAX_TEXT_LENGTH = 2000;
+const SAFE_MAX_TEXT_LENGTH = 500;
 
 /* =========================================================
    NORMALIZATION HELPERS
@@ -521,6 +521,9 @@ const ARRAY_KEYS = ["amenities", "communications", "technicalParameters"];
 
 function normalizeFilters(aiFilters, originalQuery = "") {
   const f = aiFilters && typeof aiFilters === "object" ? aiFilters : {};
+  const hasAnyAiFilter = Object.values(f).some(
+    (v) => v !== null && v !== undefined && v !== "",
+  );
 
   const normalized = {};
 
@@ -550,7 +553,7 @@ function normalizeFilters(aiFilters, originalQuery = "") {
 
   let region = normalizeRegion(f.region);
 
-  if (!region) {
+  if (!region && hasAnyAiFilter) {
     region = detectRegionFromText(originalQuery);
   }
 
@@ -567,7 +570,7 @@ function normalizeFilters(aiFilters, originalQuery = "") {
 
   if (region === "ISSYK_KUL" || cityIsIssykKul || cityIsIssykKulLocation) {
     normalized.region = "ISSYK_KUL";
-    normalized.city = "Иссык-Куль";
+    normalized.city = rawCity && !cityIsIssykKul ? rawCity : "Иссык-Куль";
   } else if (region === "TURKEY") {
     normalized.country = "turkey";
     normalized.region = "TURKEY";
@@ -626,7 +629,7 @@ function normalizeFilters(aiFilters, originalQuery = "") {
     normalized.searchQuery = cleanValue(f.searchQuery);
   }
 
-  if (!normalized.searchQuery && originalQuery) {
+  if (!normalized.searchQuery && originalQuery && hasAnyAiFilter) {
     const qLower = originalQuery.toLowerCase();
     if (qLower.includes("студи") || qLower.includes("стули")) {
       normalized.searchQuery = "студия";
@@ -709,6 +712,14 @@ function normalizeFilters(aiFilters, originalQuery = "") {
   }
 
   /* -------------------------------------------------------
+     URGENT ONLY
+  ------------------------------------------------------- */
+
+  if (f.urgentOnly === true) {
+    normalized.urgentOnly = true;
+  }
+
+  /* -------------------------------------------------------
      FEATURES
   ------------------------------------------------------- */
 
@@ -753,6 +764,8 @@ export default function SmartSearch({
   const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
   const mountedRef = useRef(true);
+  const searchAbortRef = useRef(null);
+  const searchReqIdRef = useRef(0);
 
   const [supported, setSupported] = useState(true);
   const [listening, setListening] = useState(false);
@@ -1201,6 +1214,12 @@ export default function SmartSearch({
       return;
     }
 
+    // Защита от гонок: отменяем предыдущий запрос, если он ещё не завершился.
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    const reqId = (searchReqIdRef.current += 1);
+
     try {
       setSearching(true);
       setError("");
@@ -1210,12 +1229,15 @@ export default function SmartSearch({
         headers: {
           "Content-Type": "application/json",
         },
+        signal: controller.signal,
         body: JSON.stringify({
           query: trimmedText,
         }),
       });
 
       const data = await response.json().catch(() => ({}));
+
+      if (reqId !== searchReqIdRef.current || !mountedRef.current) return;
 
       if (!response.ok || !data?.success) {
         throw new Error(data?.message || t("smartSearch.errors.searchFailed"));
@@ -1227,12 +1249,20 @@ export default function SmartSearch({
 
       const normalized = normalizeFilters(data.filters, trimmedText);
 
-      console.group("SMART SEARCH");
-      console.log("Language:", language);
-      console.log("Query:", trimmedText);
-      console.log("AI response:", data.filters);
-      console.log("Normalized:", normalized);
-      console.groupEnd();
+      // Если AI вернул все null (запрос не о недвижимости или без параметров):
+      // в degraded-режиме (LLM недоступен) пробуем текстовый поиск по сырой строке,
+      // иначе показываем сообщение и не сбрасываем текущие фильтры пользователя.
+      if (Object.keys(normalized).length === 0) {
+        if (data.degraded) {
+          onFiltersDetected?.({
+            query: trimmedText,
+            filters: { searchQuery: trimmedText.slice(0, 100) },
+          });
+        } else {
+          setError(t("smartSearch.errors.aiNoFilters"));
+        }
+        return;
+      }
 
       setText(trimmedText);
 
@@ -1241,6 +1271,9 @@ export default function SmartSearch({
         filters: normalized,
       });
     } catch (searchError) {
+      if (searchError?.name === "AbortError") return;
+      if (reqId !== searchReqIdRef.current || !mountedRef.current) return;
+
       console.error("Smart search error:", searchError);
 
       setError(
@@ -1248,8 +1281,16 @@ export default function SmartSearch({
           ? searchError.message
           : t("smartSearch.errors.searchFailed"),
       );
+
+      // Предсказуемый фолбэк при сбое API: ищем по тексту как по ключевому слову.
+      onFiltersDetected?.({
+        query: trimmedText,
+        filters: { searchQuery: trimmedText.slice(0, 100) },
+      });
     } finally {
-      setSearching(false);
+      if (reqId === searchReqIdRef.current && mountedRef.current) {
+        setSearching(false);
+      }
     }
   }
 
@@ -1298,6 +1339,8 @@ export default function SmartSearch({
   ========================================================= */
 
   function clearSearch() {
+    searchAbortRef.current?.abort();
+
     if (listening && isKyrgyz) {
       const recorder = mediaRecorderRef.current;
 
@@ -1317,6 +1360,7 @@ export default function SmartSearch({
   useEffect(() => {
     return () => {
       mountedRef.current = false;
+      searchAbortRef.current?.abort();
 
       try {
         const recorder = mediaRecorderRef.current;
