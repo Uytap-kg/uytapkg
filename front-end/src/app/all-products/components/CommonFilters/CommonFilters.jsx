@@ -518,10 +518,15 @@ export default function CommonFilters({ filters, updateFilter }) {
 
   const kyrgyzRegions = Object.values(locations.kyrgyzstan.regions);
 
-  const selectedKyrgyzRegion =
-    locations.kyrgyzstan.regions[filters?.region] || null;
+  const normalizedKyrgyzRegionKey =
+    filters?.region === "OSH" || filters?.region === "OSH_CITY"
+      ? "OSH_REGION"
+      : filters?.region || "";
 
-  const isBishkek = filters?.region === "BISHKEK";
+  const selectedKyrgyzRegion =
+    locations.kyrgyzstan.regions[normalizedKyrgyzRegionKey] || null;
+
+  const isBishkek = normalizedKyrgyzRegionKey === "BISHKEK";
 
   const kyrgyzRegionOptions = [
     {
@@ -544,7 +549,21 @@ export default function CommonFilters({ filters, updateFilter }) {
 
   const turkeyCities = Object.values(locations.turkey.cities);
 
-  const selectedTurkeyCity = locations.turkey.cities[filters?.city] || null;
+  const resolvedTurkeyCityKey = (() => {
+    const raw = String(filters?.city || "").trim();
+    if (!raw || raw === "Все") return "";
+    if (locations.turkey.cities[raw]) return raw;
+    const rawLower = raw.toLowerCase();
+    if (rawLower === "мерсин") return "mersin";
+    const found = Object.entries(locations.turkey.cities).find(
+      ([k, item]) =>
+        k.toLowerCase() === rawLower || item.name.toLowerCase() === rawLower,
+    );
+    return found ? found[0] : "";
+  })();
+
+  const selectedTurkeyCity =
+    locations.turkey.cities[resolvedTurkeyCityKey] || null;
 
   const turkeyCityOptions = [
     {
@@ -616,7 +635,7 @@ export default function CommonFilters({ filters, updateFilter }) {
     const country = value === "kyrgyzstan" ? "kyrgyzstan" : "turkey";
 
     updateFilter("country", country);
-    updateFilter("region", "");
+    updateFilter("region", country === "turkey" ? "TURKEY" : "");
     updateFilter("city", "");
     updateFilter("settlement", "");
     updateFilter("district", "");
@@ -659,7 +678,7 @@ export default function CommonFilters({ filters, updateFilter }) {
     if (!locations.turkey.cities[value]) return;
 
     updateFilter("city", value);
-    updateFilter("region", "");
+    updateFilter("region", "TURKEY");
     updateFilter("settlement", "");
     updateFilter("district", "");
   }
@@ -672,13 +691,15 @@ export default function CommonFilters({ filters, updateFilter }) {
      DISPLAY VALUES
   ======================================================= */
 
-  const selectedKyrgyzRegionName = filters?.region ? filters.region : "";
+  const selectedKyrgyzRegionName = normalizedKyrgyzRegionKey;
 
-  const selectedKyrgyzSettlement = filters?.settlement || "";
+  const selectedKyrgyzSettlement =
+    filters?.settlement ||
+    (!isBishkek && filters?.city && filters.city !== "Все" ? filters.city : "");
 
   const selectedBishkekDistrict = filters?.district || "";
 
-  const selectedTurkeyCityName = filters?.city || "";
+  const selectedTurkeyCityName = resolvedTurkeyCityKey;
 
   const selectedTurkeyDistrict = filters?.district || "";
 

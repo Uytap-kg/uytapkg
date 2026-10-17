@@ -24,6 +24,7 @@ import {
   emptySmartSearchFilters,
   AREA_UNIT,
 } from "../ai/smartSearch.normalize.js";
+import { extractCategoryFeatures } from "../ai/smartSearch.features.js";
 
 // Числа с единицей площади (для локального парсера): «50 квадратов», «80 м2», «от 80 до 100 кв».
 const AREA_NUMBER_RE = new RegExp(`(?<![\\p{L}\\d.,])\\d+(?:[.,]\\d+)?\\s*${AREA_UNIT}`, "giu");
@@ -379,7 +380,7 @@ export const fallbackParse = (prompt) => {
     } else {
       searchQuery = sanitizeSearchQuery(firstWord);
     }
-  } else if (lower.includes("студи")) {
+  } else if (/(?:^|[^\p{L}])(?:студ(?=$|[^\p{L}])|сту[дл]и\p{L}*(?=$|[^\p{L}]))/iu.test(lower)) {
     searchQuery = "студия";
   } else if (lower.includes("евродвушк")) {
     searchQuery = "евродвушка";
@@ -393,33 +394,86 @@ export const fallbackParse = (prompt) => {
     lower.includes("turkey") ||
     lower.includes("түркия") ||
     lower.includes("алань") ||
+    lower.includes("алани") ||
     lower.includes("антал") ||
     lower.includes("стамбул") ||
+    lower.includes("istanbul") ||
     lower.includes("мерсин") ||
-    lower.includes("измир");
+    lower.includes("измир") ||
+    lower.includes("бодрум") ||
+    lower.includes("анкар") ||
+    lower.includes("бурс") ||
+    lower.includes("мармарис");
 
   const isIssykKul =
     lower.includes("иссык") ||
     lower.includes("ысык") ||
+    lower.includes("issyk") ||
     lower.includes("чолпон") ||
     lower.includes("бостери") ||
     lower.includes("каракол") ||
-    lower.includes("балыкчы");
+    lower.includes("балыкчы") ||
+    lower.includes("тамч") ||
+    lower.includes("каджи") ||
+    lower.includes("чок-тал") ||
+    lower.includes("чок тал") ||
+    lower.includes("сары-ой") ||
+    lower.includes("сары ой") ||
+    lower.includes("тамг") ||
+    lower.includes("тосор") ||
+    lower.includes("боконбаев") ||
+    lower.includes("барскоон") ||
+    lower.includes("ананьев") ||
+    lower.includes("семеновк") ||
+    lower.includes("григорьевк") ||
+    lower.includes("тюп") ||
+    lower.includes("кызыл-суу");
 
-  const isOsh = /(?:^|[^\p{L}])ош(?:то|тон|ко|тун|ской|ская|ские|е|а|у)?(?![\p{L}])/iu.test(lower);
+  const matchLocationInList = (text, list) => {
+    const foldedText = text.replace(/[-–—_]+/g, " ").replace(/\s+/g, " ");
+    for (const item of list) {
+      const variants = item.includes("(")
+        ? [
+            item.replace(/\s*\([^)]*\)/g, "").trim(),
+            (item.match(/\(([^)]+)\)/)?.[1] || "").trim(),
+          ].filter(Boolean)
+        : [item];
+      for (const v of variants) {
+        const cleanV = v.toLowerCase().replace(/ё/g, "е").replace(/[-–—_]+/g, " ").trim();
+        const stemV = cleanV.length >= 4 ? cleanV.replace(/[аяоеиыуюь]$/i, "") : cleanV;
+        if (stemV && foldedText.includes(stemV)) {
+          return item;
+        }
+      }
+    }
+    return null;
+  };
+
+  const matchedOshSettlement = matchLocationInList(lower, OSH_REGION_LOCATIONS);
+  const matchedJalalAbadSettlement = matchLocationInList(lower, JALAL_ABAD_LOCATIONS);
+  const matchedNarynSettlement = matchLocationInList(lower, NARYN_LOCATIONS);
+  const matchedTalasSettlement = matchLocationInList(lower, TALAS_LOCATIONS);
+  const matchedBatkenSettlement = matchLocationInList(lower, BATKEN_LOCATIONS);
+  const matchedChuySettlement = matchLocationInList(lower, CHUY_LOCATIONS);
+  const matchedIssykKulSettlement = matchLocationInList(lower, ISSYK_KUL_LOCATIONS);
+
+  const isOsh =
+    /(?:^|[^\p{L}])ош(?:то|тон|ко|тун|ской|ская|ские|е|а|у)?(?![\p{L}])/iu.test(lower) ||
+    Boolean(matchedOshSettlement);
   const isBishkek = lower.includes("бишкек") || lower.includes("бшкек") || lower.includes("bishkek");
   const isChuy =
     lower.includes("чуй") ||
     lower.includes("чүй") ||
-    lower.includes("токмок") ||
-    lower.includes("кант") ||
-    lower.includes("кара-балта") ||
-    lower.includes("сокулук");
+    Boolean(matchedChuySettlement);
   const isJalalAbad =
-    lower.includes("жалал-абад") || lower.includes("джалал-абад");
-  const isNaryn = lower.includes("нарын");
-  const isTalas = lower.includes("талас");
-  const isBatken = lower.includes("баткен");
+    lower.includes("жалал-абад") ||
+    lower.includes("джалал-абад") ||
+    lower.includes("жалал абад") ||
+    lower.includes("джалал абад") ||
+    Boolean(matchedJalalAbadSettlement);
+  const isNaryn = lower.includes("нарын") || Boolean(matchedNarynSettlement);
+  const isTalas = lower.includes("талас") || Boolean(matchedTalasSettlement);
+  const isBatken = lower.includes("баткен") || Boolean(matchedBatkenSettlement);
 
   let country = null;
   let region = null;
@@ -428,16 +482,27 @@ export const fallbackParse = (prompt) => {
   if (isTurkey) {
     country = "turkey";
     region = "TURKEY";
-    city = lower.includes("алань")
-      ? "Аланья"
-      : lower.includes("антал")
-        ? "Анталья"
-        : lower.includes("стамбул")
-          ? "Стамбул"
-          : lower.includes("мерсин")
-            ? "Мерсин"
-            : "Турция";
-  } else if (isIssykKul) {
+    city =
+      lower.includes("алань") || lower.includes("алани")
+        ? "Аланья"
+        : lower.includes("антал")
+          ? "Анталья"
+          : lower.includes("стамбул") || lower.includes("istanbul")
+            ? "Стамбул"
+            : lower.includes("мерсин")
+              ? "Мерсин"
+              : lower.includes("бодрум")
+                ? "Бодрум"
+                : lower.includes("измир")
+                  ? "Измир"
+                  : lower.includes("анкар")
+                    ? "Анкара"
+                    : lower.includes("бурс")
+                      ? "Бурса"
+                      : lower.includes("мармарис")
+                        ? "Мармарис"
+                        : null;
+  } else if (isIssykKul || matchedIssykKulSettlement) {
     country = "kyrgyzstan";
     region = "ISSYK_KUL";
     city = lower.includes("каракол")
@@ -448,11 +513,37 @@ export const fallbackParse = (prompt) => {
           ? "Бостери"
           : lower.includes("балыкчы")
             ? "Балыкчы"
-            : "Иссык-Куль";
+            : lower.includes("тамч")
+              ? "Тамчи"
+              : lower.includes("каджи")
+                ? "Каджи-Сай"
+                : lower.includes("чок-тал") || lower.includes("чок тал")
+                  ? "Чок-Тал"
+                  : lower.includes("сары-ой") || lower.includes("сары ой")
+                    ? "Сары-Ой"
+                    : lower.includes("тамг")
+                      ? "Тамга"
+                      : lower.includes("тосор")
+                        ? "Тосор"
+                        : lower.includes("боконбаев")
+                          ? "Боконбаево"
+                          : lower.includes("барскоон")
+                            ? "Барскоон"
+                            : lower.includes("ананьев")
+                              ? "Ананьево"
+                              : lower.includes("семеновк")
+                                ? "Семеновка"
+                                : lower.includes("григорьевк")
+                                  ? "Григорьевка"
+                                  : lower.includes("тюп")
+                                    ? "Тюп"
+                                    : lower.includes("кызыл-суу")
+                                      ? "Кызыл-Суу"
+                                      : matchedIssykKulSettlement || null;
   } else if (isOsh) {
     country = "kyrgyzstan";
-    region = "OSH";
-    city = "Ош";
+    region = matchedOshSettlement ? "OSH_REGION" : "OSH";
+    city = matchedOshSettlement || (lower.includes("област") ? null : "Ош");
   } else if (isBishkek) {
     country = "kyrgyzstan";
     region = "BISHKEK";
@@ -460,34 +551,26 @@ export const fallbackParse = (prompt) => {
   } else if (isChuy) {
     country = "kyrgyzstan";
     region = "CHUY";
-    city = lower.includes("токмок")
-      ? "Токмок"
-      : lower.includes("кант")
-        ? "Кант"
-        : lower.includes("кара-балта")
-          ? "Кара-Балта"
-          : lower.includes("сокулук")
-            ? "Сокулук"
-            : null;
+    city = matchedChuySettlement || null;
   } else if (isJalalAbad) {
     country = "kyrgyzstan";
     region = "JALAL_ABAD";
-    city = "Жалал-Абад";
+    city = matchedJalalAbadSettlement || (lower.includes("област") ? null : "Жалал-Абад");
   } else if (isNaryn) {
     country = "kyrgyzstan";
     region = "NARYN";
-    city = "Нарын";
+    city = matchedNarynSettlement || (lower.includes("област") ? null : "Нарын");
   } else if (isTalas) {
     country = "kyrgyzstan";
     region = "TALAS";
-    city = "Талас";
+    city = matchedTalasSettlement || (lower.includes("област") ? null : "Талас");
   } else if (isBatken) {
     country = "kyrgyzstan";
     region = "BATKEN";
-    city = "Баткен";
+    city = matchedBatkenSettlement || (lower.includes("област") ? null : "Баткен");
   }
 
-  // District (Canonical naming for Bishkek)
+  // District (Canonical naming for Bishkek & Osh)
   let district = null;
   if (
     lower.includes("южн") &&
@@ -548,54 +631,63 @@ export const fallbackParse = (prompt) => {
       country = "kyrgyzstan";
     }
   } else {
-    for (const bDist of BISHKEK_DISTRICTS) {
-      if (lower.includes(bDist.toLowerCase())) {
-        district = bDist;
+    const matchedBishkekDist = matchLocationInList(lower, BISHKEK_DISTRICTS);
+    if (matchedBishkekDist) {
+      district = matchedBishkekDist;
+      if (!region) {
+        region = "BISHKEK";
+        city = "Бишкек";
+        country = "kyrgyzstan";
+      }
+    } else {
+      const matchedOshDist = matchLocationInList(lower, OSH_CITY_DISTRICTS);
+      if (matchedOshDist) {
+        district = matchedOshDist;
         if (!region) {
-          region = "BISHKEK";
-          city = "Бишкек";
+          region = "OSH_CITY";
+          city = "Ош";
           country = "kyrgyzstan";
         }
-        break;
       }
     }
   }
 
-  // Property Type (including Kyrgyz: жер уй / жер үй = house, батир = apartment, жер = land)
+  // Property Type (including Kyrgyz & prefixes: кварт*, комнат*, участ*, коттед*, коммер*, паркин*, гараж*)
   let propertyType = null;
   if (
     lower.includes("жер уй") ||
     lower.includes("жер үй") ||
-    /(?:^|[^\wа-яёөүң])(жер\s*[үу]й|үй|уй|дом\w*)(?=[^\wа-яёөүң]|$)/i.test(
+    /(?:^|[^\wа-яёөүң])(жер\s*[үу]й|үй|уй|дом\w*|таунхаус\w*|особняк\w*|вилл\w*|дач\w*)(?=[^\wа-яёөүң]|$)/i.test(
       lower,
     )
   ) {
     propertyType = "house";
-  } else if (lower.includes("коттедж")) {
+  } else if (lower.includes("коттед")) {
     propertyType = "cottage";
-  } else if (lower.includes("участок") || lower.includes("жер")) {
+  } else if (lower.includes("участ") || lower.includes("жер")) {
     propertyType = "land";
   } else if (
-    lower.includes("коммерц") ||
-    lower.includes("коммерч") ||
+    lower.includes("коммер") ||
     lower.includes("офис") ||
     lower.includes("склад") ||
-    lower.includes("магазин")
+    lower.includes("магазин") ||
+    lower.includes("помещен")
   ) {
     propertyType = "commercial";
-  } else if (lower.includes("гараж") || lower.includes("паркинг")) {
+  } else if (lower.includes("гараж") || lower.includes("паркин") || lower.includes("машиномест")) {
     propertyType = "parking";
   } else if (
     lower.includes("комната") ||
     lower.includes("комнату") ||
-    lower.includes("бөлмө")
+    lower.includes("бөлмө") ||
+    /(?:^|[^\p{L}])комнат(?=$|[^\p{L}])/iu.test(lower)
   ) {
     propertyType =
-      lower.includes("квартир") || lower.includes("квртир") || lower.includes("батир")
+      lower.includes("кварт") || lower.includes("квртир") || lower.includes("батир")
         ? "apartment"
         : "room";
   } else if (
-    lower.includes("квартир") ||
+    lower.includes("кварт") ||
     lower.includes("квртир") ||
     lower.includes("кватир") ||
     lower.includes("kvartir") ||
@@ -603,7 +695,10 @@ export const fallbackParse = (prompt) => {
     lower.includes("однушк") ||
     lower.includes("двушк") ||
     lower.includes("трешк") ||
-    lower.includes("студи")
+    lower.includes("евродвушк") ||
+    lower.includes("пентхаус") ||
+    lower.includes("апарт") ||
+    /(?:^|[^\p{L}])(?:студ(?=$|[^\p{L}])|сту[дл]и\p{L}*(?=$|[^\p{L}]))/iu.test(lower)
   ) {
     propertyType = "apartment";
   }
@@ -945,6 +1040,7 @@ export const aiSearch = async (req, res) => {
       return res.json({
         success: true,
         filters: cachedFilters,
+        features: extractCategoryFeatures(prompt, cachedFilters),
         source: "cache",
         degraded: SEARCH_CACHE.get(normalizeCacheKey(prompt))?.degraded === true,
       });
@@ -966,15 +1062,18 @@ export const aiSearch = async (req, res) => {
     return res.json({
       success: true,
       filters,
+      features: extractCategoryFeatures(prompt, filters),
       source,
       degraded,
     });
   } catch (error) {
     // Пользователю никогда не отдаём стектрейс/500: управляемый результат с признаком degraded.
     console.error("AI Search Controller Error:", error?.message || error);
+    const fallbackFilters = safeLocalParse(req.body?.prompt) || emptySmartSearchFilters();
     return res.json({
       success: true,
-      filters: safeLocalParse(req.body?.prompt) || emptySmartSearchFilters(),
+      filters: fallbackFilters,
+      features: extractCategoryFeatures(req.body?.prompt, fallbackFilters),
       source: LOCAL_PARSER_SOURCE,
       degraded: true,
     });

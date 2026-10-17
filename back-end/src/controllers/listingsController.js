@@ -19,6 +19,12 @@ import {
   sanitizeFeatureValue,
 } from "../constants/features.js";
 import {
+  CITY_ALIASES,
+  LOCATIONS_BY_REGION,
+  REGION_SEARCH_PATTERNS,
+  resolveRegionCode,
+} from "../constants/locations.js";
+import {
   consumeTariffBoost,
 
   refundTariffBoost,
@@ -150,12 +156,81 @@ export function sanitizeSearchQuery(rawQuery, maxLength = 100) {
   return normalized;
 }
 
+// Отсечение падежных окончаний (русских и кыргызских) для морфологического поиска
+// (например: «студия»/«студию» -> «студи», «караколе»/«караколдо» -> «каракол», «уютная»/«уютную» -> «уютн»)
+const INFLECTION_SUFFIX_RE =
+  /(?:иями|ями|ами|ого|его|ому|ему|ыми|ими|ая|яя|ое|ее|ые|ие|ой|ей|ий|ый|ую|юю|ом|ем|ам|ям|ах|ях|ов|ев|ью|ья|ьи|дан|ден|дон|дөн|тан|тен|тон|төн|лар|лер|лор|лөр|дар|дер|дор|дөр|тар|тер|тор|төр|га|ге|го|гө|ка|ке|ко|кө|да|де|до|дө|та|те|то|тө|ны|ни|ну|нү|ды|ди|ду|дү|ты|ти|ту|тү|а|я|о|е|и|ы|у|ю|ь)$/iu;
+
+export function stemSearchWord(word) {
+  if (!word || word.length < 4) return word;
+  const stemmed = word.replace(INFLECTION_SUFFIX_RE, "");
+  return stemmed.length >= 3 ? stemmed : word;
+}
+
+export function buildSearchPattern(cleanSearch) {
+  if (!cleanSearch) return "";
+  return cleanSearch
+    .split(/\s+/)
+    .map(stemSearchWord)
+    .filter(Boolean)
+    .join("%");
+}
+
+const CANONICAL_CITY_MAP = (() => {
+  const map = new Map();
+  const add = (name) => {
+    if (!name) return;
+    const key = String(name).trim().toLowerCase().replace(/ё/g, "е").replace(/[-–—_]+/g, " ").replace(/\s+/g, " ");
+    map.set(key, name);
+    map.set(String(name).trim().toLowerCase(), name);
+  };
+  ["Бишкек", "Ош", "Жалал-Абад", "Нарын", "Талас", "Баткен"].forEach(add);
+  Object.values(LOCATIONS_BY_REGION).forEach((list) => {
+    if (Array.isArray(list)) list.forEach(add);
+  });
+  return map;
+})();
+
+function canonicalizeCityName(val) {
+  if (!val) return val;
+  const trimmed = String(val).trim();
+  const norm = trimmed.toLowerCase().replace(/ё/g, "е").replace(/[-–—_]+/g, " ").replace(/\s+/g, " ");
+  return CANONICAL_CITY_MAP.get(norm) || CANONICAL_CITY_MAP.get(trimmed.toLowerCase()) || trimmed;
+}
+
+function isRegionOnlyName(val) {
+  if (!val) return false;
+  const lower = String(val)
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[-–—_]+/g, " ")
+    .replace(/\s+/g, " ");
+  return (
+    lower.includes("област") ||
+    lower === "иссык куль" ||
+    lower === "иссыккуль" ||
+    lower === "ысык кол" ||
+    lower === "ысык көл" ||
+    lower === "issyk kul" ||
+    lower === "чуй" ||
+    lower === "чүй" ||
+    lower === "chuy" ||
+    lower === "турция" ||
+    lower === "түркия" ||
+    lower === "turkey" ||
+    lower === "кыргызстан" ||
+    lower === "kyrgyzstan"
+  );
+}
+
 // Общие серверные фильтры публичной выдачи объявлений (каталог и карта)
 export function applyListingFilters(query, filters = {}) {
   const {
     country,
     region,
     city,
+    settlement,
     district,
     propertyType,
     dealType,
@@ -179,33 +254,71 @@ export function applyListingFilters(query, filters = {}) {
     beachDistanceTo,
   } = filters;
 
-  // 1. Санитизация и серверный поиск по ключевым словам (searchQuery / query)
+  // 1. Санитизация и серверный поиск по ключевым словам (searchQuery / query) с учётом падежных окончаний и порядка слов
   const rawSearch = searchQuery ?? qParam;
   const cleanSearch = sanitizeSearchQuery(rawSearch);
   if (cleanSearch) {
-    // В PostgREST .or() синтаксис: col.operator.value,col2.operator.value
-    // cleanSearch содержит ТОЛЬКО безопасные символы из белого списка (буквы, цифры, дефис, пробел).
-    // Поиск по title, district и city — все три поля имеют GIN-триграммные индексы (pg_trgm).
-    query = query.or(`title.ilike.%${cleanSearch}%,district.ilike.%${cleanSearch}%,city.ilike.%${cleanSearch}%`);
+    const searchPattern = buildSearchPattern(cleanSearch);
+    const patternSet = new Set([cleanSearch]);
+    if (searchPattern) patternSet.add(searchPattern);
+
+    const stemmedWords = cleanSearch.split(/\s+/).map(stemSearchWord).filter(Boolean);
+    if (stemmedWords.length >= 2 && stemmedWords.length <= 3) {
+      patternSet.add([...stemmedWords].reverse().join("%"));
+    }
+
+    const clauses = [];
+    for (const pat of patternSet) {
+      clauses.push(
+        `title.ilike.%${pat}%,description.ilike.%${pat}%,district.ilike.%${pat}%,city.ilike.%${pat}%`,
+      );
+    }
+    query = query.or(clauses.join(","));
   }
 
   // 2. Фильтрация по региону / городу / району / стране
-  if (country) {
-    const cLower = String(country).toLowerCase();
-    if (cLower === "turkey" || cLower === "турция") {
-      query = query.or("region.ilike.%TURKEY%,region.ilike.%Турция%,city.ilike.%Турция%,city.ilike.%Turkey%");
-    }
-  } else if (region) {
-    const rLower = String(region).toLowerCase();
-    if (rLower === "turkey" || rLower === "турция") {
-      query = query.or("region.ilike.%TURKEY%,region.ilike.%Турция%,city.ilike.%Турция%,city.ilike.%Turkey%");
+  const rawCityInput =
+    city && city !== "Все" && city !== "all"
+      ? String(city).trim()
+      : settlement && settlement !== "Все" && settlement !== "all"
+        ? String(settlement).trim()
+        : "";
+
+  const cityIsRegionPlaceholder = isRegionOnlyName(rawCityInput);
+  const effectiveRegion =
+    region && region !== "Все" && region !== "all"
+      ? String(region).trim()
+      : cityIsRegionPlaceholder
+        ? rawCityInput
+        : "";
+
+  const regionCode = resolveRegionCode(effectiveRegion);
+  const cLower = country ? String(country).trim().toLowerCase() : "";
+  const isTurkeyCountry = cLower === "turkey" || cLower === "турция" || cLower === "түркия";
+
+  if (regionCode === "TURKEY" || (!regionCode && isTurkeyCountry)) {
+    query = query.or("region.ilike.%TURKEY%,region.ilike.%Турция%,city.ilike.%Турция%,city.ilike.%Turkey%");
+  } else if (regionCode && REGION_SEARCH_PATTERNS[regionCode]) {
+    const patterns = REGION_SEARCH_PATTERNS[regionCode];
+    query = query.or(patterns.map((p) => `region.ilike.%${p}%`).join(","));
+  } else if (effectiveRegion && typeof query.ilike === "function") {
+    query = query.ilike("region", `%${effectiveRegion}%`);
+  } else if ((cLower === "kyrgyzstan" || cLower === "кыргызстан") && typeof query.neq === "function") {
+    query = query.neq("region", "TURKEY");
+  }
+
+  if (rawCityInput && !cityIsRegionPlaceholder) {
+    const aliases = CITY_ALIASES[rawCityInput.toLowerCase()];
+    if (aliases && aliases.length > 0 && typeof query.in === "function") {
+      query = query.in("city", aliases);
     } else {
-      query = query.ilike("region", `%${region}%`);
+      query = query.eq("city", canonicalizeCityName(rawCityInput));
     }
   }
 
-  if (city && city !== "Все") query = query.eq("city", String(city).trim());
-  if (district) query = query.ilike("district", `%${district}%`);
+  if (district && district !== "Все" && district !== "all") {
+    query = query.ilike("district", `%${String(district).trim()}%`);
+  }
 
   // 3. Фильтрация по типу недвижимости (с поддержкой cottage и parking через единые константы)
   if (propertyType && propertyType !== "all" && propertyType !== "Все") {
@@ -222,8 +335,8 @@ export function applyListingFilters(query, filters = {}) {
     }
   }
 
-  if (dealType) query = query.eq("deal_type", dealType);
-  if (rentPeriod) query = query.eq("rent_period", rentPeriod);
+  if (dealType && dealType !== "all" && dealType !== "Все") query = query.eq("deal_type", dealType);
+  if (rentPeriod && rentPeriod !== "all" && rentPeriod !== "Все") query = query.eq("rent_period", rentPeriod);
 
   // 4. Фильтр urgentOnly (срочные объявления: активные и неистёкшие)
   if (urgentOnly === "true" || urgentOnly === true) {

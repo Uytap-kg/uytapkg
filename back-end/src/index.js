@@ -51,6 +51,7 @@ const defaultOrigins = [
   "https://uytapkg-kui5.vercel.app",
   "https://uytapkgdep.vercel.app",
   "https://www.uytap.kg",
+  "https://uytapkg-3szx8w041-fanwwis-projects.vercel.app",
 ];
 // ALLOWED_ORIGINS="https://a.kg,https://b.kg" полностью заменяет список по умолчанию.
 const envOrigins = (process.env.ALLOWED_ORIGINS || "")

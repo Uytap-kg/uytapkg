@@ -133,10 +133,12 @@ const DEFAULT_FILTERS = {
   documents: [],
   furniture: [],
   offerType: [],
+  pets: [],
 
   residentialComplex: [],
 
   rentalPeriod: [],
+  rentPeriod: "",
 
   amenities: [],
   communications: [],
@@ -156,6 +158,7 @@ const featureKeys = [
   "documents",
   "furniture",
   "offerType",
+  "pets",
 
   "residentialComplex",
 
@@ -192,19 +195,7 @@ const featureKeys = [
 ];
 
 const arrayFeatureKeys = [
-  "series",
-  "floor",
-  "condition",
-  "walls",
-  "heating",
-  "documents",
-  "furniture",
-  "offerType",
-
-  "residentialComplex",
-
-  "rentalPeriod",
-
+  ...featureKeys,
   "amenities",
   "communications",
   "technicalParameters",
@@ -216,6 +207,7 @@ const ignoredUrlKeys = [
   "propertyType",
   "category",
   "dealType",
+  "rentPeriod",
 
   "city",
   "settlement",
@@ -382,6 +374,10 @@ function normalizeDealType(value) {
     return "sale";
   }
 
+  if (value === "all" || value === "Все") {
+    return "all";
+  }
+
   if (value === "Продажа") {
     return "sale";
   }
@@ -439,8 +435,10 @@ function parseUrlToFilters(searchParams) {
 
     propertyType,
     dealType,
+    rentPeriod: searchParams.get("rentPeriod") || "",
 
     city: searchParams.get("city") || searchParams.get("settlement") || "Все",
+    settlement: searchParams.get("settlement") || "",
 
     region: searchParams.get("region") || "",
 
@@ -467,33 +465,11 @@ function parseUrlToFilters(searchParams) {
     beachDistanceTo: searchParams.get("beachDistanceTo") || "",
 
     urgentOnly: searchParams.get("urgentOnly") === "true",
-
-    series: parseArrayParam("series"),
-
-    floor: parseArrayParam("floor"),
-
-    condition: parseArrayParam("condition"),
-
-    walls: parseArrayParam("walls"),
-
-    heating: parseArrayParam("heating"),
-
-    documents: parseArrayParam("documents"),
-
-    furniture: parseArrayParam("furniture"),
-
-    offerType: parseArrayParam("offerType"),
-
-    residentialComplex: parseArrayParam("residentialComplex"),
-
-    rentalPeriod: parseArrayParam("rentalPeriod"),
-
-    amenities: parseArrayParam("amenities"),
-
-    communications: parseArrayParam("communications"),
-
-    technicalParameters: parseArrayParam("technicalParameters"),
   };
+
+  for (const key of arrayFeatureKeys) {
+    nextFilters[key] = parseArrayParam(key);
+  }
 
   for (const [key, value] of searchParams.entries()) {
     if (ignoredUrlKeys.includes(key)) {
@@ -517,12 +493,19 @@ function buildApiFilters(f) {
     params.propertyType = f.propertyType;
   }
 
-  if (f.dealType && f.dealType !== "Все") {
+  if (f.dealType && f.dealType !== "Все" && f.dealType !== "all") {
     params.dealType = f.dealType;
   }
 
-  if (f.city && f.city !== "Все") {
-    params.city = f.city;
+  if (f.rentPeriod && f.rentPeriod !== "Все" && f.rentPeriod !== "all") {
+    params.rentPeriod = f.rentPeriod;
+  }
+
+  const effectiveCity =
+    f.city && f.city !== "Все" ? f.city : f.settlement || "";
+
+  if (effectiveCity && effectiveCity !== "Все") {
+    params.city = effectiveCity;
   }
 
   if (f.region) {
@@ -850,7 +833,7 @@ export default function AllProducts() {
   function updateUrl(nextFilters) {
     const params = new URLSearchParams();
 
-    if (nextFilters.propertyType && nextFilters.propertyType !== "all") {
+    if (nextFilters.propertyType) {
       params.set("propertyType", nextFilters.propertyType);
     }
 
@@ -858,8 +841,17 @@ export default function AllProducts() {
       params.set("dealType", nextFilters.dealType);
     }
 
-    if (nextFilters.city && nextFilters.city !== "Все") {
-      params.set("city", nextFilters.city);
+    if (nextFilters.rentPeriod) {
+      params.set("rentPeriod", nextFilters.rentPeriod);
+    }
+
+    const effectiveCity =
+      nextFilters.city && nextFilters.city !== "Все"
+        ? nextFilters.city
+        : nextFilters.settlement || "";
+
+    if (effectiveCity && effectiveCity !== "Все") {
+      params.set("city", effectiveCity);
     }
 
     if (nextFilters.region) {
@@ -938,18 +930,19 @@ export default function AllProducts() {
     const parsed = data.filters || data;
 
     const next = {
-      ...filters,
+      ...DEFAULT_FILTERS,
+      propertyType: parsed.propertyType
+        ? normalizePropertyType(parsed.propertyType)
+        : "all",
+      dealType: parsed.dealType ? normalizeDealType(parsed.dealType) : "all",
+      rentPeriod: parsed.rentPeriod ? String(parsed.rentPeriod) : "",
+      city: "Все",
+      settlement: "",
+      region: "",
+      country: "",
+      district: "",
+      searchQuery: "",
     };
-
-    if (parsed.propertyType) {
-      next.propertyType = normalizePropertyType(parsed.propertyType);
-    } else {
-      next.propertyType = "all";
-    }
-
-    if (parsed.dealType) {
-      next.dealType = normalizeDealType(parsed.dealType);
-    }
 
     if (parsed.region) {
       next.region = parsed.region;
@@ -969,8 +962,6 @@ export default function AllProducts() {
 
     if (parsed.searchQuery !== undefined && parsed.searchQuery !== null) {
       next.searchQuery = String(parsed.searchQuery);
-    } else {
-      next.searchQuery = "";
     }
 
     if (parsed.currency) {
@@ -980,13 +971,25 @@ export default function AllProducts() {
     const cityText = String(next.city || "").toLowerCase();
     const regionText = String(next.region || "").toLowerCase();
 
-    const isIssykKul =
-      regionText === "issyk_kul" ||
-      (cityText.includes("иссык") && cityText.includes("куль"));
+    const cityIsIssykKulRegionName =
+      (cityText.includes("иссык") && cityText.includes("куль")) ||
+      (cityText.includes("ысык") && cityText.includes("көл")) ||
+      cityText === "issyk kul";
 
-    if (isIssykKul) {
+    const cityIsTurkeyCountryName =
+      cityText === "турция" || cityText === "turkey" || cityText === "түркия";
+
+    if (regionText === "issyk_kul" || cityIsIssykKulRegionName) {
       next.region = "ISSYK_KUL";
-      next.city = "Иссык-Куль";
+      if (cityIsIssykKulRegionName || !next.city) {
+        next.city = "Все";
+      }
+    } else if (regionText === "turkey" || cityIsTurkeyCountryName) {
+      next.region = "TURKEY";
+      next.country = "turkey";
+      if (cityIsTurkeyCountryName || !next.city) {
+        next.city = "Все";
+      }
     }
 
     if (parsed.priceFrom !== undefined && parsed.priceFrom !== null) {
@@ -1079,9 +1082,10 @@ export default function AllProducts() {
       if (filterKey === "propertyType") {
         next.propertyType = "all";
       } else if (filterKey === "dealType") {
-        next.dealType = "sale";
+        next.dealType = "all";
       } else if (filterKey === "location") {
         next.city = "Все";
+        next.settlement = "";
         next.region = "";
         next.district = "";
         next.country = "";

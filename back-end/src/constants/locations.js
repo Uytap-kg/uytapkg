@@ -113,6 +113,9 @@ export const TURKEY_LOCATIONS = [
   "Мерсин",
   "Бодрум",
   "Измир",
+  "Анкара",
+  "Бурса",
+  "Мармарис",
 ];
 
 // Единый справочник "регион -> населённые пункты/районы".
@@ -129,3 +132,75 @@ export const LOCATIONS_BY_REGION = {
   BATKEN: BATKEN_LOCATIONS,
   TURKEY: TURKEY_LOCATIONS,
 };
+
+// Алиасы городов (ключ формы создания объявления StepLocation ↔ русское название в фильтрах/AI).
+export const CITY_ALIASES = {
+  istanbul: ["istanbul", "Стамбул"],
+  стамбул: ["istanbul", "Стамбул"],
+  ankara: ["ankara", "Анкара"],
+  анкара: ["ankara", "Анкара"],
+  antalya: ["antalya", "Анталья", "Анталия"],
+  анталья: ["antalya", "Анталья", "Анталия"],
+  анталия: ["antalya", "Анталья", "Анталия"],
+  alanya: ["alanya", "mersin", "Аланья", "Алания"],
+  аланья: ["alanya", "mersin", "Аланья", "Алания"],
+  алания: ["alanya", "mersin", "Аланья", "Алания"],
+  mersin: ["mersin", "Мерсин", "Аланья"],
+  мерсин: ["mersin", "Мерсин"],
+  izmir: ["izmir", "Измир"],
+  измир: ["izmir", "Измир"],
+  bursa: ["bursa", "Бурса"],
+  бурса: ["bursa", "Бурса"],
+  bodrum: ["bodrum", "mugla", "Бодрум", "Мугла"],
+  бодрум: ["bodrum", "mugla", "Бодрум", "Мугла"],
+  mugla: ["mugla", "bodrum", "Бодрум", "Мугла"],
+  marmaris: ["marmaris", "adana", "Мармарис", "Адана"],
+  мармарис: ["marmaris", "adana", "Мармарис", "Адана"],
+  adana: ["adana", "marmaris", "Мармарис", "Адана"],
+  тамчи: ["Тамчи", "Тамчы"],
+  тамчы: ["Тамчи", "Тамчы"],
+  "жалал-абад": ["Жалал-Абад", "Джалал-Абад"],
+  "джалал-абад": ["Жалал-Абад", "Джалал-Абад"],
+  "жалал абад": ["Жалал-Абад", "Джалал-Абад"],
+  "джалал абад": ["Жалал-Абад", "Джалал-Абад"],
+  раззаков: ["Раззаков (Исфана)", "Раззаков", "Исфана"],
+  исфана: ["Раззаков (Исфана)", "Раззаков", "Исфана"],
+  "раззаков (исфана)": ["Раззаков (Исфана)", "Раззаков", "Исфана"],
+  "сары-ой": ["Сары-Ой", "Чон-Сары-Ой"],
+  "чон-сары-ой": ["Сары-Ой", "Чон-Сары-Ой"],
+};
+
+// Паттерны поиска региона в БД (поддержка кодов BISHKEK/ISSYK_KUL и русских названий).
+export const REGION_SEARCH_PATTERNS = {
+  BISHKEK: ["BISHKEK", "Бишкек"],
+  ISSYK_KUL: ["ISSYK_KUL", "Иссык-Кул"],
+  CHUY: ["CHUY", "Чуй"],
+  OSH: ["OSH", "OSH_CITY", "OSH_REGION", "Ош"],
+  OSH_CITY: ["OSH_CITY", "OSH", "Ош"],
+  OSH_REGION: ["OSH_REGION", "OSH", "Ош"],
+  JALAL_ABAD: ["JALAL_ABAD", "Жалал-Абад", "Джалал-Абад"],
+  NARYN: ["NARYN", "Нарын"],
+  TALAS: ["TALAS", "Талас"],
+  BATKEN: ["BATKEN", "Баткен"],
+  TURKEY: ["TURKEY", "Турция", "Turkey"],
+};
+
+export function resolveRegionCode(rawRegion) {
+  if (!rawRegion) return null;
+  const trimmed = String(rawRegion).trim();
+  const upper = trimmed.toUpperCase();
+  if (REGION_SEARCH_PATTERNS[upper]) return upper;
+
+  const lower = trimmed.toLowerCase().replace(/ё/g, "е").replace(/[-–—_]+/g, " ");
+  if (lower.includes("иссык") || lower.includes("ысык") || lower.includes("issyk")) return "ISSYK_KUL";
+  if (lower.includes("чуй") || lower.includes("чүй") || lower.includes("chuy")) return "CHUY";
+  if (lower.includes("бишкек") || lower.includes("bishkek")) return "BISHKEK";
+  if (lower.includes("жалал") || lower.includes("джалал") || lower.includes("jalal")) return "JALAL_ABAD";
+  if (lower.includes("нарын") || lower.includes("naryn")) return "NARYN";
+  if (lower.includes("талас") || lower.includes("talas")) return "TALAS";
+  if (lower.includes("баткен") || lower.includes("batken")) return "BATKEN";
+  if (lower.includes("турц") || lower.includes("түрк") || lower.includes("turk")) return "TURKEY";
+  if (/(?:^|\s)ош/.test(lower) || lower === "osh") return "OSH";
+  return null;
+}
+

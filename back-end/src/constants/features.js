@@ -38,6 +38,7 @@ export const FEATURE_KEYS = new Set([
   "truckAccess",
   "gateType",
   "rentalPeriod",
+  "pets",
   "amenities",
   "communications",
   "technicalParameters",

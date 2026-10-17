@@ -482,6 +482,9 @@ const FEATURE_KEYS = [
   "documents",
   "furniture",
   "offerType",
+  "residentialComplex",
+  "rentalPeriod",
+  "pets",
 
   "houseType",
   "floors",
@@ -515,14 +518,34 @@ const FEATURE_KEYS = [
 
 const ARRAY_KEYS = ["amenities", "communications", "technicalParameters"];
 
+const REGION_DISPLAY_LABELS = {
+  BISHKEK: "Бишкек",
+  ISSYK_KUL: "Иссык-Кульская область",
+  CHUY: "Чуйская область",
+  OSH: "Ошская область",
+  OSH_CITY: "Ош",
+  OSH_REGION: "Ошская область",
+  JALAL_ABAD: "Жалал-Абадская область",
+  NARYN: "Нарынская область",
+  TALAS: "Таласская область",
+  BATKEN: "Баткенская область",
+  TURKEY: "Турция",
+};
+
 /* =========================================================
    NORMALIZE AI RESPONSE
 ========================================================= */
 
-function normalizeFilters(aiFilters, originalQuery = "") {
-  const f = aiFilters && typeof aiFilters === "object" ? aiFilters : {};
+function normalizeFilters(aiFilters, originalQuery = "", aiFeatures = {}) {
+  const baseObj = aiFilters && typeof aiFilters === "object" ? aiFilters : {};
+  const featObj = aiFeatures && typeof aiFeatures === "object" ? aiFeatures : {};
+  const f = { ...baseObj, ...featObj };
   const hasAnyAiFilter = Object.values(f).some(
-    (v) => v !== null && v !== undefined && v !== "",
+    (v) =>
+      v !== null &&
+      v !== undefined &&
+      v !== "" &&
+      (!Array.isArray(v) || v.length > 0),
   );
 
   const normalized = {};
@@ -538,13 +561,17 @@ function normalizeFilters(aiFilters, originalQuery = "") {
   }
 
   /* -------------------------------------------------------
-     DEAL TYPE
+     DEAL TYPE & RENT PERIOD
   ------------------------------------------------------- */
 
   const dealType = normalizeDealType(f.dealType);
 
   if (dealType) {
     normalized.dealType = dealType;
+  }
+
+  if (f.rentPeriod && typeof f.rentPeriod === "string") {
+    normalized.rentPeriod = f.rentPeriod.trim();
   }
 
   /* -------------------------------------------------------
@@ -562,7 +589,13 @@ function normalizeFilters(aiFilters, originalQuery = "") {
 
   const cityIsIssykKul =
     (normalizedCity.includes("иссык") && normalizedCity.includes("куль")) ||
-    (normalizedCity.includes("ысык") && normalizedCity.includes("көл"));
+    (normalizedCity.includes("ысык") && normalizedCity.includes("көл")) ||
+    normalizedCity === "issyk kul";
+
+  const cityIsTurkey =
+    normalizedCity === "турция" ||
+    normalizedCity === "turkey" ||
+    normalizedCity === "түркия";
 
   const cityIsIssykKulLocation = ISSYK_KUL_CITIES.some((city) =>
     normalizedCity.includes(city),
@@ -570,18 +603,22 @@ function normalizeFilters(aiFilters, originalQuery = "") {
 
   if (region === "ISSYK_KUL" || cityIsIssykKul || cityIsIssykKulLocation) {
     normalized.region = "ISSYK_KUL";
-    normalized.city = rawCity && !cityIsIssykKul ? rawCity : "Иссык-Куль";
-  } else if (region === "TURKEY") {
+    normalized.country = "kyrgyzstan";
+    if (rawCity && !cityIsIssykKul) {
+      normalized.city = rawCity;
+    }
+  } else if (region === "TURKEY" || cityIsTurkey) {
     normalized.country = "turkey";
     normalized.region = "TURKEY";
-
-    normalized.city = rawCity || "Турция";
+    if (rawCity && !cityIsTurkey) {
+      normalized.city = rawCity;
+    }
   } else if (region) {
     normalized.region = region;
 
     if (region === "BISHKEK") {
       normalized.city = "Бишкек";
-    } else if (region === "OSH") {
+    } else if (region === "OSH" && !rawCity) {
       normalized.city = "Ош";
     }
   }
@@ -589,7 +626,9 @@ function normalizeFilters(aiFilters, originalQuery = "") {
   if (
     rawCity &&
     region !== "ISSYK_KUL" &&
+    region !== "TURKEY" &&
     !cityIsIssykKul &&
+    !cityIsTurkey &&
     !cityIsIssykKulLocation
   ) {
     normalized.city = rawCity;
@@ -608,6 +647,9 @@ function normalizeFilters(aiFilters, originalQuery = "") {
       country.includes("түрк")
     ) {
       normalized.country = "turkey";
+      if (!normalized.region) {
+        normalized.region = "TURKEY";
+      }
     } else {
       normalized.country = cleanValue(f.country);
     }
@@ -631,7 +673,7 @@ function normalizeFilters(aiFilters, originalQuery = "") {
 
   if (!normalized.searchQuery && originalQuery && hasAnyAiFilter) {
     const qLower = originalQuery.toLowerCase();
-    if (qLower.includes("студи") || qLower.includes("стули")) {
+    if (/(?:^|[^\p{L}])сту[дл]/iu.test(qLower)) {
       normalized.searchQuery = "студия";
     } else if (qLower.includes("евродвушк")) {
       normalized.searchQuery = "евродвушка";
@@ -726,7 +768,12 @@ function normalizeFilters(aiFilters, originalQuery = "") {
   for (const key of FEATURE_KEYS) {
     const value = f[key];
 
-    if (value !== undefined && value !== null && value !== "") {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== "" &&
+      (!Array.isArray(value) || value.length > 0)
+    ) {
       normalized[key] = value;
     }
   }
@@ -738,7 +785,12 @@ function normalizeFilters(aiFilters, originalQuery = "") {
   for (const key of ARRAY_KEYS) {
     const value = f[key];
 
-    if (value !== undefined && value !== null && value !== "") {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== "" &&
+      (!Array.isArray(value) || value.length > 0)
+    ) {
       normalized[key] = Array.isArray(value) ? value : [value];
     }
   }
@@ -787,7 +839,7 @@ export default function SmartSearch({
       });
     }
 
-    if (activeFilters.dealType) {
+    if (activeFilters.dealType && activeFilters.dealType !== "all") {
       activeChips.push({
         id: "dealType",
         label:
@@ -807,6 +859,16 @@ export default function SmartSearch({
         label: activeFilters.district
           ? `${activeFilters.city}, ${activeFilters.district}`
           : activeFilters.city,
+      });
+    } else if (activeFilters.region) {
+      const regionLabel =
+        REGION_DISPLAY_LABELS[String(activeFilters.region).toUpperCase()] ||
+        activeFilters.region;
+      activeChips.push({
+        id: "location",
+        label: activeFilters.district
+          ? `${regionLabel}, ${activeFilters.district}`
+          : regionLabel,
       });
     } else if (activeFilters.district) {
       activeChips.push({
@@ -1247,7 +1309,11 @@ export default function SmartSearch({
         throw new Error(t("smartSearch.errors.aiNoFilters"));
       }
 
-      const normalized = normalizeFilters(data.filters, trimmedText);
+      const normalized = normalizeFilters(
+        data.filters,
+        trimmedText,
+        data.features,
+      );
 
       // Если AI вернул все null (запрос не о недвижимости или без параметров):
       // в degraded-режиме (LLM недоступен) пробуем текстовый поиск по сырой строке,

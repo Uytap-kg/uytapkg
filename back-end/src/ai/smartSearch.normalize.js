@@ -154,6 +154,28 @@ export function normalizeSmartSearchResult(raw, { query } = {}) {
   if (f.region) f.country = countryForRegion(f.region);
   else if (f.country === "turkey") f.region = TURKEY_REGION;
 
+  // Город: если модель ошибочно записала название области/страны («Иссык-Куль», «Турция») в city —
+  // переносим в region и сбрасываем city в null.
+  if (f.city) {
+    const foldedCity = foldText(f.city);
+    if (
+      foldedCity === "иссык кул" ||
+      foldedCity === "ысык кол" ||
+      foldedCity.includes("иссык кульск") ||
+      foldedCity.includes("ысык колск")
+    ) {
+      if (!f.region) f.region = "ISSYK_KUL";
+      f.country = "kyrgyzstan";
+      f.city = null;
+    } else if (foldedCity === "турция" || foldedCity === "туркя" || foldedCity === "turkey") {
+      f.region = TURKEY_REGION;
+      f.country = "turkey";
+      f.city = null;
+    } else if (foldedCity.includes("област")) {
+      f.city = null;
+    }
+  }
+
   // Город: справочное значение (с приведением к написанию из констант) либо названное в тексте.
   if (f.city) {
     const canonical = canonicalFrom(KNOWN_CITIES, f.city);
@@ -166,6 +188,20 @@ export function normalizeSmartSearchResult(raw, { query } = {}) {
     const canonical = canonicalFrom(KNOWN_DISTRICTS, f.district);
     if (canonical) f.district = canonical;
     else if (foldedQuery !== null && !queryMentions(foldedQuery, f.district)) f.district = null;
+  }
+
+  // Студия («студ», «студия», «студию»): searchQuery = "студия", rooms = null (если 1-комнатность не названа явно).
+  if (foldedQuery && /(?:^|\s)(?:студ(?=\s|$)|сту[дл](?:я|и\p{L}*)(?=\s|$))/u.test(foldedQuery)) {
+    if (!f.searchQuery || /^(?:квартир\p{L}*\s+)?сту[дл]\p{L}*$/u.test(foldText(f.searchQuery))) {
+      f.searchQuery = "студия";
+    }
+    if (!f.propertyType) {
+      f.propertyType = "apartment";
+    }
+    const explicitOneRoom = /(?:^|\s)(?:1|бир|одна|одну|однокомнат|однушк|odnushk)/u.test(foldedQuery);
+    if (f.rooms === 1 && !explicitOneRoom) {
+      f.rooms = null;
+    }
   }
 
   f = dropPriceMatchingAreaNumber(f, query);

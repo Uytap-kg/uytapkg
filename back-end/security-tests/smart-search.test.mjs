@@ -628,3 +628,156 @@ test("Hold-out сценарий (a): чистая площадь без цены
   }
 });
 
+/* ============================ Реальные сценарии каталога и Category Features ============================ */
+
+test("Морфология и префикс «студ» / «студия» / «студию»: rooms=null, searchQuery='студия' и поиск обоих окончаний", async () => {
+  const { buildSearchPattern, applyListingFilters } = await import("../src/controllers/listingsController.js");
+
+  for (const q of ["студ", "студия", "студию", "квартира студию"]) {
+    const local = N(fallbackParse(q), q);
+    assert.equal(local.propertyType, "apartment", `propertyType для "${q}"`);
+    assert.equal(local.rooms, null, `rooms=null для "${q}" (не должно принудительно фильтровать rooms=1)`);
+    assert.equal(local.searchQuery, "студия", `searchQuery для "${q}"`);
+
+    // Даже если LLM вернул rooms: 1 для «студия» без явного упоминания 1-комнатности — rooms сбрасывается в null
+    const llmNormalized = N({ propertyType: "apartment", rooms: 1, searchQuery: q }, q);
+    assert.equal(llmNormalized.rooms, null, `LLM rooms сброшен в null для "${q}"`);
+    assert.equal(llmNormalized.searchQuery, "студия", `LLM searchQuery нормализован в "студия" для "${q}"`);
+  }
+
+  // Стемминг: «студия» и «студию» дают паттерн «студи», который находит и «квартира уютная тире студия», и «Продаю квартиру студию»
+  assert.equal(buildSearchPattern("студия"), "студи");
+  assert.equal(buildSearchPattern("студию"), "студи");
+  assert.equal(buildSearchPattern("студ"), "студ");
+
+  const orCalls = [];
+  const mockQuery = {
+    or(clause) {
+      orCalls.push(clause);
+      return this;
+    },
+  };
+  applyListingFilters(mockQuery, { searchQuery: "студия" });
+  assert.equal(orCalls.length, 1);
+  assert.ok(orCalls[0].includes("title.ilike.%студия%"), "содержит точное совпадение %студия%");
+  assert.ok(orCalls[0].includes("title.ilike.%студи%"), "содержит морфологическую основу %студи% (находит «студию»)");
+});
+
+test("Локации Иссык-Куля и Турции: область без города не подставляет фиктивный city, города маппятся через алиасы", async () => {
+  const { applyListingFilters } = await import("../src/controllers/listingsController.js");
+
+  // 1. «иссык кульская область» -> region: ISSYK_KUL, city: null
+  const ikRegion = N(fallbackParse("иссык кульская область"), "иссык кульская область");
+  assert.equal(ikRegion.country, "kyrgyzstan");
+  assert.equal(ikRegion.region, "ISSYK_KUL");
+  assert.equal(ikRegion.city, null);
+
+  // Даже если LLM вернул city: "Иссык-Куль" — нормализатор сбрасывает city в null
+  const ikFromLlm = N({ country: "kyrgyzstan", region: "ISSYK_KUL", city: "Иссык-Куль" }, "иссык куль");
+  assert.equal(ikFromLlm.region, "ISSYK_KUL");
+  assert.equal(ikFromLlm.city, null);
+
+  // 2. «чолпон ата» и «каракол» -> конкретный город в Иссык-Кульской области
+  const cholpon = N(fallbackParse("чолпон ата"), "чолпон ата");
+  assert.equal(cholpon.region, "ISSYK_KUL");
+  assert.equal(cholpon.city, "Чолпон-Ата");
+
+  const karakol = N(fallbackParse("каракол"), "каракол");
+  assert.equal(karakol.region, "ISSYK_KUL");
+  assert.equal(karakol.city, "Каракол");
+
+  // 3. «турция» -> country: turkey, region: TURKEY, city: null
+  const trRegion = N(fallbackParse("турция"), "турция");
+  assert.equal(trRegion.country, "turkey");
+  assert.equal(trRegion.region, "TURKEY");
+  assert.equal(trRegion.city, null);
+
+  // 4. «стамбул» -> country: turkey, region: TURKEY, city: "Стамбул", а applyListingFilters ищет ["istanbul", "Стамбул"]
+  const istanbul = N(fallbackParse("квартира в стамбуле"), "квартира в стамбуле");
+  assert.equal(istanbul.country, "turkey");
+  assert.equal(istanbul.region, "TURKEY");
+  assert.equal(istanbul.city, "Стамбул");
+
+  const inCalls = [];
+  const orCalls = [];
+  const mockQuery = {
+    or(clause) {
+      orCalls.push(clause);
+      return this;
+    },
+    in(col, vals) {
+      inCalls.push({ col, vals });
+      return this;
+    },
+    eq() {
+      return this;
+    },
+    ilike() {
+      return this;
+    },
+    neq() {
+      return this;
+    },
+  };
+  applyListingFilters(mockQuery, { country: "turkey", region: "TURKEY", city: "Стамбул" });
+  assert.ok(inCalls.some((c) => c.col === "city" && c.vals.includes("istanbul") && c.vals.includes("Стамбул")));
+});
+
+test("Category Features: extractCategoryFeatures извлекает характеристики всех категорий и rentPeriod", async () => {
+  const { extractCategoryFeatures } = await import("../src/ai/smartSearch.features.js");
+
+  // Квартира
+  const aptFeatures = extractCategoryFeatures(
+    "сниму 2 комнатную квартиру в Бишкеке 106 серия на 5 этаже евроремонт кирпич центральное отопление красная книга от собственника с мебелью можно с животными с лифтом балкон кондиционер",
+    { propertyType: "apartment", dealType: "rent" },
+  );
+  assert.deepEqual(aptFeatures.series, ["106 обычная", "106 улучшенная"]);
+  assert.deepEqual(aptFeatures.floor, ["5"]);
+  assert.deepEqual(aptFeatures.condition, ["Евроремонт"]);
+  assert.deepEqual(aptFeatures.walls, ["Кирпич"]);
+  assert.deepEqual(aptFeatures.heating, ["Центральное"]);
+  assert.deepEqual(aptFeatures.documents, ["Красная книга"]);
+  assert.deepEqual(aptFeatures.offerType, ["От собственника"]);
+  assert.deepEqual(aptFeatures.furniture, ["Полностью меблирована"]);
+  assert.deepEqual(aptFeatures.pets, ["Можно с животными"]);
+  assert.ok(aptFeatures.amenities.includes("Лифт"));
+  assert.ok(aptFeatures.amenities.includes("Балкон / лоджия"));
+  assert.ok(aptFeatures.amenities.includes("Кондиционер"));
+
+  // Посуточная аренда -> rentPeriod: "daily"
+  const dailyRent = extractCategoryFeatures("сниму квартиру посуточно", { propertyType: "apartment", dealType: "rent" });
+  assert.equal(dailyRent.rentPeriod, "daily");
+  assert.deepEqual(dailyRent.rentalPeriod, ["Посуточно"]);
+
+  // Дом / коттедж
+  const houseFeatures = extractCategoryFeatures("дом 2 этажа таунхаус септик центральная вода 3 фазы", {
+    propertyType: "house",
+  });
+  assert.deepEqual(houseFeatures.houseType, ["Таунхаус"]);
+  assert.deepEqual(houseFeatures.floors, ["2"]);
+  assert.deepEqual(houseFeatures.sewerage, ["Септик"]);
+  assert.deepEqual(houseFeatures.water, ["Центральное"]);
+  assert.deepEqual(houseFeatures.electricity, ["3 фазы (380В)"]);
+
+  // Коммерческая недвижимость
+  const commFeatures = extractCategoryFeatures("офис на первой линии отдельный вход действующий бизнес 380в", {
+    propertyType: "commercial",
+  });
+  assert.deepEqual(commFeatures.premisesType, ["Офис"]);
+  assert.deepEqual(commFeatures.firstLine, ["Да (первая линия)"]);
+  assert.deepEqual(commFeatures.separateEntrance, ["Да"]);
+  assert.deepEqual(commFeatures.rentalBusiness, ["Да (с арендаторами)"]);
+  assert.ok(commFeatures.technicalParameters.includes("Высокая мощность (380В)"));
+
+  // Паркинг / гараж
+  const parkFeatures = extractCategoryFeatures("капитальный гараж роллеты смотровая яма с погребом заезд для фуры", {
+    propertyType: "parking",
+  });
+  assert.deepEqual(parkFeatures.parkingType, ["Капитальный гараж"]);
+  assert.deepEqual(parkFeatures.gateType, ["Автоматические (роллеты/секционные)"]);
+  assert.deepEqual(parkFeatures.inspectionPit, ["Есть"]);
+  assert.deepEqual(parkFeatures.basement, ["Есть"]);
+  assert.deepEqual(parkFeatures.truckAccess, ["Да"]);
+});
+
+
