@@ -34,7 +34,19 @@ const isTrustedImageUrl = (value) => {
   if (typeof value !== "string") return false;
   try {
     const url = new URL(value);
-    const trustedProtocol = TRUSTED_IMAGE_ORIGINS.get(url.host);
+    let trustedProtocol = TRUSTED_IMAGE_ORIGINS.get(url.host);
+    if (trustedProtocol === undefined && process.env.SUPABASE_URL) {
+      try {
+        const parsedEnv = new URL(process.env.SUPABASE_URL);
+        if (
+          parsedEnv.host === url.host &&
+          (parsedEnv.protocol === "https:" || parsedEnv.protocol === "http:")
+        ) {
+          trustedProtocol = parsedEnv.protocol;
+          TRUSTED_IMAGE_ORIGINS.set(parsedEnv.host, parsedEnv.protocol);
+        }
+      } catch {}
+    }
     return trustedProtocol !== undefined && url.protocol === trustedProtocol;
   } catch {
     return false;

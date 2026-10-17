@@ -1,12 +1,5 @@
 import { NextResponse } from "next/server";
-import { applyTrustedForwardedFor } from "../_lib/forwardedFor";
-
-let rawBackendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-rawBackendUrl = rawBackendUrl.replace(/\/$/, "");
-if (!rawBackendUrl.endsWith("/api") && !rawBackendUrl.includes("localhost")) {
-  rawBackendUrl = `${rawBackendUrl}/api`;
-}
-const BACKEND_API_URL = rawBackendUrl;
+import { applyTrustedForwardedFor, getBackendApiUrl } from "../_lib/forwardedFor";
 
 async function proxyRequest(request, context) {
   try {
@@ -19,7 +12,7 @@ async function proxyRequest(request, context) {
     const url = new URL(request.url);
     const searchParams = url.search;
     
-    const targetUrl = `${BACKEND_API_URL}/${path}${searchParams}`;
+    const targetUrl = `${getBackendApiUrl()}/${path}${searchParams}`;
 
     const headers = new Headers(request.headers);
     headers.delete("host");
@@ -40,6 +33,29 @@ async function proxyRequest(request, context) {
     }
 
     const upstream = await fetch(targetUrl, init);
+
+    // RFC 9110 / HTTP 204 No Content не должен иметь тела
+    if (upstream.status === 204) {
+      return new NextResponse(null, { status: 204 });
+    }
+
+    const responseHeaders = {
+      "content-type": "application/json; charset=utf-8",
+    };
+
+    // Пробрасываем заголовки ограничения частоты запросов и кэширования
+    const headersToForward = [
+      "retry-after",
+      "ratelimit-limit",
+      "ratelimit-remaining",
+      "ratelimit-reset",
+      "cache-control",
+    ];
+    for (const h of headersToForward) {
+      const val = upstream.headers.get(h);
+      if (val) responseHeaders[h] = val;
+    }
+
     const text = await upstream.text();
 
     let data = {};
@@ -51,9 +67,7 @@ async function proxyRequest(request, context) {
 
     return NextResponse.json(data, {
       status: upstream.status,
-      headers: {
-        "content-type": "application/json; charset=utf-8",
-      },
+      headers: responseHeaders,
     });
   } catch (error) {
     console.error("Catch-all proxy error:", error);

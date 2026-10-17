@@ -338,25 +338,32 @@ export async function getAllListings(params = {}, maxItems = 2000) {
   if (total > items.length && items.length < maxItems) {
     const totalToFetch = Math.min(total, maxItems);
     const totalPages = Math.ceil(totalToFetch / pageSize);
-    const pagePromises = [];
-
+    const CONCURRENCY = 4;
+    const pageNumbers = [];
     for (let p = 2; p <= totalPages; p++) {
-      pagePromises.push(
-        getListings({
-          ...params,
-          page: p,
-          limit: pageSize,
-        }).catch((err) => {
-          console.error(`Error loading listings page ${p}:`, err);
-          return null;
-        })
-      );
+      pageNumbers.push(p);
     }
 
-    const restPages = await Promise.all(pagePromises);
-    for (const pageRes of restPages) {
-      if (pageRes?.success && Array.isArray(pageRes.data)) {
-        items.push(...pageRes.data);
+    // Загрузка пачками с контролем параллелизма, чтобы не перегружать сервер и сокеты
+    for (let i = 0; i < pageNumbers.length; i += CONCURRENCY) {
+      const batch = pageNumbers.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.all(
+        batch.map((p) =>
+          getListings({
+            ...params,
+            page: p,
+            limit: pageSize,
+          }).catch((err) => {
+            console.error(`Error loading listings page ${p}:`, err);
+            return null;
+          })
+        )
+      );
+
+      for (const pageRes of batchResults) {
+        if (pageRes?.success && Array.isArray(pageRes.data)) {
+          items.push(...pageRes.data);
+        }
       }
     }
   }

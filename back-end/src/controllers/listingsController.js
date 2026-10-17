@@ -485,6 +485,12 @@ export function applyListingFilters(query, filters = {}) {
 
   if (isResort !== undefined) query = query.eq("is_resort", isResort === "true");
 
+  // 10. Фильтрация по ЖК (complexId / residentialComplexId)
+  const effectiveComplexId = filters.complexId ?? filters.residentialComplexId;
+  if (effectiveComplexId && effectiveComplexId !== "all" && effectiveComplexId !== "Все") {
+    query = query.eq("features->>residentialComplexId", String(effectiveComplexId).trim());
+  }
+
   // ТЗ Правило (Дефект 1.1): В блок "Популярные" на главной попадают только объявления с фото
   if (onlyPopular === "true") {
     query = query.gt("photos_count", 0);
@@ -625,45 +631,41 @@ export const getMapListings = async (req, res) => {
         latitude, longitude, status, is_urgent, promotion_status, priority_rank,
         created_at, expires_at,
         listing_photos (id, url, is_main, display_order),
-        users!inner (id, is_verified, account_type)
+        users (id, is_verified, account_type)
       `, { count: "exact" })
       .eq("status", "active")
       .gt("expires_at", new Date().toISOString())
       .not("latitude", "is", null)
       .not("longitude", "is", null);
 
-    query = applyListingFilters(query, {
-      country,
-      region,
-      city,
-      district,
-      propertyType,
-      dealType,
-      rentPeriod,
-      minPrice,
-      maxPrice,
-      priceFrom,
-      priceTo,
-      minArea,
-      maxArea,
-      areaFrom,
-      areaTo,
-      rooms,
-      currency,
-      searchQuery,
-      query: qParam,
-      isResort,
-    });
+    // Применяем все фильтры каталога (валюта, площадь, поиск, характеристики)
+    query = applyListingFilters(query, req.query);
 
     // Необязательное ограничение по видимой области карты (bbox)
-    const south = parseCoord(minLat, -90, 90);
-    const north = parseCoord(maxLat, -90, 90);
-    const west = parseCoord(minLng, -180, 180);
-    const east = parseCoord(maxLng, -180, 180);
-    if (south !== null) query = query.gte("latitude", south);
-    if (north !== null) query = query.lte("latitude", north);
-    if (west !== null) query = query.gte("longitude", west);
-    if (east !== null) query = query.lte("longitude", east);
+    const southRaw = parseCoord(minLat, -90, 90);
+    const northRaw = parseCoord(maxLat, -90, 90);
+    const westRaw = parseCoord(minLng, -180, 180);
+    const eastRaw = parseCoord(maxLng, -180, 180);
+
+    if (southRaw !== null && northRaw !== null) {
+      const south = Math.min(southRaw, northRaw);
+      const north = Math.max(southRaw, northRaw);
+      query = query.gte("latitude", south).lte("latitude", north);
+    } else if (southRaw !== null) {
+      query = query.gte("latitude", southRaw);
+    } else if (northRaw !== null) {
+      query = query.lte("latitude", northRaw);
+    }
+
+    if (westRaw !== null && eastRaw !== null) {
+      const west = Math.min(westRaw, eastRaw);
+      const east = Math.max(westRaw, eastRaw);
+      query = query.gte("longitude", west).lte("longitude", east);
+    } else if (westRaw !== null) {
+      query = query.gte("longitude", westRaw);
+    } else if (eastRaw !== null) {
+      query = query.lte("longitude", eastRaw);
+    }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(MAP_MAX_LIMIT, Math.max(1, parseInt(limit, 10) || MAP_MAX_LIMIT));

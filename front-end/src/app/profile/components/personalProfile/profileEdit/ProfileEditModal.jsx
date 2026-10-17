@@ -218,53 +218,7 @@ export default function ProfileEditModal({ user, close }) {
 
       /*
        * -----------------------------------------------------
-       * Update local user
-       * -----------------------------------------------------
-       */
-
-      const updatedUser = {
-        ...user,
-
-        phone,
-
-        profile: {
-          ...(user?.profile || {}),
-
-          ...refreshedProfile,
-
-          first_name: firstName,
-
-          last_name: lastName,
-
-          about,
-
-          avatar_url: savedAvatar,
-
-          avatar: savedAvatar,
-        },
-      };
-
-      localStorage.setItem("uytap_user", JSON.stringify(updatedUser));
-
-      /*
-       * -----------------------------------------------------
-       * Notify app
-       * -----------------------------------------------------
-       */
-
-      try {
-        window.dispatchEvent(
-          new CustomEvent("uytap:user-updated", {
-            detail: updatedUser,
-          }),
-        );
-      } catch (error) {
-        console.warn("Could not dispatch user-updated event", error);
-      }
-
-      /*
-       * -----------------------------------------------------
-       * Update additional profile data
+       * 2. Update additional profile data on server
        * -----------------------------------------------------
        */
 
@@ -298,7 +252,7 @@ export default function ProfileEditModal({ user, close }) {
 
       /*
        * -----------------------------------------------------
-       * Fresh user
+       * 3. Fresh user from server & commit to local state
        * -----------------------------------------------------
        */
 
@@ -316,6 +270,22 @@ export default function ProfileEditModal({ user, close }) {
       }
 
       localStorage.setItem("uytap_user", JSON.stringify(freshUser));
+
+      /*
+       * -----------------------------------------------------
+       * 4. Notify app that user updated
+       * -----------------------------------------------------
+       */
+
+      try {
+        window.dispatchEvent(
+          new CustomEvent("uytap:user-updated", {
+            detail: freshUser,
+          }),
+        );
+      } catch (error) {
+        console.warn("Could not dispatch user-updated event", error);
+      }
 
       /*
        * -----------------------------------------------------

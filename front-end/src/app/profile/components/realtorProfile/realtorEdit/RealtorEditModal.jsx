@@ -183,28 +183,7 @@ export default function RealtorEditModal({ user, close }) {
       };
 
       /*
-       * Сохраняем локально
-       */
-
-      localStorage.setItem("uytap_user", JSON.stringify(updatedUser));
-
-      /*
-       * Сообщаем приложению,
-       * что пользователь обновился
-       */
-
-      try {
-        window.dispatchEvent(
-          new CustomEvent("uytap:user-updated", {
-            detail: updatedUser,
-          }),
-        );
-      } catch (error) {
-        console.warn("Could not dispatch user-updated event", error);
-      }
-
-      /*
-       * Обновляем обычные данные пользователя
+       * Обновляем данные пользователя на сервере
        */
 
       await updateMe(token, {
@@ -239,7 +218,21 @@ export default function RealtorEditModal({ user, close }) {
         };
       }
 
+      /*
+       * Сохраняем локально и сообщаем приложению
+       */
+
       localStorage.setItem("uytap_user", JSON.stringify(freshUser));
+
+      try {
+        window.dispatchEvent(
+          new CustomEvent("uytap:user-updated", {
+            detail: freshUser,
+          }),
+        );
+      } catch (error) {
+        console.warn("Could not dispatch user-updated event", error);
+      }
 
       /*
        * Закрываем modal
