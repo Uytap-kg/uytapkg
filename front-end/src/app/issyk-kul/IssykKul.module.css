@@ -1,1061 +1,731 @@
 .page {
+  --accent: #483df6;
+  --accent-dark: #3428d8;
+  --accent-light: #eeedff;
+  --text: #171625;
+  --text-secondary: #666779;
+  --text-muted: #8b8c9d;
+  --surface: #ffffff;
+  --page-bg: #f7f8fc;
+  --border: rgba(28, 31, 66, 0.08);
+
+  position: relative;
+  isolation: isolate;
   width: 100%;
+  min-width: 0;
   min-height: 100vh;
-
   box-sizing: border-box;
-
-  padding: clamp(14px, 2.2vw, 32px) clamp(14px, 3.2vw, 48px) 0;
-
-  overflow-x: hidden;
-
-  background: #ffffff;
-  color: #171827;
+  padding-top: 0;
+  overflow-x: clip;
+  color: var(--text);
+  font-family: inherit;
 }
 
-/* =========================================================
-   HERO
-========================================================= */
+.page *,
+.page *::before,
+.page *::after {
+  box-sizing: border-box;
+}
+
+.page button {
+  font: inherit;
+}
+
+.page button:focus-visible {
+  outline: 3px solid rgba(72, 61, 246, 0.4);
+  outline-offset: 4px;
+}
+
+/* Верхнее синее свечение на всю ширину */
+.page::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 120px;
+  background: linear-gradient(
+    180deg,
+    #354cff 0%,
+    rgba(65, 76, 255, 0.76) 18%,
+    rgba(93, 94, 255, 0.38) 45%,
+    rgba(145, 150, 255, 0.12) 73%,
+    rgba(247, 248, 252, 0) 100%
+  );
+}
+
+/* HERO */
 
 .hero {
   position: relative;
-
-  width: min(100%, 1800px);
-  height: clamp(520px, 42vw, 650px);
-
-  margin: 0 auto;
-
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 610px;
+  padding: 100px clamp(24px, 7vw, 110px);
   overflow: hidden;
+  color: #fff;
+  background-image:
+    linear-gradient(
+      90deg,
+      rgba(10, 17, 48, 0.677) 0%,
+      rgba(20, 28, 65, 0.58) 48%,
+      rgba(40, 43, 100, 0.2) 100%
+    ),
+    url("../../../public/assets/issykKul.webp");
 
-  border-radius: clamp(18px, 2vw, 28px);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
 
-  background: url("/assets/issykKul.webp") center center / cover no-repeat;
+.hero::before,
+.hero::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: 50%;
+}
 
-  box-shadow: 0 18px 50px rgba(30, 35, 60, 0.12);
+.hero::before {
+  z-index: -1;
+  width: 480px;
+  height: 480px;
+  right: -100px;
+  top: -170px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 0 0 50px rgba(255, 255, 255, 0.025),
+    0 0 0 100px rgba(255, 255, 255, 0.02);
+}
+
+.hero::after {
+  z-index: -1;
+  width: 300px;
+  height: 300px;
+  right: 14%;
+  bottom: -230px;
+  background: rgba(151, 165, 255, 0.2);
+  filter: blur(30px);
 }
 
 .heroOverlay {
   position: absolute;
+  z-index: -1;
   inset: 0;
-
-  background:
-    linear-gradient(
-      180deg,
-      rgba(15, 18, 35, 0.04) 0%,
-      rgba(15, 18, 35, 0.12) 35%,
-      rgba(15, 18, 35, 0.75) 100%
-    ),
-    linear-gradient(90deg, rgba(72, 61, 246, 0.18), transparent 65%);
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(8, 14, 43, 0.48) 0%,
+    rgba(14, 20, 57, 0.15) 60%,
+    transparent 100%
+  );
 }
 
 .heroContent {
   position: relative;
-  z-index: 2;
-
-  width: 100%;
-  height: 100%;
-
-  padding: clamp(25px, 5vw, 50px);
-
-  box-sizing: border-box;
-
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-
-  text-align: center;
-
-  color: #ffffff;
+  z-index: 1;
+  width: min(100%, 850px);
+  margin: 0 auto 0 0;
+  animation: heroReveal 0.75s ease both;
 }
-
-/* =========================================================
-   BADGE
-========================================================= */
 
 .badge {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-
-  gap: 8px;
-
-  max-width: 100%;
-
-  padding: 8px 14px;
-
-  box-sizing: border-box;
-
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  gap: 9px;
+  padding: 10px 15px;
+  margin-bottom: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 999px;
-
-  background: rgba(255, 255, 255, 0.15);
-
-  color: #ffffff;
-
-  font-size: clamp(9px, 0.8vw, 11px);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-
-  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+  backdrop-filter: blur(14px);
 }
 
 .badge svg {
-  width: 16px;
-  height: 16px;
-
-  flex-shrink: 0;
-
-  color: #ffffff;
+  width: 17px;
+  height: 17px;
 }
-
-/* =========================================================
-   HERO TITLE
-========================================================= */
 
 .hero h1 {
-  max-width: 1100px;
-
-  margin: clamp(20px, 2.4vw, 27px) 0 clamp(15px, 1.8vw, 20px);
-
-  color: #ffffff;
-
-  font-size: clamp(40px, 6vw, 80px);
-
-  line-height: 0.98;
-
-  font-weight: 900;
-
-  letter-spacing: clamp(-2px, -0.25vw, -4px);
-
-  text-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
-}
-
-.hero p {
-  width: min(100%, 720px);
-
+  max-width: 850px;
   margin: 0;
-
-  color: rgba(255, 255, 255, 0.86);
-
-  font-size: clamp(13px, 1.1vw, 16px);
-  line-height: 1.65;
+  font-size: clamp(42px, 6.2vw, 78px);
+  line-height: 1.04;
+  letter-spacing: -0.065em;
+  font-weight: 800;
+  text-wrap: balance;
 }
 
-/* =========================================================
-   HERO BUTTONS
-========================================================= */
+.hero h1 br + * {
+  color: #b9c5ff;
+}
+
+.heroContent > p {
+  max-width: 620px;
+  margin: 25px 0 0;
+  color: rgba(255, 255, 255, 0.79);
+  font-size: clamp(15px, 1.5vw, 18px);
+  line-height: 1.85;
+}
 
 .buttons {
-  width: min(100%, 900px);
-
   display: flex;
   align-items: center;
-  justify-content: center;
-
   flex-wrap: wrap;
-
-  gap: 10px;
-
-  margin-top: clamp(22px, 2.5vw, 32px);
+  gap: 12px;
+  margin-top: 34px;
 }
 
-.mainButton,
-.whiteButton,
-.homeButton {
-  min-height: 54px;
-
-  padding: 0 21px;
-
+.buttons button,
+.investmentContent button,
+.quickSearch > button,
+.addSection > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
-  gap: 9px;
-
-  box-sizing: border-box;
-
-  border-radius: 13px;
-
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 800;
-
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 22px;
+  border: 1px solid transparent;
+  border-radius: 15px;
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
-
-  white-space: nowrap;
-
   transition:
-    transform 0.2s ease,
-    background 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    transform 0.22s ease,
+    background 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
 }
 
-/* PRIMARY */
-
-.mainButton {
-  border: 1px solid #483df6;
-
-  background: #483df6;
-  color: #ffffff;
-
-  box-shadow: 0 10px 25px rgba(72, 61, 246, 0.25);
-}
-
-.mainButton:hover {
+.buttons button:hover,
+.investmentContent button:hover,
+.quickSearch > button:hover,
+.addSection > button:hover {
   transform: translateY(-3px);
-
-  background: #3d32e8;
-
-  box-shadow: 0 15px 32px rgba(72, 61, 246, 0.3);
 }
-
-/* SECONDARY */
-
-.whiteButton {
-  border: 1px solid rgba(255, 255, 255, 0.4);
-
-  background: rgba(255, 255, 255, 0.92);
-
-  color: #171827;
-
-  backdrop-filter: blur(10px);
-}
-
-.whiteButton:hover {
-  transform: translateY(-3px);
-
-  background: #ffffff;
-
-  border-color: #ffffff;
-}
-
-.whiteButton span {
-  width: 30px;
-  height: 30px;
-
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 8px;
-
-  background: #483df6;
-
-  color: #ffffff;
-}
-
-/* HOME */
 
 .homeButton {
-  border: 1px solid rgba(255, 255, 255, 0.4);
-
-  background: rgba(255, 255, 255, 0.12);
-
-  color: #ffffff;
-
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  background: rgba(255, 255, 255, 0.09);
   backdrop-filter: blur(10px);
 }
 
 .homeButton:hover {
-  transform: translateY(-3px);
-
-  background: rgba(255, 255, 255, 0.22);
-
-  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.17);
 }
 
-/* =========================================================
-   COMMON SECTIONS
-========================================================= */
+.mainButton {
+  color: #28205f;
+  background: #fff;
+  box-shadow: 0 9px 26px rgba(5, 10, 40, 0.16);
+}
 
-.section,
+.mainButton:hover {
+  box-shadow: 0 13px 30px rgba(5, 10, 40, 0.24);
+}
+
+.whiteButton {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  background: transparent;
+}
+
+.whiteButton > span {
+  display: grid;
+  place-items: center;
+}
+
+.whiteButton:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ADVERTISEMENT */
+
+.page > :global(*) {
+  min-width: 0;
+}
+
+/* SHARED SECTION STYLES */
+
 .intro,
+.section,
 .benefitsSection {
-  width: min(100%, 1800px);
+  width: min(100% - 48px, 1180px);
+  margin-right: auto;
+  margin-left: auto;
+}
 
-  margin: clamp(65px, 7vw, 100px) auto 0;
+.intro {
+  padding-top: 104px;
+  padding-bottom: 60px;
+}
+
+.section {
+  padding-top: 72px;
+  padding-bottom: 78px;
+}
+
+.benefitsSection {
+  padding-top: 75px;
+  padding-bottom: 95px;
 }
 
 .sectionHeading {
-  margin-bottom: clamp(25px, 3vw, 36px);
+  max-width: 750px;
+  margin: 0 auto 42px;
+  text-align: center;
 }
 
 .sectionHeading > span,
 .investmentContent > span,
-.addSection > div > span,
-.quickSearch span {
-  display: block;
-
-  margin-bottom: 10px;
-
-  color: #483df6;
-
-  font-size: 10px;
-  font-weight: 900;
-
-  letter-spacing: 2px;
-
-  line-height: 1.4;
+.quickSearch > div > div:last-child > span,
+.addSection > div > span {
+  display: inline-block;
+  margin-bottom: 13px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1.5;
+  text-transform: uppercase;
 }
 
-.sectionHeading h2 {
-  width: 100%;
-  max-width: 850px;
-
+.sectionHeading h2,
+.quickSearch h2,
+.addSection h2 {
   margin: 0;
-
-  color: #171827;
-
-  font-size: clamp(30px, 3.3vw, 42px);
-
-  line-height: 1.05;
-
-  font-weight: 900;
-
-  letter-spacing: clamp(-1px, -0.13vw, -2px);
+  color: var(--text);
+  font-size: clamp(29px, 4vw, 43px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.16;
+  text-wrap: balance;
 }
 
-.sectionHeading p {
-  width: min(100%, 700px);
-
-  margin: 14px 0 0;
-
-  color: #727587;
-
-  font-size: clamp(13px, 1vw, 15px);
-
-  line-height: 1.7;
+.sectionHeading > p {
+  max-width: 600px;
+  margin: 16px auto 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.8;
 }
 
-/* =========================================================
-   INTRO
-========================================================= */
+/* INTRO */
 
 .introGrid {
   display: grid;
-
-  grid-template-columns:
-    minmax(0, 1.45fr)
-    minmax(280px, 0.85fr);
-
-  gap: 18px;
-}
-
-.introText,
-.introCard {
-  border-radius: clamp(17px, 2vw, 22px);
-
-  box-sizing: border-box;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: 36px;
+  align-items: stretch;
 }
 
 .introText {
-  padding: clamp(24px, 3vw, 38px);
-
-  background: #f7f8fc;
-
-  border: 1px solid #e9eaf2;
+  padding: 15px 0;
 }
 
 .introText p {
-  margin: 0 0 18px;
-
-  color: #626778;
-
-  font-size: clamp(13px, 1vw, 15px);
-
-  line-height: 1.8;
+  margin: 0 0 17px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.95;
 }
 
 .textButton {
   display: inline-flex;
   align-items: center;
-
-  gap: 8px;
-
+  gap: 10px;
   margin-top: 10px;
-
-  padding: 0;
-
-  border: none;
-
+  padding: 10px 0;
+  border: 0;
   background: transparent;
-
-  color: #483df6;
-
-  font-family: inherit;
-
-  font-size: 14px;
-  font-weight: 850;
-
+  color: var(--accent);
+  font-weight: 750;
   cursor: pointer;
-
-  transition:
-    gap 0.2s ease,
-    color 0.2s ease;
+  transition: gap 0.2s ease;
 }
 
 .textButton:hover {
-  gap: 12px;
-
-  color: #3d32e8;
+  gap: 16px;
 }
-
-/* =========================================================
-   INTRO CARD
-========================================================= */
 
 .introCard {
-  min-height: 280px;
-
-  padding: clamp(24px, 2.7vw, 34px);
-
-  background: #eef0ff;
-
-  border: 1px solid #dfe1ff;
-
-  color: #171827;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 250px;
+  padding: 32px;
+  overflow: hidden;
+  border: 1px solid rgba(72, 61, 246, 0.1);
+  border-radius: 26px;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(121, 126, 255, 0.18),
+      transparent 46%
+    ),
+    linear-gradient(145deg, #fff, #f0efff);
 }
 
-.introCard svg {
-  width: 34px;
-  height: 34px;
-
-  margin-bottom: clamp(35px, 4vw, 52px);
-
-  color: #483df6;
+.introCard > svg {
+  width: 55px;
+  height: 55px;
+  padding: 13px;
+  margin-bottom: 23px;
+  border-radius: 17px;
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 9px 22px rgba(72, 61, 246, 0.22);
 }
 
 .introCard strong {
-  display: block;
-
-  margin-bottom: 9px;
-
-  font-size: clamp(21px, 2vw, 25px);
-
-  line-height: 1.2;
-
-  font-weight: 900;
+  max-width: 300px;
+  font-size: 21px;
+  letter-spacing: -0.035em;
+  line-height: 1.4;
 }
 
 .introCard p {
-  max-width: 330px;
-
-  margin: 0;
-
-  color: #666b80;
-
-  font-size: clamp(13px, 0.95vw, 14px);
-
-  line-height: 1.65;
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
 }
 
-/* =========================================================
-   PROPERTY
-========================================================= */
+/* PROPERTY TYPES */
 
 .propertyGrid {
   display: grid;
-
   grid-template-columns: repeat(4, minmax(0, 1fr));
-
-  gap: 15px;
+  gap: 18px;
 }
 
 .propertyCard {
-  min-height: 260px;
-
-  padding: clamp(21px, 2vw, 27px);
-
-  box-sizing: border-box;
-
-  border-radius: 20px;
-
-  background: #ffffff;
-
-  border: 1px solid #e8e9ef;
-
-  box-shadow: 0 8px 25px rgba(35, 38, 65, 0.05);
-
-  transition:
-    transform 0.25s ease,
-    border-color 0.25s ease,
-    box-shadow 0.25s ease;
-}
-
-.propertyCard:hover {
-  transform: translateY(-5px);
-
-  border-color: rgba(72, 61, 246, 0.35);
-
-  box-shadow:
-    0 18px 40px rgba(35, 38, 65, 0.09),
-    0 0 0 3px rgba(72, 61, 246, 0.04);
-}
-
-.cardIcon,
-.benefitIcon {
-  width: 46px;
-  height: 46px;
-
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 12px;
-
-  background: #eef0ff;
-
-  color: #483df6;
-
-  border: 1px solid #dfe1ff;
-}
-
-.propertyCard h3 {
-  margin: 21px 0 9px;
-
-  color: #171827;
-
-  font-size: clamp(16px, 1.3vw, 18px);
-
-  line-height: 1.25;
-
-  font-weight: 850;
-}
-
-.propertyCard p {
-  min-height: 78px;
-
-  margin: 0 0 18px;
-
-  color: #767b8d;
-
-  font-size: clamp(12px, 0.95vw, 13px);
-
-  line-height: 1.65;
-}
-
-.propertyCard button {
-  display: inline-flex;
-  align-items: center;
-
-  gap: 7px;
-
-  padding: 0;
-
-  border: none;
-
-  background: transparent;
-
-  color: #483df6;
-
-  font-family: inherit;
-
-  font-size: 13px;
-  font-weight: 850;
-
-  cursor: pointer;
-
-  transition:
-    gap 0.2s ease,
-    color 0.2s ease;
-}
-
-.propertyCard button:hover {
-  gap: 11px;
-
-  color: #3d32e8;
-}
-
-/* =========================================================
-   BENEFITS
-========================================================= */
-
-.benefitsSection {
-  padding: clamp(30px, 4vw, 58px);
-
-  box-sizing: border-box;
-
-  border-radius: clamp(20px, 2vw, 26px);
-
-  background: #f7f8fc;
-
-  color: #171827;
-
-  border: 1px solid #e8e9ef;
-}
-
-.benefitsSection .sectionHeading {
-  margin-bottom: clamp(25px, 3vw, 34px);
-}
-
-.benefitsGrid {
-  display: grid;
-
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-
-  gap: 12px;
-}
-
-.benefit {
-  display: flex;
-
-  gap: 15px;
-
-  min-width: 0;
-
-  padding: clamp(17px, 2vw, 22px);
-
-  border-radius: 17px;
-
-  background: #ffffff;
-
-  border: 1px solid #e8e9ef;
-
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.benefit:hover {
-  transform: translateY(-3px);
-
-  border-color: rgba(72, 61, 246, 0.25);
-
-  box-shadow: 0 10px 25px rgba(35, 38, 65, 0.06);
-}
-
-.benefit > div:last-child {
-  min-width: 0;
-}
-
-.benefitIcon {
-  background: #483df6;
-
-  color: #ffffff;
-
-  border-color: transparent;
-
-  box-shadow: 0 8px 18px rgba(72, 61, 246, 0.18);
-}
-
-.benefit h3 {
-  margin: 2px 0 8px;
-
-  color: #171827;
-
-  font-size: clamp(15px, 1.2vw, 17px);
-
-  line-height: 1.3;
-
-  font-weight: 850;
-}
-
-.benefit p {
-  margin: 0;
-
-  color: #777c8d;
-
-  font-size: clamp(12px, 0.95vw, 13px);
-
-  line-height: 1.65;
-}
-
-/* =========================================================
-   LOCATIONS
-   (оставил адаптивным на случай, если блок вернёшь)
-========================================================= */
-
-.locationsGrid {
-  display: grid;
-
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-
-  gap: 15px;
-}
-
-.locationCard {
-  width: 100%;
-
-  padding: 0;
-
-  border: none;
-
-  background: transparent;
-
-  text-align: left;
-
-  cursor: pointer;
-}
-
-.locationImage {
   position: relative;
-
-  width: 100%;
-  height: 320px;
-
-  overflow: hidden;
-
-  border-radius: 22px;
-
-  background:
-    linear-gradient(180deg, rgba(20, 23, 40, 0.02), rgba(20, 23, 40, 0.72)),
-    url("/assets/issykKul.webp") center / cover;
-
-  border: 1px solid #e3e5ed;
-
-  box-shadow: 0 12px 30px rgba(30, 35, 60, 0.1);
-
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  min-height: 280px;
+  padding: 26px 23px 23px;
+  border: 1px solid var(--border);
+  border-radius: 23px;
+  background: var(--surface);
+  box-shadow: 0 5px 20px rgba(31, 36, 80, 0.025);
   transition:
     transform 0.25s ease,
     box-shadow 0.25s ease,
     border-color 0.25s ease;
 }
 
-.locationCard:hover .locationImage {
-  transform: translateY(-5px);
-
-  border-color: rgba(72, 61, 246, 0.35);
-
-  box-shadow: 0 20px 45px rgba(30, 35, 60, 0.15);
+.propertyCard:hover {
+  transform: translateY(-6px);
+  border-color: rgba(72, 61, 246, 0.24);
+  box-shadow: 0 17px 40px rgba(31, 36, 80, 0.09);
 }
 
-.locationOverlay {
-  position: absolute;
-  inset: 0;
-
-  background: linear-gradient(
-    180deg,
-    rgba(20, 23, 40, 0) 25%,
-    rgba(20, 23, 40, 0.78) 100%
-  );
+.cardIcon,
+.benefitIcon,
+.quickIcon,
+.investmentIcon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  color: var(--accent);
+  background: var(--accent-light);
 }
 
-.locationIcon {
-  position: absolute;
-
-  top: 17px;
-  left: 17px;
-
-  width: 43px;
-  height: 43px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 12px;
-
-  background: rgba(255, 255, 255, 0.9);
-
-  color: #483df6;
-
-  border: 1px solid rgba(255, 255, 255, 0.8);
-
-  backdrop-filter: blur(10px);
+.cardIcon {
+  width: 53px;
+  height: 53px;
+  margin-bottom: 25px;
+  border-radius: 17px;
+  transition:
+    color 0.25s ease,
+    background 0.25s ease;
 }
 
-.locationInfo {
-  position: absolute;
-
-  left: 19px;
-  right: 42px;
-  bottom: 19px;
-
-  color: #ffffff;
+.propertyCard:hover .cardIcon {
+  color: #fff;
+  background: var(--accent);
 }
 
-.locationInfo h3 {
-  margin: 0 0 5px;
-
-  font-size: 21px;
-  font-weight: 900;
-}
-
-.locationInfo p {
+.propertyCard h3,
+.benefit h3 {
   margin: 0;
-
-  color: rgba(255, 255, 255, 0.75);
-
-  font-size: 12px;
-
-  line-height: 1.5;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  line-height: 1.45;
 }
 
-.locationArrow {
-  position: absolute;
-
-  right: 18px;
-  bottom: 21px;
-
-  color: #ffffff;
-
-  transition: 0.2s ease;
+.propertyCard p {
+  flex: 1;
+  margin: 11px 0 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.8;
 }
 
-.locationCard:hover .locationArrow {
+.propertyCard button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.propertyCard button svg {
+  transition: transform 0.2s ease;
+}
+
+.propertyCard button:hover svg {
   transform: translateX(4px);
 }
 
-/* =========================================================
-   INVESTMENT
-========================================================= */
+/* BENEFITS */
+
+.benefitsSection {
+  padding-right: clamp(20px, 4vw, 48px);
+  padding-left: clamp(20px, 4vw, 48px);
+  border: 1px solid rgba(72, 61, 246, 0.07);
+  border-radius: 32px;
+  background:
+    radial-gradient(
+      ellipse at 0% 0%,
+      rgba(101, 94, 255, 0.08),
+      transparent 42%
+    ),
+    #fff;
+}
+
+.benefitsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 34px 42px;
+}
+
+.benefit {
+  display: grid;
+  grid-template-columns: 53px minmax(0, 1fr);
+  align-items: start;
+  gap: 17px;
+}
+
+.benefitIcon {
+  width: 53px;
+  height: 53px;
+  border-radius: 17px;
+}
+
+.benefit p {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+/* INVESTMENT */
 
 .investment {
   position: relative;
-
-  width: min(100%, 1800px);
-
-  min-height: clamp(330px, 30vw, 400px);
-
-  margin: clamp(65px, 7vw, 100px) auto 0;
-
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 430px;
+  margin-top: 100px;
+  padding: 72px 24px;
   overflow: hidden;
+  color: white;
+  background:
+    radial-gradient(
+      ellipse at 15% 90%,
+      rgba(129, 114, 255, 0.38),
+      transparent 45%
+    ),
+    linear-gradient(120deg, #111a46 0%, #222b77 55%, #493df6 100%);
+}
 
-  border-radius: clamp(20px, 2vw, 26px);
+.investment::before,
+.investment::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+}
 
-  background: url("/assets/issykKul.webp") center / cover;
+.investment::before {
+  width: 550px;
+  height: 550px;
+  right: -130px;
+  top: -300px;
+  box-shadow:
+    0 0 0 45px rgba(255, 255, 255, 0.025),
+    0 0 0 90px rgba(255, 255, 255, 0.02);
+}
 
-  border: 1px solid #e3e5ed;
-
-  box-shadow: 0 18px 50px rgba(30, 35, 60, 0.12);
+.investment::after {
+  width: 330px;
+  height: 330px;
+  left: -190px;
+  bottom: -180px;
 }
 
 .investmentOverlay {
   position: absolute;
+  z-index: -1;
   inset: 0;
-
-  background: linear-gradient(
-    90deg,
-    rgba(17, 20, 35, 0.91) 0%,
-    rgba(17, 20, 35, 0.7) 55%,
-    rgba(72, 61, 246, 0.18) 100%
-  );
+  background: linear-gradient(90deg, rgba(10, 14, 46, 0.28), transparent 80%);
 }
 
 .investmentContent {
-  position: relative;
-  z-index: 2;
-
-  width: min(100%, 720px);
-
-  padding: clamp(35px, 5vw, 65px);
-
-  box-sizing: border-box;
-
-  color: #ffffff;
+  width: min(100%, 760px);
+  text-align: center;
 }
 
 .investmentIcon {
-  width: 52px;
-  height: 52px;
-
-  margin-bottom: 25px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 13px;
-
-  background: #483df6;
-
-  color: #ffffff;
-
-  box-shadow: 0 10px 25px rgba(72, 61, 246, 0.25);
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 24px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  backdrop-filter: blur(10px);
 }
 
 .investmentContent > span {
-  color: #a9a4ff;
+  color: #c4caff;
 }
 
 .investmentContent h2 {
   margin: 0;
-
-  color: #ffffff;
-
-  font-size: clamp(30px, 3.5vw, 43px);
-
-  line-height: 1.08;
-
-  font-weight: 900;
-
-  letter-spacing: -2px;
+  font-size: clamp(31px, 4.4vw, 49px);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1.13;
+  text-wrap: balance;
 }
 
 .investmentContent p {
-  margin: clamp(16px, 2vw, 20px) 0 clamp(22px, 2.5vw, 30px);
-
+  max-width: 610px;
+  margin: 20px auto 27px;
   color: rgba(255, 255, 255, 0.78);
-
-  font-size: clamp(13px, 1vw, 15px);
-
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.9;
 }
 
-.investmentContent button,
-.quickSearch button,
-.addSection button {
-  min-height: 53px;
-
-  padding: 0 21px;
-
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  gap: 9px;
-
-  box-sizing: border-box;
-
-  border: none;
-  border-radius: 13px;
-
-  background: #483df6;
-
-  color: #ffffff;
-
-  font-family: inherit;
-
-  font-size: 13px;
-  font-weight: 850;
-
-  cursor: pointer;
-
-  box-shadow: 0 10px 25px rgba(72, 61, 246, 0.2);
-
-  transition:
-    transform 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease;
+.investmentContent button {
+  color: #29215e;
+  background: white;
+  box-shadow: 0 9px 25px rgba(4, 7, 33, 0.16);
 }
 
-.investmentContent button:hover,
-.quickSearch button:hover,
-.addSection button:hover {
-  transform: translateY(-3px);
-
-  background: #3d32e8;
-
-  box-shadow: 0 15px 35px rgba(72, 61, 246, 0.28);
+.investmentContent button:hover {
+  box-shadow: 0 13px 30px rgba(4, 7, 33, 0.24);
 }
 
-/* =========================================================
-   QUICK SEARCH
-========================================================= */
+/* QUICK SEARCH */
 
 .quickSearch {
-  width: min(100%, 1800px);
-
-  margin: clamp(50px, 5vw, 70px) auto 0;
-
-  padding: clamp(18px, 2vw, 25px);
-
   display: flex;
   align-items: center;
   justify-content: space-between;
-
-  gap: 25px;
-
-  box-sizing: border-box;
-
-  border-radius: 20px;
-
-  background: #f7f8fc;
-
-  border: 1px solid #e7e8ef;
-
-  box-shadow: 0 10px 30px rgba(35, 38, 65, 0.05);
+  gap: 30px;
+  width: min(100% - 48px, 1180px);
+  margin: 90px auto 0;
+  padding: 36px;
+  border: 1px solid var(--border);
+  border-radius: 27px;
+  background: #fff;
+  box-shadow: 0 10px 34px rgba(31, 36, 80, 0.035);
 }
 
 .quickSearch > div {
-  min-width: 0;
-
   display: flex;
-  align-items: center;
-
-  gap: 17px;
+  align-items: flex-start;
+  gap: 22px;
+  min-width: 0;
 }
 
 .quickIcon {
-  width: 49px;
-  height: 49px;
-
-  flex: 0 0 49px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 13px;
-
-  background: #eef0ff;
-
-  color: #483df6;
-
-  border: 1px solid #dfe1ff;
+  width: 55px;
+  height: 55px;
+  border-radius: 18px;
 }
 
 .quickSearch > div > div:last-child {
   min-width: 0;
 }
 
-.quickSearch span {
-  margin-bottom: 4px;
+.quickSearch > div > div:last-child > span {
+  margin-bottom: 7px;
 }
 
 .quickSearch h2 {
-  margin: 0;
-
-  color: #171827;
-
-  font-size: clamp(18px, 1.5vw, 21px);
-
-  line-height: 1.3;
-
-  font-weight: 900;
+  font-size: clamp(23px, 3vw, 32px);
 }
 
 .quickSearch p {
-  margin: 6px 0 0;
-
-  color: #777c8d;
-
-  font-size: 13px;
-
-  line-height: 1.5;
+  max-width: 560px;
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
 }
 
-/* =========================================================
-   ADD SECTION
-========================================================= */
+.quickSearch > button {
+  flex-shrink: 0;
+  color: white;
+  background: var(--accent);
+  box-shadow: 0 8px 20px rgba(72, 61, 246, 0.18);
+}
+
+.quickSearch > button:hover {
+  background: var(--accent-dark);
+  box-shadow: 0 12px 26px rgba(72, 61, 246, 0.24);
+}
+
+/* ADD OBJECT */
 
 .addSection {
-  width: min(100%, 1800px);
-
-  margin: clamp(50px, 5vw, 70px) auto clamp(55px, 7vw, 100px);
-
-  padding: clamp(30px, 4vw, 46px);
-
   display: flex;
   align-items: center;
   justify-content: space-between;
-
-  gap: 35px;
-
-  box-sizing: border-box;
-
-  border-radius: 22px;
-
-  background: #eef0ff;
-
-  border: 1px solid #dfe1ff;
+  gap: 30px;
+  width: min(100% - 48px, 1180px);
+  margin: 24px auto 90px;
+  padding: 38px;
+  border: 1px solid rgba(72, 61, 246, 0.12);
+  border-radius: 27px;
+  background:
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(119, 124, 255, 0.15),
+      transparent 43%
+    ),
+    linear-gradient(120deg, #f0efff, #fff);
 }
 
 .addSection > div {
@@ -1063,693 +733,308 @@
 }
 
 .addSection > div > span {
-  color: #483df6;
+  margin-bottom: 8px;
 }
 
 .addSection h2 {
-  margin: 0;
-
-  color: #171827;
-
-  font-size: clamp(25px, 2.6vw, 32px);
-
-  line-height: 1.15;
-
-  font-weight: 900;
-
-  letter-spacing: -1px;
+  font-size: clamp(25px, 3.3vw, 35px);
 }
 
 .addSection p {
-  width: min(100%, 650px);
-
+  max-width: 590px;
   margin: 12px 0 0;
-
-  color: #666b80;
-
-  font-size: clamp(13px, 1vw, 14px);
-
-  line-height: 1.65;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
 }
 
-.addSection button {
+.addSection > button {
   flex-shrink: 0;
+  color: white;
+  background: var(--accent);
+  box-shadow: 0 8px 22px rgba(72, 61, 246, 0.18);
 }
 
-/* =========================================================
-   FOCUS
-========================================================= */
-
-button:focus-visible,
-a:focus-visible {
-  outline: 3px solid rgba(72, 61, 246, 0.25);
-
-  outline-offset: 3px;
+.addSection > button:hover {
+  background: var(--accent-dark);
+  box-shadow: 0 12px 28px rgba(72, 61, 246, 0.25);
 }
 
-/* =========================================================
-   TABLET
-========================================================= */
+/* MOTION */
 
-@media (max-width: 1100px) {
-  .propertyGrid,
-  .locationsGrid {
+@keyframes heroReveal {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroContent {
+    animation: none;
+  }
+
+  .page *,
+  .page *::before,
+  .page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* TABLETS */
+
+@media (max-width: 1024px) {
+  .hero {
+    min-height: 560px;
+    padding: 100px 40px 85px;
+  }
+
+  .propertyGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .introGrid {
-    grid-template-columns:
-      minmax(0, 1.2fr)
-      minmax(260px, 0.8fr);
-  }
-
-  .hero {
-    height: 600px;
-  }
-}
-
-/* =========================================================
-   SMALL TABLET
-========================================================= */
-
-@media (max-width: 850px) {
-  .hero {
-    min-height: 570px;
-    height: auto;
-  }
-
-  .heroContent {
-    min-height: 570px;
-  }
-
-  .hero h1 {
-    font-size: clamp(38px, 7vw, 56px);
-  }
-
-  .buttons {
-    width: 100%;
-    max-width: 540px;
-  }
-
-  .mainButton,
-  .whiteButton,
-  .homeButton {
-    flex: 1 1 auto;
+  .propertyCard {
+    min-height: 245px;
   }
 
   .introGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .introCard {
-    min-height: auto;
-  }
-
-  .introCard svg {
-    margin-bottom: 28px;
-  }
-
-  .benefitsGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .quickSearch {
-    align-items: flex-start;
+    gap: 25px;
   }
 
   .quickSearch,
   .addSection {
-    flex-direction: column;
-  }
-
-  .quickSearch > div {
-    width: 100%;
-  }
-
-  .quickSearch button,
-  .addSection button {
-    width: 100%;
-  }
-
-  .addSection {
-    align-items: flex-start;
+    padding: 28px;
   }
 }
 
-/* =========================================================
-   MOBILE
-========================================================= */
+/* MOBILE */
 
-@media (max-width: 600px) {
-  .page {
-    padding-left: 14px;
-    padding-right: 14px;
-  }
-
-  .hero {
-    min-height: 570px;
-
-    border-radius: 20px;
-
-    background-position: 62% center;
-  }
-
-  .heroContent {
-    min-height: 570px;
-
-    padding: 30px 18px;
-  }
-
-  .badge {
-    font-size: 9px;
-
-    padding: 8px 12px;
-  }
-
-  .hero h1 {
-    margin-top: 19px;
-
-    font-size: clamp(34px, 10vw, 48px);
-
-    letter-spacing: -2px;
-
-    line-height: 1;
-  }
-
-  .hero p {
-    max-width: 480px;
-
-    font-size: 13px;
-
-    line-height: 1.6;
-  }
-
-  .buttons {
-    margin-top: 24px;
-
-    flex-direction: column;
-
-    gap: 9px;
-  }
-
-  .mainButton,
-  .whiteButton,
-  .homeButton {
-    width: 100%;
-
-    flex: none;
-
-    min-height: 51px;
-  }
-
-  .section,
-  .intro,
-  .benefitsSection {
-    margin-top: 58px;
-  }
-
-  .sectionHeading {
-    margin-bottom: 25px;
-  }
-
-  .sectionHeading > span,
-  .investmentContent > span,
-  .addSection > div > span,
-  .quickSearch span {
-    font-size: 9px;
-
-    letter-spacing: 1.7px;
-  }
-
-  .sectionHeading h2 {
-    font-size: clamp(27px, 8vw, 34px);
-
-    letter-spacing: -1.2px;
-  }
-
-  .sectionHeading p {
-    font-size: 13px;
-  }
-
-  .introText {
-    padding: 22px;
-  }
-
-  .introText p {
-    font-size: 13px;
-  }
-
-  .introCard {
-    padding: 22px;
-  }
-
-  .introCard strong {
-    font-size: 21px;
-  }
-
-  .propertyGrid,
-  .locationsGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .propertyCard {
-    min-height: auto;
-
-    padding: 22px;
-  }
-
-  .propertyCard p {
-    min-height: 0;
-
-    margin-bottom: 17px;
-  }
-
-  .benefitsSection {
-    padding: 24px 20px;
-  }
-
-  .benefit {
-    padding: 17px;
-
-    gap: 12px;
-  }
-
-  .benefitIcon {
-    width: 42px;
-    height: 42px;
-  }
-
-  .benefit h3 {
-    font-size: 15px;
-  }
-
-  .benefit p {
-    font-size: 12px;
-  }
-
-  .investment {
-    min-height: 460px;
-
-    margin-top: 58px;
-
-    border-radius: 20px;
-
-    background-position: 63% center;
-  }
-
-  .investmentOverlay {
+@media (max-width: 640px) {
+  .page::before {
+    height: 100px;
     background: linear-gradient(
       180deg,
-      rgba(17, 20, 35, 0.55) 0%,
-      rgba(17, 20, 35, 0.93) 100%
+      rgba(53, 76, 255, 0.8),
+      rgba(95, 100, 255, 0.25) 48%,
+      rgba(247, 248, 252, 0) 100%
     );
   }
 
-  .investmentContent {
-    width: 100%;
-
-    padding: 32px 24px;
-  }
-
-  .investmentContent h2 {
-    font-size: clamp(28px, 8vw, 34px);
-
-    letter-spacing: -1.4px;
-  }
-
-  .investmentContent p {
-    font-size: 13px;
-  }
-
-  .investmentContent button {
-    width: 100%;
-  }
-
-  .quickSearch {
-    margin-top: 48px;
-
-    padding: 18px;
-
-    border-radius: 17px;
-  }
-
-  .quickSearch > div {
-    align-items: flex-start;
-
-    gap: 12px;
-  }
-
-  .quickIcon {
-    width: 43px;
-    height: 43px;
-
-    flex-basis: 43px;
-  }
-
-  .quickSearch h2 {
-    font-size: 18px;
-  }
-
-  .quickSearch p {
-    font-size: 12px;
-  }
-
-  .addSection {
-    margin-top: 48px;
-
-    margin-bottom: 60px;
-
-    padding: 26px 20px;
-
-    border-radius: 18px;
-  }
-
-  .addSection h2 {
-    font-size: 25px;
-  }
-
-  .addSection p {
-    font-size: 13px;
-  }
-}
-
-/* =========================================================
-   VERY SMALL DEVICES
-   320px — 400px
-========================================================= */
-
-@media (max-width: 400px) {
-  .page {
-    padding-left: 10px;
-    padding-right: 10px;
-  }
-
   .hero {
-    min-height: 555px;
+    min-height: auto;
+    padding: 115px 22px 64px;
+    border-radius: 0 0 25px 25px;
+  }
 
-    border-radius: 17px;
+  .hero::before {
+    width: 290px;
+    height: 290px;
+    right: -140px;
+    top: -70px;
   }
 
   .heroContent {
-    min-height: 555px;
-
-    padding: 25px 14px;
+    width: 100%;
   }
 
   .badge {
-    max-width: calc(100% - 10px);
-
-    padding: 7px 10px;
-
-    font-size: 8px;
-
-    gap: 6px;
-  }
-
-  .badge svg {
-    width: 14px;
-    height: 14px;
+    margin-bottom: 23px;
+    padding: 9px 12px;
+    font-size: 11px;
   }
 
   .hero h1 {
+    font-size: clamp(37px, 10vw, 54px);
+    letter-spacing: -0.055em;
+    line-height: 1.08;
+  }
+
+  .heroContent > p {
+    margin-top: 20px;
+    font-size: 14px;
+    line-height: 1.8;
+  }
+
+  .buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 27px;
+  }
+
+  .buttons button {
     width: 100%;
-
-    font-size: clamp(31px, 10vw, 40px);
-
-    letter-spacing: -1.7px;
+    min-height: 50px;
   }
 
-  .hero p {
-    width: 100%;
-
-    font-size: 12px;
-  }
-
-  .mainButton,
-  .whiteButton,
-  .homeButton {
-    min-height: 49px;
-
-    padding: 0 14px;
-
-    font-size: 12px;
-
-    border-radius: 11px;
-  }
-
-  .whiteButton span {
-    width: 27px;
-    height: 27px;
-  }
-
-  .section,
   .intro,
-  .benefitsSection {
-    margin-top: 50px;
+  .section,
+  .benefitsSection,
+  .quickSearch,
+  .addSection {
+    width: calc(100% - 32px);
+  }
+
+  .intro {
+    padding-top: 70px;
+    padding-bottom: 30px;
+  }
+
+  .section {
+    padding-top: 60px;
+    padding-bottom: 55px;
+  }
+
+  .sectionHeading {
+    margin-bottom: 28px;
   }
 
   .sectionHeading h2 {
-    font-size: 26px;
+    font-size: 31px;
   }
 
-  .sectionHeading p {
-    font-size: 12px;
-  }
-
-  .introText {
-    padding: 19px;
-  }
-
-  .introText p {
-    font-size: 12px;
-
-    line-height: 1.7;
-  }
-
-  .textButton {
-    font-size: 12px;
-  }
-
-  .introCard {
-    padding: 19px;
-
-    min-height: 230px;
-  }
-
-  .introCard svg {
-    width: 30px;
-    height: 30px;
-
-    margin-bottom: 27px;
-  }
-
-  .introCard strong {
-    font-size: 19px;
-  }
-
-  .introCard p {
-    font-size: 12px;
-  }
-
-  .propertyCard {
-    padding: 19px;
-
-    border-radius: 17px;
-  }
-
-  .cardIcon {
-    width: 42px;
-    height: 42px;
-  }
-
-  .propertyCard h3 {
-    margin-top: 17px;
-
-    font-size: 16px;
-  }
-
-  .propertyCard p {
-    font-size: 12px;
-  }
-
-  .propertyCard button {
-    font-size: 12px;
-  }
-
-  .benefitsSection {
-    padding: 20px 15px;
-
-    border-radius: 18px;
-  }
-
-  .benefit {
-    padding: 14px;
-
-    gap: 10px;
-
-    border-radius: 14px;
-  }
-
-  .benefitIcon {
-    width: 38px;
-    height: 38px;
-
-    flex-basis: 38px;
-  }
-
-  .benefit h3 {
+  .sectionHeading > p {
     font-size: 14px;
   }
 
-  .benefit p {
-    font-size: 11px;
+  .introGrid {
+    grid-template-columns: 1fr;
+    gap: 22px;
   }
 
-  .investment {
-    min-height: 450px;
-
-    border-radius: 17px;
+  .introText {
+    padding: 0;
   }
 
-  .investmentContent {
-    padding: 27px 18px;
+  .introText p {
+    font-size: 14px;
+    line-height: 1.9;
   }
 
-  .investmentIcon {
-    width: 46px;
-    height: 46px;
-
-    margin-bottom: 21px;
+  .introCard {
+    min-height: 220px;
+    padding: 25px;
+    border-radius: 22px;
   }
 
-  .investmentContent h2 {
-    font-size: 27px;
-
-    letter-spacing: -1px;
+  .propertyGrid {
+    grid-template-columns: 1fr;
+    gap: 13px;
   }
 
-  .investmentContent p {
-    font-size: 12px;
-  }
-
-  .investmentContent button,
-  .quickSearch button,
-  .addSection button {
-    min-height: 49px;
-
-    padding: 0 14px;
-
-    font-size: 12px;
-
-    border-radius: 11px;
-  }
-
-  .quickSearch {
-    padding: 15px;
-
-    border-radius: 15px;
-  }
-
-  .quickSearch > div {
-    gap: 10px;
-  }
-
-  .quickIcon {
-    width: 39px;
-    height: 39px;
-
-    flex-basis: 39px;
-  }
-
-  .quickSearch h2 {
-    font-size: 16px;
-  }
-
-  .quickSearch p {
-    font-size: 11px;
-  }
-
-  .addSection {
-    padding: 23px 17px;
-
-    border-radius: 16px;
-  }
-
-  .addSection h2 {
-    font-size: 22px;
-  }
-
-  .addSection p {
-    font-size: 12px;
-  }
-}
-
-/* =========================================================
-   320px SAFETY
-========================================================= */
-
-@media (max-width: 340px) {
-  .page {
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-
-  .heroContent {
-    padding-left: 11px;
-    padding-right: 11px;
-  }
-
-  .hero h1 {
-    font-size: 29px;
-  }
-
-  .hero p {
-    font-size: 11px;
-  }
-
-  .mainButton,
-  .whiteButton,
-  .homeButton {
-    font-size: 11px;
-  }
-
-  .sectionHeading h2 {
-    font-size: 24px;
-  }
-
-  .introText,
-  .introCard,
   .propertyCard {
-    padding: 17px;
+    min-height: 0;
+    padding: 23px;
+    border-radius: 20px;
+  }
+
+  .cardIcon {
+    margin-bottom: 18px;
+  }
+
+  .propertyCard p {
+    margin-bottom: 18px;
   }
 
   .benefitsSection {
-    padding: 18px 13px;
+    padding: 38px 21px;
+    border-radius: 25px;
   }
 
-  .investmentContent {
-    padding-left: 16px;
-    padding-right: 16px;
+  .benefitsGrid {
+    grid-template-columns: 1fr;
+    gap: 26px;
   }
-}
 
-/* =========================================================
-   REDUCE MOTION
-========================================================= */
+  .benefit {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 14px;
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  .mainButton,
-  .whiteButton,
-  .homeButton,
-  .textButton,
-  .propertyCard,
-  .propertyCard button,
-  .benefit,
-  .locationImage,
-  .locationArrow,
-  .investmentContent button,
-  .quickSearch button,
-  .addSection button {
-    transition: none;
+  .benefitIcon {
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
+  }
+
+  .benefit h3 {
+    font-size: 16px;
+  }
+
+  .benefit p {
+    font-size: 13px;
+  }
+
+  .investment {
+    min-height: 400px;
+    margin-top: 65px;
+    padding: 60px 22px;
+  }
+
+  .investmentContent h2 {
+    font-size: 33px;
+  }
+
+  .investmentContent p {
+    font-size: 14px;
+  }
+
+  .quickSearch {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+    margin-top: 60px;
+    padding: 23px;
+    border-radius: 22px;
+  }
+
+  .quickSearch > div {
+    gap: 14px;
+  }
+
+  .quickIcon {
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
+  }
+
+  .quickSearch h2 {
+    font-size: 25px;
+  }
+
+  .quickSearch p {
+    font-size: 13px;
+  }
+
+  .quickSearch > button {
+    width: 100%;
+  }
+
+  .addSection {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 22px;
+    margin-top: 16px;
+    margin-bottom: 55px;
+    padding: 25px 22px;
+    border-radius: 22px;
+  }
+
+  .addSection h2 {
+    font-size: 28px;
+  }
+
+  .addSection p {
+    font-size: 13px;
+  }
+
+  .addSection > button {
+    width: 100%;
   }
 }
