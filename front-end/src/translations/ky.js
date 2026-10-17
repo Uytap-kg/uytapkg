@@ -2659,6 +2659,9 @@ const ky = {
     },
 
     loading: "Жарыялар жүктөлүүдө...",
+    loadMore: "Дагы көрсөтүү",
+    loadingMore: "Жүктөлүүдө...",
+    retry: "Кайра аракет кылуу",
 
     empty: {
       title: "Эч нерсе табылган жок",
@@ -2821,6 +2824,11 @@ const ky = {
     examples: {
       title: "Мисалы:",
     },
+
+    activeFilters: "Аныкталган параметрлер:",
+    resetAll: "AI-чыпкаларды тазалоо",
+    allCategories: "Бардык кыймылсыз мүлк",
+    roomsCount: "бөлмө",
 
     errors: {
       microphonePermission:

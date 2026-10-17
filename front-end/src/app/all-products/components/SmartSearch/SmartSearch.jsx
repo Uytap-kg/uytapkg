@@ -7,6 +7,7 @@ import {
   RotateCcw,
   Search,
   Loader2,
+  X,
 } from "lucide-react";
 
 import { useEffect, useRef, useState } from "react";
@@ -738,7 +739,13 @@ function normalizeFilters(aiFilters, originalQuery = "") {
    COMPONENT
 ========================================================= */
 
-export default function SmartSearch({ onFiltersDetected }) {
+export default function SmartSearch({
+  onFiltersDetected,
+  activeFilters,
+  onRemoveFilter,
+  onResetAll,
+  categoryLabels,
+}) {
   const { language, t } = useLanguage();
 
   const recognitionRef = useRef(null);
@@ -755,6 +762,92 @@ export default function SmartSearch({ onFiltersDetected }) {
   const [error, setError] = useState("");
 
   const isKyrgyz = language === "ky";
+
+  const activeChips = [];
+  if (activeFilters) {
+    if (activeFilters.propertyType && activeFilters.propertyType !== "all") {
+      activeChips.push({
+        id: "propertyType",
+        label:
+          categoryLabels?.[activeFilters.propertyType] ||
+          activeFilters.propertyType,
+      });
+    }
+
+    if (activeFilters.dealType) {
+      activeChips.push({
+        id: "dealType",
+        label:
+          activeFilters.dealType === "rent"
+            ? language === "ky"
+              ? "Ижара"
+              : "Аренда"
+            : language === "ky"
+              ? "Сатуу"
+              : "Продажа",
+      });
+    }
+
+    if (activeFilters.city && activeFilters.city !== "Все") {
+      activeChips.push({
+        id: "location",
+        label: activeFilters.district
+          ? `${activeFilters.city}, ${activeFilters.district}`
+          : activeFilters.city,
+      });
+    } else if (activeFilters.district) {
+      activeChips.push({
+        id: "district",
+        label: activeFilters.district,
+      });
+    }
+
+    if (activeFilters.rooms && activeFilters.rooms !== "Все") {
+      activeChips.push({
+        id: "rooms",
+        label: `${activeFilters.rooms} ${t("smartSearch.roomsCount")}`,
+      });
+    }
+
+    if (activeFilters.priceFrom || activeFilters.priceTo) {
+      const cur = activeFilters.currency === "KGS" ? "сом" : "$";
+      let priceLabel = "";
+      if (activeFilters.priceFrom && activeFilters.priceTo) {
+        priceLabel = `${Number(activeFilters.priceFrom).toLocaleString()} – ${Number(activeFilters.priceTo).toLocaleString()} ${cur}`;
+      } else if (activeFilters.priceTo) {
+        priceLabel = `до ${Number(activeFilters.priceTo).toLocaleString()} ${cur}`;
+      } else {
+        priceLabel = `от ${Number(activeFilters.priceFrom).toLocaleString()} ${cur}`;
+      }
+      activeChips.push({
+        id: "price",
+        label: priceLabel,
+      });
+    }
+
+    if (activeFilters.areaFrom || activeFilters.areaTo) {
+      const unit = activeFilters.propertyType === "land" ? "сот." : "м²";
+      let areaLabel = "";
+      if (activeFilters.areaFrom && activeFilters.areaTo) {
+        areaLabel = `${activeFilters.areaFrom} – ${activeFilters.areaTo} ${unit}`;
+      } else if (activeFilters.areaTo) {
+        areaLabel = `до ${activeFilters.areaTo} ${unit}`;
+      } else {
+        areaLabel = `от ${activeFilters.areaFrom} ${unit}`;
+      }
+      activeChips.push({
+        id: "area",
+        label: areaLabel,
+      });
+    }
+
+    if (activeFilters.searchQuery) {
+      activeChips.push({
+        id: "searchQuery",
+        label: `«${activeFilters.searchQuery}»`,
+      });
+    }
+  }
 
   /* =========================================================
      SPEECH RECOGNITION
@@ -1345,6 +1438,35 @@ export default function SmartSearch({ onFiltersDetected }) {
           </>
         )}
       </button>
+
+      {activeChips.length > 0 && (
+        <div className={styles.activeChipsBlock}>
+          <div className={styles.activeChipsHeader}>
+            <span>{t("smartSearch.activeFilters")}</span>
+            <button
+              type="button"
+              className={styles.resetAllChips}
+              onClick={onResetAll}
+            >
+              {t("smartSearch.resetAll")}
+            </button>
+          </div>
+          <div className={styles.chipsList}>
+            {activeChips.map((chip) => (
+              <span key={chip.id} className={styles.chip}>
+                {chip.label}
+                <button
+                  type="button"
+                  onClick={() => onRemoveFilter?.(chip.id)}
+                  aria-label={`Удалить ${chip.label}`}
+                >
+                  <X size={13} />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className={styles.examples}>
         <span>{t("smartSearch.examples.title")}</span>

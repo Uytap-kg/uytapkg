@@ -2,20 +2,19 @@
 
 import { Home } from "lucide-react";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useLanguage } from "@/context/LanguageContext";
 
 import {
   getListings,
-  getAllListings,
   getFavorites,
   addFavorite,
   removeFavorite,
 } from "@/utils/api";
 
-import { mapListingData, formatRegion } from "@/utils/mapListingData";
+import { mapListingData } from "@/utils/mapListingData";
 
 import ApartmentFilters from "./components/ApartmentFilters/ApartmentFilters";
 import HouseFilters from "./components/HouseFilters/HouseFilters";
@@ -108,6 +107,7 @@ const DEFAULT_FILTERS = {
   region: "",
   country: "",
   district: "",
+
   searchQuery: "",
 
   currency: "USD",
@@ -289,17 +289,6 @@ function normalizeLocationValue(value) {
     .replace(/\s+/g, " ");
 }
 
-function getWordStem(word) {
-  const clean = String(word || "")
-    .toLowerCase()
-    .replace(/[^a-zа-яёөүң0-9]/g, "");
-  if (clean.length <= 3) return clean;
-  return clean.replace(
-    /(ый|ий|ое|ее|ая|яя|ые|ие|ом|ем|ым|им|ой|ей|ам|ям|ах|ях|ов|ев|ей|ок|ек|ул|у|ю|а|я|е|о|ы|и|дор|дөр|тор|төр|лор|лөр|дар|дер)$/g,
-    "",
-  );
-}
-
 function isIssykKulValue(value) {
   const normalized = normalizeLocationValue(value);
 
@@ -372,6 +361,10 @@ function normalizePropertyType(value) {
     return "apartment";
   }
 
+  if (value === "all") {
+    return "all";
+  }
+
   if (categoryComponents[value]) {
     return value;
   }
@@ -415,63 +408,207 @@ function normalizeArrayValue(value) {
   return [value];
 }
 
-function matchesMultiValue(selected, itemValue) {
-  const selectedValues = normalizeArrayValue(selected);
+/* =========================================================
+   URL ↔ FILTERS PARSER & BUILDER
+========================================================= */
 
-  if (selectedValues.length === 0) {
-    return true;
+function parseUrlToFilters(searchParams) {
+  const rawPropertyType =
+    searchParams.get("propertyType") || searchParams.get("category");
+  const propertyType = rawPropertyType
+    ? normalizePropertyType(rawPropertyType)
+    : "apartment";
+
+  const dealType = normalizeDealType(searchParams.get("dealType"));
+
+  const parseArrayParam = (key) => {
+    const value = searchParams.get(key);
+
+    if (!value) {
+      return [];
+    }
+
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const nextFilters = {
+    ...DEFAULT_FILTERS,
+
+    propertyType,
+    dealType,
+
+    city: searchParams.get("city") || searchParams.get("settlement") || "Все",
+
+    region: searchParams.get("region") || "",
+
+    country: searchParams.get("country") || "",
+
+    district: searchParams.get("district") || "",
+
+    searchQuery: searchParams.get("searchQuery") || "",
+
+    currency: searchParams.get("currency") || "USD",
+
+    priceFrom: searchParams.get("priceFrom") || "",
+
+    priceTo: searchParams.get("priceTo") || "",
+
+    areaFrom: searchParams.get("areaFrom") || "",
+
+    areaTo: searchParams.get("areaTo") || "",
+
+    rooms: searchParams.get("rooms") || "Все",
+
+    beachDistanceFrom: searchParams.get("beachDistanceFrom") || "",
+
+    beachDistanceTo: searchParams.get("beachDistanceTo") || "",
+
+    urgentOnly: searchParams.get("urgentOnly") === "true",
+
+    series: parseArrayParam("series"),
+
+    floor: parseArrayParam("floor"),
+
+    condition: parseArrayParam("condition"),
+
+    walls: parseArrayParam("walls"),
+
+    heating: parseArrayParam("heating"),
+
+    documents: parseArrayParam("documents"),
+
+    furniture: parseArrayParam("furniture"),
+
+    offerType: parseArrayParam("offerType"),
+
+    residentialComplex: parseArrayParam("residentialComplex"),
+
+    rentalPeriod: parseArrayParam("rentalPeriod"),
+
+    amenities: parseArrayParam("amenities"),
+
+    communications: parseArrayParam("communications"),
+
+    technicalParameters: parseArrayParam("technicalParameters"),
+  };
+
+  for (const [key, value] of searchParams.entries()) {
+    if (ignoredUrlKeys.includes(key)) {
+      continue;
+    }
+
+    if (!value) {
+      continue;
+    }
+
+    nextFilters[key] = value;
   }
 
-  const itemValues = normalizeArrayValue(itemValue);
-
-  if (itemValues.length === 0) {
-    return false;
-  }
-
-  const normalizedSelected = selectedValues.map((value) =>
-    String(value).trim().toLowerCase(),
-  );
-
-  const normalizedItem = itemValues.map((value) =>
-    String(value).trim().toLowerCase(),
-  );
-
-  return normalizedSelected.some((selectedValue) =>
-    normalizedItem.some(
-      (itemValue) =>
-        itemValue === selectedValue ||
-        itemValue.includes(selectedValue) ||
-        selectedValue.includes(itemValue),
-    ),
-  );
+  return nextFilters;
 }
 
-function matchesArrayFilter(selected, itemValue) {
-  const selectedValues = normalizeArrayValue(selected);
+function buildApiFilters(f) {
+  const params = {};
 
-  if (selectedValues.length === 0) {
-    return true;
+  if (f.propertyType && f.propertyType !== "all") {
+    params.propertyType = f.propertyType;
   }
 
-  const itemValues = normalizeArrayValue(itemValue);
-
-  if (itemValues.length === 0) {
-    return false;
+  if (f.dealType && f.dealType !== "Все") {
+    params.dealType = f.dealType;
   }
 
-  const normalizedItem = itemValues.map((value) =>
-    String(value).trim().toLowerCase(),
-  );
+  if (f.city && f.city !== "Все") {
+    params.city = f.city;
+  }
 
-  return selectedValues.every((selectedValue) => {
-    const normalizedSelected = String(selectedValue).trim().toLowerCase();
+  if (f.region) {
+    params.region = f.region;
+  }
 
-    return normalizedItem.some(
-      (itemValue) =>
-        itemValue === normalizedSelected ||
-        itemValue.includes(normalizedSelected),
-    );
-  });
+  if (f.district) {
+    params.district = f.district;
+  }
+
+  if (f.country) {
+    params.country = f.country;
+  }
+
+  if (f.searchQuery) {
+    params.searchQuery = f.searchQuery;
+  }
+
+  if (f.currency) {
+    params.currency = f.currency;
+  }
+
+  if (f.priceFrom) {
+    params.minPrice = f.priceFrom;
+  }
+
+  if (f.priceTo) {
+    params.maxPrice = f.priceTo;
+  }
+
+  if (f.areaFrom) {
+    params.minArea = f.areaFrom;
+  }
+
+  if (f.areaTo) {
+    params.maxArea = f.areaTo;
+  }
+
+  if (f.rooms && f.rooms !== "Все") {
+    params.rooms = f.rooms;
+  }
+
+  if (f.urgentOnly) {
+    params.urgentOnly = "true";
+  }
+
+  if (f.beachDistanceFrom) {
+    params.beachDistanceFrom = f.beachDistanceFrom;
+  }
+
+  if (f.beachDistanceTo) {
+    params.beachDistanceTo = f.beachDistanceTo;
+  }
+
+  // Характеристики категорий (features)
+  for (const key of featureKeys) {
+    const val = f[key];
+    if (
+      val === undefined ||
+      val === null ||
+      val === "" ||
+      val === "Любой" ||
+      val === "Любая" ||
+      val === "Любые" ||
+      val === "Любое"
+    ) {
+      continue;
+    }
+
+    if (Array.isArray(val)) {
+      if (val.length > 0) {
+        params[key] = val.join(",");
+      }
+    } else {
+      params[key] = String(val);
+    }
+  }
+
+  for (const key of arrayFilterKeys) {
+    const val = f[key];
+    if (Array.isArray(val) && val.length > 0) {
+      params[key] = val.join(",");
+    }
+  }
+
+  return params;
 }
 
 /* =========================================================
@@ -494,142 +631,200 @@ export default function AllProducts() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
 
   const [listingsList, setListingsList] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
 
   const [favIds, setFavIds] = useState(new Set());
 
   const [loading, setLoading] = useState(true);
-
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
 
+  const abortControllerRef = useRef(null);
+  const reqIdRef = useRef(0);
+  const initialScrollRestoredRef = useRef(false);
+
+  const listingsRef = useRef(listingsList);
+  const searchParamsString = searchParams.toString();
+  const searchParamsRef = useRef(searchParamsString);
+
+  useEffect(() => {
+    listingsRef.current = listingsList;
+  }, [listingsList]);
+
+  useEffect(() => {
+    searchParamsRef.current = searchParamsString;
+  }, [searchParamsString]);
+
   /* =======================================================
-     TRANSLATED CATEGORIES
+     FETCH LISTINGS (SERVER PAGINATION & FILTERING)
   ======================================================= */
 
-  const translatedCategories = useMemo(
-    () =>
-      categories.map((category) => ({
-        value: category.value,
-        label: t(category.labelKey),
-      })),
-    [t],
-  );
+  const fetchListings = useCallback(
+    async (
+      appliedFilters,
+      targetPage,
+      targetLimit,
+      { isLoadMore = false, targetScrollY = 0 } = {},
+    ) => {
+      if (isLoadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+        setError("");
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      }
 
-  const categoryLabels = useMemo(
-    () => ({
-      apartment: t("allProducts.categories.apartment"),
-      house: t("allProducts.categories.house"),
-      cottage: t("allProducts.categories.cottage"),
-      land: t("allProducts.categories.land"),
-      room: t("allProducts.categories.room"),
-      commercial: t("allProducts.categories.commercial"),
-      parking: t("allProducts.categories.parking"),
-    }),
-    [t],
+      const controller = new AbortController();
+      if (!isLoadMore) {
+        abortControllerRef.current = controller;
+      }
+      const currentReqId = ++reqIdRef.current;
+
+      try {
+        const apiParams = buildApiFilters(appliedFilters);
+        apiParams.page = targetPage;
+        apiParams.limit = targetLimit;
+
+        const token =
+          typeof window !== "undefined"
+            ? localStorage.getItem("uytap_token")
+            : null;
+
+        const [res, favRes] = await Promise.all([
+          getListings(apiParams, { signal: controller.signal }),
+          token && !isLoadMore ? getFavorites(token) : Promise.resolve(null),
+        ]);
+
+        if (currentReqId !== reqIdRef.current) return;
+
+        if (!res?.success) {
+          throw new Error(res?.message || "Не удалось загрузить объявления");
+        }
+
+        const rawList = Array.isArray(res.data) ? res.data : [];
+        const serverTotal = res.pagination?.total ?? rawList.length;
+
+        if (isLoadMore) {
+          setListingsList((prev) => {
+            const existingIds = new Set(prev.map((i) => i.id));
+            const filteredNew = rawList.filter((i) => !existingIds.has(i.id));
+            return [...prev, ...filteredNew];
+          });
+          setPage(targetPage);
+        } else {
+          setListingsList(rawList);
+          setTotal(serverTotal);
+          setPage(targetPage);
+
+          if (targetScrollY > 0) {
+            requestAnimationFrame(() => {
+              window.scrollTo({ top: targetScrollY, behavior: "instant" });
+            });
+          }
+        }
+
+        if (
+          favRes?.success &&
+          Array.isArray(favRes.data)
+        ) {
+          setFavIds(
+            new Set(favRes.data.map((item) => String(item.id))),
+          );
+        }
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        if (currentReqId !== reqIdRef.current) return;
+        console.error("Fetch listings error:", err);
+        if (!isLoadMore) {
+          setError(err?.message || "Ошибка соединения с сервером");
+          setListingsList([]);
+          setTotal(0);
+        }
+      } finally {
+        if (currentReqId === reqIdRef.current) {
+          if (isLoadMore) {
+            setLoadingMore(false);
+          } else {
+            setLoading(false);
+          }
+        }
+      }
+    },
+    [],
   );
 
   /* =======================================================
-     URL → FILTERS
+     SESSION STORAGE FOR BACK BUTTON & SCROLL RESTORATION
   ======================================================= */
 
   useEffect(() => {
-    const propertyType = normalizePropertyType(
-      searchParams.get("propertyType") || searchParams.get("category"),
-    );
-
-    const dealType = normalizeDealType(searchParams.get("dealType"));
-
-    const parseArrayParam = (key) => {
-      const value = searchParams.get(key);
-
-      if (!value) {
-        return [];
+    const saveCatalogState = () => {
+      try {
+        if (listingsRef.current.length > 0) {
+          sessionStorage.setItem(
+            "uytap_catalog_state",
+            JSON.stringify({
+              filterKey: searchParamsRef.current,
+              loadedCount: listingsRef.current.length,
+              scrollY: window.scrollY || 0,
+              timestamp: Date.now(),
+            }),
+          );
+        }
+      } catch (e) {
+        // Игнорируем ошибки квот / режима инкогнито
       }
-
-      return value
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
     };
 
-    const nextFilters = {
-      ...DEFAULT_FILTERS,
-
-      propertyType,
-      dealType,
-
-      city: searchParams.get("city") || searchParams.get("settlement") || "Все",
-
-      region: searchParams.get("region") || "",
-
-      country: searchParams.get("country") || "",
-
-      district: searchParams.get("district") || "",
-
-      searchQuery: searchParams.get("searchQuery") || "",
-
-      currency: searchParams.get("currency") || "USD",
-
-      priceFrom: searchParams.get("priceFrom") || "",
-
-      priceTo: searchParams.get("priceTo") || "",
-
-      areaFrom: searchParams.get("areaFrom") || "",
-
-      areaTo: searchParams.get("areaTo") || "",
-
-      rooms: searchParams.get("rooms") || "Все",
-
-      beachDistanceFrom: searchParams.get("beachDistanceFrom") || "",
-
-      beachDistanceTo: searchParams.get("beachDistanceTo") || "",
-
-      urgentOnly: searchParams.get("urgentOnly") === "true",
-
-      series: parseArrayParam("series"),
-
-      floor: parseArrayParam("floor"),
-
-      condition: parseArrayParam("condition"),
-
-      walls: parseArrayParam("walls"),
-
-      heating: parseArrayParam("heating"),
-
-      documents: parseArrayParam("documents"),
-
-      furniture: parseArrayParam("furniture"),
-
-      offerType: parseArrayParam("offerType"),
-
-      residentialComplex: parseArrayParam("residentialComplex"),
-
-      rentalPeriod: parseArrayParam("rentalPeriod"),
-
-      amenities: parseArrayParam("amenities"),
-
-      communications: parseArrayParam("communications"),
-
-      technicalParameters: parseArrayParam("technicalParameters"),
+    window.addEventListener("beforeunload", saveCatalogState);
+    return () => {
+      window.removeEventListener("beforeunload", saveCatalogState);
+      saveCatalogState();
     };
-
-    for (const [key, value] of searchParams.entries()) {
-      if (ignoredUrlKeys.includes(key)) {
-        continue;
-      }
-
-      if (!value) {
-        continue;
-      }
-
-      nextFilters[key] = value;
-    }
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFilters(nextFilters);
-  }, [searchParams]);
+  }, []);
 
   /* =======================================================
-     UPDATE FILTER
+     URL SEARCHPARAMS → LOAD LISTINGS
+  ======================================================= */
+
+  useEffect(() => {
+    let initialLimit = 20;
+    let initialScrollY = 0;
+
+    if (!initialScrollRestoredRef.current) {
+      initialScrollRestoredRef.current = true;
+      try {
+        const rawSaved = sessionStorage.getItem("uytap_catalog_state");
+        if (rawSaved) {
+          const saved = JSON.parse(rawSaved);
+          const isFresh = Date.now() - saved.timestamp < 15 * 60 * 1000; // 15 минут TTL
+          const isSameFilter = saved.filterKey === searchParamsString;
+
+          if (isFresh && isSameFilter && saved.loadedCount > 0) {
+            initialLimit = Math.min(100, Math.max(20, saved.loadedCount));
+            initialScrollY = saved.scrollY || 0;
+          }
+          sessionStorage.removeItem("uytap_catalog_state");
+        }
+      } catch (e) {
+        // Игнорируем ошибки парсинга
+      }
+    }
+
+    const nextFilters = parseUrlToFilters(searchParams);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFilters(nextFilters);
+    fetchListings(nextFilters, 1, initialLimit, {
+      isLoadMore: false,
+      targetScrollY: initialScrollY,
+    });
+  }, [searchParamsString, fetchListings, searchParams]);
+
+  /* =======================================================
+     UPDATE FILTER & URL
   ======================================================= */
 
   function updateFilter(key, value) {
@@ -652,14 +847,10 @@ export default function AllProducts() {
     });
   }
 
-  /* =======================================================
-     UPDATE URL
-  ======================================================= */
-
   function updateUrl(nextFilters) {
     const params = new URLSearchParams();
 
-    if (nextFilters.propertyType) {
+    if (nextFilters.propertyType && nextFilters.propertyType !== "all") {
       params.set("propertyType", nextFilters.propertyType);
     }
 
@@ -716,17 +907,9 @@ export default function AllProducts() {
       }
     }
 
-    /* =====================================================
-       URGENT
-    ===================================================== */
-
     if (nextFilters.urgentOnly) {
       params.set("urgentOnly", "true");
     }
-
-    /* =====================================================
-       ARRAY FILTERS
-    ===================================================== */
 
     for (const key of arrayFeatureKeys) {
       const value = normalizeArrayValue(nextFilters[key]);
@@ -744,7 +927,7 @@ export default function AllProducts() {
   }
 
   /* =======================================================
-     SMART SEARCH
+     SMART SEARCH HANDLERS
   ======================================================= */
 
   async function handleSmartSearch(data) {
@@ -760,6 +943,8 @@ export default function AllProducts() {
 
     if (parsed.propertyType) {
       next.propertyType = normalizePropertyType(parsed.propertyType);
+    } else {
+      next.propertyType = "all";
     }
 
     if (parsed.dealType) {
@@ -793,7 +978,6 @@ export default function AllProducts() {
     }
 
     const cityText = String(next.city || "").toLowerCase();
-
     const regionText = String(next.region || "").toLowerCase();
 
     const isIssykKul =
@@ -861,10 +1045,6 @@ export default function AllProducts() {
       next.beachDistanceTo = String(parsed.beachDistanceTo);
     }
 
-    /* =====================================================
-       SMART SEARCH → URGENT
-    ===================================================== */
-
     if (parsed.urgentOnly !== undefined && parsed.urgentOnly !== null) {
       next.urgentOnly = Boolean(parsed.urgentOnly);
     }
@@ -890,81 +1070,68 @@ export default function AllProducts() {
     }
 
     setFilters(next);
-
     updateUrl(next);
   }
 
-  /* =======================================================
-     LOAD LISTINGS
-  ======================================================= */
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const token =
-          typeof window !== "undefined"
-            ? localStorage.getItem("uytap_token")
-            : null;
-
-        const [listingsResponse, favoritesResponse] = await Promise.all([
-          getAllListings(),
-
-          token ? getFavorites(token) : Promise.resolve(null),
-        ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        if (!listingsResponse?.success) {
-          throw new Error(
-            listingsResponse?.message || "Не удалось загрузить объявления",
-          );
-        }
-
-        setListingsList(
-          Array.isArray(listingsResponse.data) ? listingsResponse.data : [],
-        );
-
-        if (
-          favoritesResponse?.success &&
-          Array.isArray(favoritesResponse.data)
-        ) {
-          setFavIds(
-            new Set(favoritesResponse.data.map((item) => String(item.id))),
-          );
+  function handleRemoveSmartFilter(filterKey) {
+    setFilters((prev) => {
+      const next = { ...prev };
+      if (filterKey === "propertyType") {
+        next.propertyType = "all";
+      } else if (filterKey === "dealType") {
+        next.dealType = "sale";
+      } else if (filterKey === "location") {
+        next.city = "Все";
+        next.region = "";
+        next.district = "";
+        next.country = "";
+      } else if (filterKey === "district") {
+        next.district = "";
+      } else if (filterKey === "rooms") {
+        next.rooms = "Все";
+      } else if (filterKey === "price") {
+        next.priceFrom = "";
+        next.priceTo = "";
+      } else if (filterKey === "area") {
+        next.areaFrom = "";
+        next.areaTo = "";
+      } else if (filterKey === "searchQuery") {
+        next.searchQuery = "";
+      } else if (filterKey === "beachDistance") {
+        next.beachDistanceFrom = "";
+        next.beachDistanceTo = "";
+      } else {
+        if (Array.isArray(next[filterKey])) {
+          next[filterKey] = [];
         } else {
-          setFavIds(new Set());
-        }
-      } catch (err) {
-        console.error(err);
-
-        if (!cancelled) {
-          setError(err?.message || "Ошибка соединения с сервером");
-
-          setListingsList([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+          delete next[filterKey];
         }
       }
-    }
+      updateUrl(next);
+      return next;
+    });
+  }
 
-    loadData();
+  function handleClearSearchQuery() {
+    setFilters((prev) => {
+      const next = { ...prev, searchQuery: "" };
+      updateUrl(next);
+      return next;
+    });
+  }
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  function handleLoadMore() {
+    if (loadingMore || loading || listingsList.length >= total) return;
+    const nextPage = page + 1;
+    fetchListings(filters, nextPage, 20, { isLoadMore: true });
+  }
+
+  function handleRetry() {
+    fetchListings(filters, 1, 20, { isLoadMore: false });
+  }
 
   /* =======================================================
-     MAP LISTINGS
+     MAP LISTINGS (TRANSFORM RAW SERVER DATA)
   ======================================================= */
 
   const mappedListings = useMemo(() => {
@@ -974,12 +1141,13 @@ export default function AllProducts() {
           return mapListingData(item);
         } catch (err) {
           console.error("Ошибка mapListingData:", err);
-
           return null;
         }
       })
       .filter(Boolean);
   }, [listingsList]);
+
+  const hasMore = listingsList.length < total && listingsList.length > 0;
 
   /* =======================================================
      FAVORITES
@@ -997,7 +1165,6 @@ export default function AllProducts() {
     }
 
     const id = String(item.id);
-
     const isFavorite = favIds.has(id);
 
     try {
@@ -1007,9 +1174,7 @@ export default function AllProducts() {
         if (response?.success) {
           setFavIds((prev) => {
             const next = new Set(prev);
-
             next.delete(id);
-
             return next;
           });
         }
@@ -1019,9 +1184,7 @@ export default function AllProducts() {
         if (response?.success) {
           setFavIds((prev) => {
             const next = new Set(prev);
-
             next.add(id);
-
             return next;
           });
         }
@@ -1032,497 +1195,36 @@ export default function AllProducts() {
   }
 
   /* =======================================================
-     FILTER LISTINGS
-  ======================================================= */
-
-  const filteredListings = useMemo(() => {
-    return mappedListings
-      .filter((item) => {
-        /* =================================================
-           URGENT STATUS FILTER
-        ================================================= */
-
-        const itemStatus = String(item?.status || "")
-          .trim()
-          .toLowerCase();
-
-        if (filters.urgentOnly && itemStatus !== "urgent") {
-          return false;
-        }
-
-        /* =================================================
-           CATEGORY
-        ================================================= */
-
-        const selectedType = categoryApiMap[filters.propertyType];
-
-        const itemType = String(item.type || "")
-          .trim()
-          .toLowerCase();
-
-        const matchesCategory =
-          !selectedType || itemType === selectedType.toLowerCase();
-
-        /* =================================================
-           DEAL
-        ================================================= */
-
-        const selectedDeal = dealApiMap[filters.dealType];
-
-        const itemDeal = String(item.dealType || "")
-          .trim()
-          .toLowerCase();
-
-        const matchesDeal =
-          !selectedDeal || itemDeal === selectedDeal.toLowerCase();
-
-        /* =================================================
-           CITY & SETTLEMENT
-        ================================================= */
-
-        const matchesCity = (() => {
-          const targetCityOrSettlement =
-            filters.city && filters.city !== "Все"
-              ? filters.city
-              : filters.settlement && filters.settlement !== "Все"
-                ? filters.settlement
-                : null;
-
-          if (!targetCityOrSettlement) {
-            return true;
-          }
-
-          const selected = normalizeLocationValue(targetCityOrSettlement);
-
-          const values = [
-            item.location,
-            item.city,
-            item.region,
-            item.address,
-            item.country,
-            item.district,
-          ]
-            .filter(Boolean)
-            .map(normalizeLocationValue);
-
-          if (
-            isIssykKulValue(selected) ||
-            ISSYK_KUL_CITIES.some(
-              (city) =>
-                selected === normalizeLocationValue(city) ||
-                selected.includes(normalizeLocationValue(city)),
-            )
-          ) {
-            return values.some((value) => {
-              if (isIssykKulValue(value)) {
-                return true;
-              }
-
-              return ISSYK_KUL_CITIES.some((city) => {
-                const normalizedCity = normalizeLocationValue(city);
-
-                return (
-                  value === normalizedCity || value.includes(normalizedCity)
-                );
-              });
-            });
-          }
-
-          if (selected === "турция") {
-            return values.some(
-              (value) =>
-                value.includes("турци") ||
-                value.includes("turkey") ||
-                value.includes("алань") ||
-                value.includes("антал") ||
-                value.includes("стамбул") ||
-                value.includes("мерсин") ||
-                value.includes("измир"),
-            );
-          }
-
-          return values.some((value) => value.includes(selected));
-        })();
-
-        /* =================================================
-           REGION
-        ================================================= */
-
-        const matchesRegion = (() => {
-          if (!filters.region) {
-            return true;
-          }
-
-          const selRegion = normalizeLocationValue(filters.region);
-          const selRegionFormatted = normalizeLocationValue(
-            formatRegion(filters.region),
-          );
-          if (!selRegion && !selRegionFormatted) return true;
-
-          const values = [
-            item.region,
-            item.raw?.region,
-            item.location,
-            item.country,
-            item.raw?.country,
-          ]
-            .filter(Boolean)
-            .map(normalizeLocationValue);
-
-          if (selRegion === "turkey" || selRegionFormatted.includes("турци")) {
-            return values.some(
-              (v) => v.includes("turkey") || v.includes("турци"),
-            );
-          }
-
-          if (
-            selRegion === "bishkek" ||
-            selRegionFormatted.includes("бишкек")
-          ) {
-            return values.some(
-              (v) => v.includes("bishkek") || v.includes("бишкек"),
-            );
-          }
-
-          if (
-            selRegion === "issyk_kul" ||
-            isIssykKulValue(selRegion) ||
-            isIssykKulValue(selRegionFormatted)
-          ) {
-            return values.some(
-              (v) =>
-                isIssykKulValue(v) ||
-                v.includes("issyk") ||
-                v.includes("иссык") ||
-                v.includes("ысык"),
-            );
-          }
-
-          return values.some(
-            (v) =>
-              (selRegion && (v.includes(selRegion) || selRegion.includes(v))) ||
-              (selRegionFormatted &&
-                (v.includes(selRegionFormatted) ||
-                  selRegionFormatted.includes(v))),
-          );
-        })();
-
-        /* =================================================
-           DISTRICT
-        ================================================= */
-
-        const matchesDistrict = (() => {
-          if (!filters.district) {
-            return true;
-          }
-
-          const selDistrict = normalizeLocationValue(filters.district);
-          if (!selDistrict) return true;
-
-          const values = [
-            item.district,
-            item.raw?.district,
-            item.address,
-            item.location,
-            item.title,
-            item.description,
-          ]
-            .filter(Boolean)
-            .map(normalizeLocationValue);
-
-          if (
-            values.some(
-              (v) => v.includes(selDistrict) || selDistrict.includes(v),
-            )
-          ) {
-            return true;
-          }
-
-          const selTokens = selDistrict
-            .split(/[\s,.-]+/)
-            .map(getWordStem)
-            .filter((s) => s.length >= 3);
-
-          if (selTokens.length === 0) return false;
-
-          const allValueWords = values
-            .join(" ")
-            .split(/[\s,.-]+/)
-            .map(getWordStem)
-            .filter(Boolean);
-
-          return selTokens.every((token) =>
-            allValueWords.some((w) => w.includes(token) || token.includes(w)),
-          );
-        })();
-
-        /* =================================================
-           KEYWORD / SEARCH QUERY (e.g. "студия", "евродвушка")
-        ================================================= */
-
-        const matchesSearchQuery = (() => {
-          if (!filters.searchQuery || !String(filters.searchQuery).trim()) {
-            return true;
-          }
-
-          const rawQuery = String(filters.searchQuery).trim().toLowerCase();
-          const queryTokens = rawQuery
-            .split(/[\s,.-]+/)
-            .map(getWordStem)
-            .filter((s) => s.length >= 3);
-
-          if (queryTokens.length === 0) {
-            return true;
-          }
-
-          const haystack = [
-            item.title,
-            item.description,
-            item.address,
-            item.district,
-            item.location,
-            item.type,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-
-          const haystackWords = haystack
-            .split(/[\s,.-]+/)
-            .map(getWordStem)
-            .filter(Boolean);
-
-          return queryTokens.every(
-            (token) =>
-              haystack.includes(token) ||
-              haystackWords.some((w) => w.includes(token) || token.includes(w)),
-          );
-        })();
-
-        /* =================================================
-           ROOMS
-        ================================================= */
-
-        const matchesRooms = (() => {
-          if (!filters.rooms || filters.rooms === "Все") {
-            return true;
-          }
-
-          const itemRooms = Number(item.rooms);
-
-          if (filters.rooms === "4+") {
-            return itemRooms >= 4;
-          }
-
-          return itemRooms === Number(filters.rooms);
-        })();
-
-        /* =================================================
-           PRICE
-        ================================================= */
-
-        const matchesPrice = (() => {
-          const price = Number(item.rawPrice);
-
-          const min = filters.priceFrom ? Number(filters.priceFrom) : null;
-
-          const max = filters.priceTo ? Number(filters.priceTo) : null;
-
-          if (min !== null && !Number.isNaN(min) && price < min) {
-            return false;
-          }
-
-          if (max !== null && !Number.isNaN(max) && price > max) {
-            return false;
-          }
-
-          return true;
-        })();
-
-        /* =================================================
-           AREA
-        ================================================= */
-
-        const matchesArea = (() => {
-          const area = Number(item.rawArea);
-
-          const min = filters.areaFrom ? Number(filters.areaFrom) : null;
-
-          const max = filters.areaTo ? Number(filters.areaTo) : null;
-
-          if (min !== null && !Number.isNaN(min) && area < min) {
-            return false;
-          }
-
-          if (max !== null && !Number.isNaN(max) && area > max) {
-            return false;
-          }
-
-          return true;
-        })();
-
-        /* =================================================
-           BEACH DISTANCE
-        ================================================= */
-
-        const matchesBeach = (() => {
-          if (!filters.beachDistanceFrom && !filters.beachDistanceTo) {
-            return true;
-          }
-
-          if (!isIssykKulLocation(filters)) {
-            return true;
-          }
-
-          const rawDistance =
-            item.beachDistanceFrom ??
-            item.beachDistance ??
-            item.beach_distance ??
-            item.distanceToBeach ??
-            item.distance_to_beach ??
-            item.features?.beachDistance ??
-            item.features?.beach_distance ??
-            item.features?.distanceToBeach ??
-            item.features?.distance_to_beach;
-
-          const distance = Number(rawDistance);
-
-          if (
-            rawDistance === undefined ||
-            rawDistance === null ||
-            rawDistance === ""
-          ) {
-            return true;
-          }
-
-          if (Number.isNaN(distance)) {
-            return true;
-          }
-
-          const min = filters.beachDistanceFrom
-            ? Number(filters.beachDistanceFrom)
-            : null;
-
-          const max = filters.beachDistanceTo
-            ? Number(filters.beachDistanceTo)
-            : null;
-
-          if (min !== null && !Number.isNaN(min) && distance < min) {
-            return false;
-          }
-
-          if (max !== null && !Number.isNaN(max) && distance > max) {
-            return false;
-          }
-
-          return true;
-        })();
-
-        /* =================================================
-           ARRAY FEATURES
-        ================================================= */
-
-        for (const key of arrayFeatureKeys) {
-          const selected = filters[key];
-
-          if (!Array.isArray(selected) || selected.length === 0) {
-            continue;
-          }
-
-          const itemValue = item[key] ?? item.features?.[key];
-
-          if (
-            ["amenities", "communications", "technicalParameters"].includes(key)
-          ) {
-            if (!matchesArrayFilter(selected, itemValue)) {
-              return false;
-            }
-
-            continue;
-          }
-
-          if (!matchesMultiValue(selected, itemValue)) {
-            return false;
-          }
-        }
-
-        /* =================================================
-           SIMPLE FEATURES
-        ================================================= */
-
-        for (const key of featureKeys) {
-          if (arrayFeatureKeys.includes(key)) {
-            continue;
-          }
-
-          const selected = filters[key];
-
-          if (
-            !selected ||
-            selected === "Любой" ||
-            selected === "Любая" ||
-            selected === "Любые" ||
-            selected === "Любое"
-          ) {
-            continue;
-          }
-
-          const itemValue = item[key] ?? item.features?.[key];
-
-          if (itemValue === undefined || itemValue === null) {
-            return false;
-          }
-
-          if (
-            !String(itemValue)
-              .toLowerCase()
-              .includes(String(selected).toLowerCase())
-          ) {
-            return false;
-          }
-        }
-
-        /* =================================================
-           FINAL FILTER RESULT
-        ================================================= */
-
-        return (
-          matchesCategory &&
-          matchesDeal &&
-          matchesRegion &&
-          matchesCity &&
-          matchesDistrict &&
-          matchesRooms &&
-          matchesPrice &&
-          matchesArea &&
-          matchesBeach &&
-          matchesSearchQuery
-        );
-      })
-      .sort((a, b) => {
-        const priority = {
-          vip: 0,
-          urgent: 1,
-          top: 2,
-          regular: 3,
-        };
-
-        return (
-          (priority[String(a.status || "").toLowerCase()] ?? 3) -
-          (priority[String(b.status || "").toLowerCase()] ?? 3)
-        );
-      });
-  }, [mappedListings, filters]);
-
-  /* =======================================================
-     CATEGORY FILTER
+     CATEGORY FILTERS COMPONENT
   ======================================================= */
 
   const CategoryFilters =
     categoryComponents[filters.propertyType] || ApartmentFilters;
 
+  const translatedCategories = useMemo(
+    () =>
+      categories.map((category) => ({
+        value: category.value,
+        label: t(category.labelKey),
+      })),
+    [t],
+  );
+
+  const categoryLabels = useMemo(
+    () => ({
+      apartment: t("allProducts.categories.apartment"),
+      house: t("allProducts.categories.house"),
+      cottage: t("allProducts.categories.cottage"),
+      land: t("allProducts.categories.land"),
+      room: t("allProducts.categories.room"),
+      commercial: t("allProducts.categories.commercial"),
+      parking: t("allProducts.categories.parking"),
+    }),
+    [t],
+  );
+
   /* =======================================================
-     BEACH
+     BEACH DISTANCE VISIBILITY
   ======================================================= */
 
   const showBeachDistance = useMemo(
@@ -1545,7 +1247,7 @@ export default function AllProducts() {
   }
 
   /* =======================================================
-     HAS FILTERS
+     HAS FILTERS CHECK
   ======================================================= */
 
   const hasFilters =
@@ -1559,6 +1261,7 @@ export default function AllProducts() {
     Boolean(filters.areaTo) ||
     Boolean(filters.beachDistanceFrom) ||
     Boolean(filters.beachDistanceTo) ||
+    Boolean(filters.urgentOnly) ||
     Object.entries(filters).some(([key, value]) => {
       if (
         [
@@ -1573,6 +1276,7 @@ export default function AllProducts() {
           "areaTo",
           "beachDistanceFrom",
           "beachDistanceTo",
+          "urgentOnly",
         ].includes(key)
       ) {
         return false;
@@ -1619,6 +1323,7 @@ export default function AllProducts() {
           updateFilter={updateFilter}
           updateUrl={updateUrl}
           handleSmartSearch={handleSmartSearch}
+          handleRemoveSmartFilter={handleRemoveSmartFilter}
           resetFilters={resetFilters}
           hasFilters={hasFilters}
           categories={translatedCategories}
@@ -1629,14 +1334,19 @@ export default function AllProducts() {
 
         <ProductsResults
           loading={loading}
+          loadingMore={loadingMore}
           error={error}
-          listings={filteredListings}
+          onRetry={handleRetry}
+          listings={mappedListings}
+          total={total}
+          hasMore={hasMore}
+          onLoadMore={handleLoadMore}
           favIds={favIds}
           onFavoriteClick={handleFavoriteClick}
           hasFilters={hasFilters}
           onReset={resetFilters}
           searchQuery={filters.searchQuery}
-          onClearSearchQuery={() => updateFilter("searchQuery", "")}
+          onClearSearchQuery={handleClearSearchQuery}
         />
       </div>
       <Footer />
