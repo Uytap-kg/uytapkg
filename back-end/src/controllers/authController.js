@@ -81,6 +81,7 @@ const OTP_TTL_MS = 10 * 60 * 1000; // срок жизни кода — 10 мин
 const OTP_MAX_ATTEMPTS = 5; // неверных попыток на один код
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // не чаще 1 отправки в 60 секунд
 const OTP_HOURLY_LIMIT = 5; // не более 5 кодов в час на email
+const OTP_DAILY_LIMIT = 10; // не более 10 кодов в 24 часа на email
 
 /**
  * Хэширование одноразового OTP-кода (HMAC-SHA256).
@@ -97,9 +98,26 @@ export function hashOtpCode(code) {
 // Защита от параллельных запросов на один email внутри процесса
 const otpInFlight = new Set();
 
-// Проверка кулдауна и часового лимита отправки кодов для email.
+// Проверка кулдауна, часового и суточного лимитов отправки кодов для email.
 // Возвращает { message } при превышении, иначе null.
 async function checkOtpSendLimits(email, type = "registration") {
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  let dailyQuery = supabase
+    .from("email_verifications")
+    .select("id", { count: "exact", head: true })
+    .eq("email", email)
+    .gte("created_at", dayAgo);
+
+  if (type) {
+    dailyQuery = dailyQuery.eq("type", type);
+  }
+
+  const { count: dailyCount, error: dailyErr } = await dailyQuery;
+  if (dailyErr) throw dailyErr;
+  if (typeof dailyCount === "number" && dailyCount >= OTP_DAILY_LIMIT) {
+    return { message: "Превышен суточный лимит запроса кодов на этот email. Попробуйте завтра." };
+  }
+
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   let query = supabase
     .from("email_verifications")

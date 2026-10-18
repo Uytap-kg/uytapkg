@@ -72,21 +72,12 @@ export function normalizeNikitaPhone(rawPhone) {
     cleaned = "996" + cleaned;
   }
 
-  // Международный номер: от 10 до 15 цифр без плюса
-  if (!/^\d{10,15}$/.test(cleaned)) {
+  // Строгая защита баланса провайдера: разрешены ИСКЛЮЧИТЕЛЬНО номера Кыргызстана (+996, ровно 12 цифр)
+  if (!cleaned.startsWith("996") || cleaned.length !== 12) {
     return {
       valid: false,
       phone: cleaned,
-      error: "Некорректный номер телефона",
-    };
-  }
-
-  // Для номеров Кыргызстана (префикс 996) строго 12 цифр
-  if (cleaned.startsWith("996") && cleaned.length !== 12) {
-    return {
-      valid: false,
-      phone: cleaned,
-      error: "Некорректный номер телефона Кыргызстана (должно быть 9 цифр после 996)",
+      error: "Разрешены только номера Кыргызстана (+996)",
     };
   }
 
