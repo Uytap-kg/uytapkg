@@ -335,7 +335,7 @@ export const register = async (req, res) => {
 
     const { data: existingByPhone, error: phoneCheckError } = await supabase
       .from("users")
-      .select("id, is_verified, is_email_verified, created_at")
+      .select("id, is_verified, is_email_verified, token_version, created_at")
       .eq("phone", formattedPhone)
       .maybeSingle();
 
@@ -344,6 +344,7 @@ export const register = async (req, res) => {
     }
 
     if (existingByPhone && existingByPhone.id !== existingByEmail?.id) {
+      // 1. Неподтверждённый email и телефон
       const isVerified = existingByPhone.is_verified || existingByPhone.is_email_verified;
       if (isVerified) {
         return res.status(409).json({
@@ -352,7 +353,7 @@ export const register = async (req, res) => {
         });
       }
 
-      // Неподтверждённый номер: проверяем, истёк ли срок резервирования
+      // 2. Срок резервирования
       const reservationAgeMs = Date.now() - new Date(existingByPhone.created_at).getTime();
       if (reservationAgeMs < UNVERIFIED_PHONE_RESERVATION_TTL_MS) {
         return res.status(409).json({
@@ -361,7 +362,54 @@ export const register = async (req, res) => {
         });
       }
 
-      // Срок брошенной неподтверждённой регистрации истёк: освобождаем номер
+      // 3. 0 логинов (token_version === 0)
+      if ((existingByPhone.token_version || 0) > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Пользователь с таким номером телефона уже существует",
+        });
+      }
+
+      // 4. 0 объявлений
+      const { count: listingsCount } = await supabase
+        .from("listings")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", existingByPhone.id);
+
+      if (listingsCount && listingsCount > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Пользователь с таким номером телефона уже существует",
+        });
+      }
+
+      // 5. 0 платежей
+      const { count: paymentsCount } = await supabase
+        .from("payments")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", existingByPhone.id);
+
+      if (paymentsCount && paymentsCount > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Пользователь с таким номером телефона уже существует",
+        });
+      }
+
+      // 6. 0 профилей
+      const { count: profilesCount } = await supabase
+        .from("user_profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", existingByPhone.id);
+
+      if (profilesCount && profilesCount > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Пользователь с таким номером телефона уже существует",
+        });
+      }
+
+      // Все строгие условия соблюдены: брошенная регистрация освобождает номер
       await supabase.from("users").delete().eq("id", existingByPhone.id);
     }
 

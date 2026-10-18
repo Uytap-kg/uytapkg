@@ -171,3 +171,285 @@ test(
     }
   }
 );
+
+test(
+  "Phone Reservation D: нельзя забрать номер, если подтверждён email (is_email_verified = true)",
+  { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false },
+  async () => {
+    const emailA = `email-verified-${Date.now()}@example.local`;
+    const attackerEmail = `attacker-d-${Date.now()}@example.local`;
+    const phone = `+996555${Math.floor(100000 + Math.random() * 900000)}`;
+    const twentyMinsAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+
+    let userAId = null;
+    try {
+      const { data: userA } = await supabaseAdmin
+        .from("users")
+        .insert({
+          email: emailA,
+          phone,
+          password_hash: "$2b$10$abcdefghijklmnopqrstuu",
+          account_type: "personal",
+          is_verified: false,
+          is_email_verified: true, // email подтверждён!
+          created_at: twentyMinsAgo,
+        })
+        .select("id")
+        .single();
+      userAId = userA.id;
+
+      const res = await api("/api/auth/register", {
+        method: "POST",
+        body: {
+          accountType: "personal",
+          email: attackerEmail,
+          phone,
+          password: "StrongPassword123!",
+          firstName: "Attacker",
+          lastName: "D",
+        },
+      });
+
+      assert.equal(res.status, 409, "Аккаунт с подтверждённым email нельзя удалить");
+      assert.match(res.body.message, /номер.*телефон|уже существует/i);
+    } finally {
+      if (userAId) await supabaseAdmin.from("users").delete().eq("id", userAId);
+    }
+  }
+);
+
+test(
+  "Phone Reservation E: нельзя забрать номер, если были логины (token_version > 0)",
+  { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false },
+  async () => {
+    const emailA = `login-active-${Date.now()}@example.local`;
+    const attackerEmail = `attacker-e-${Date.now()}@example.local`;
+    const phone = `+996555${Math.floor(100000 + Math.random() * 900000)}`;
+    const twentyMinsAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+
+    let userAId = null;
+    try {
+      const { data: userA } = await supabaseAdmin
+        .from("users")
+        .insert({
+          email: emailA,
+          phone,
+          password_hash: "$2b$10$abcdefghijklmnopqrstuu",
+          account_type: "personal",
+          is_verified: false,
+          is_email_verified: false,
+          token_version: 1, // пользователь входил в систему
+          created_at: twentyMinsAgo,
+        })
+        .select("id")
+        .single();
+      userAId = userA.id;
+
+      const res = await api("/api/auth/register", {
+        method: "POST",
+        body: {
+          accountType: "personal",
+          email: attackerEmail,
+          phone,
+          password: "StrongPassword123!",
+          firstName: "Attacker",
+          lastName: "E",
+        },
+      });
+
+      assert.equal(res.status, 409, "Аккаунт с историей входов (token_version > 0) нельзя удалить");
+      assert.match(res.body.message, /номер.*телефон|уже существует/i);
+    } finally {
+      if (userAId) await supabaseAdmin.from("users").delete().eq("id", userAId);
+    }
+  }
+);
+
+test(
+  "Phone Reservation F: нельзя забрать номер, если у аккаунта есть объявления (listings > 0)",
+  { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false },
+  async () => {
+    const emailA = `has-listings-${Date.now()}@example.local`;
+    const attackerEmail = `attacker-f-${Date.now()}@example.local`;
+    const phone = `+996555${Math.floor(100000 + Math.random() * 900000)}`;
+    const twentyMinsAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+
+    let userAId = null;
+    let listingId = null;
+    try {
+      const { data: userA } = await supabaseAdmin
+        .from("users")
+        .insert({
+          email: emailA,
+          phone,
+          password_hash: "$2b$10$abcdefghijklmnopqrstuu",
+          account_type: "personal",
+          is_verified: false,
+          is_email_verified: false,
+          created_at: twentyMinsAgo,
+        })
+        .select("id")
+        .single();
+      userAId = userA.id;
+
+      // Создаём объявление, привязанное к пользователю А
+      const { data: listing, error: listingErr } = await supabaseAdmin
+        .from("listings")
+        .insert({
+          user_id: userAId,
+          title: "Test listing for reservation guard",
+          deal_type: "sale",
+          property_type: "apartment",
+          region: "Бишкек",
+          city: "Бишкек",
+          price: 50000,
+          currency: "USD",
+          area: 50,
+          status: "draft",
+        })
+        .select("id")
+        .single();
+      assert.ifError(listingErr);
+      listingId = listing.id;
+
+      const res = await api("/api/auth/register", {
+        method: "POST",
+        body: {
+          accountType: "personal",
+          email: attackerEmail,
+          phone,
+          password: "StrongPassword123!",
+          firstName: "Attacker",
+          lastName: "F",
+        },
+      });
+
+      assert.equal(res.status, 409, "Аккаунт с объявлениями нельзя удалить через освобождение номера");
+      assert.match(res.body.message, /номер.*телефон|уже существует/i);
+    } finally {
+      if (listingId) await supabaseAdmin.from("listings").delete().eq("id", listingId);
+      if (userAId) await supabaseAdmin.from("users").delete().eq("id", userAId);
+    }
+  }
+);
+
+test(
+  "Phone Reservation G: нельзя забрать номер, если у аккаунта есть платежи (payments > 0)",
+  { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false },
+  async () => {
+    const emailA = `has-payments-${Date.now()}@example.local`;
+    const attackerEmail = `attacker-g-${Date.now()}@example.local`;
+    const phone = `+996555${Math.floor(100000 + Math.random() * 900000)}`;
+    const twentyMinsAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+
+    let userAId = null;
+    let paymentId = null;
+    try {
+      const { data: userA } = await supabaseAdmin
+        .from("users")
+        .insert({
+          email: emailA,
+          phone,
+          password_hash: "$2b$10$abcdefghijklmnopqrstuu",
+          account_type: "personal",
+          is_verified: false,
+          is_email_verified: false,
+          created_at: twentyMinsAgo,
+        })
+        .select("id")
+        .single();
+      userAId = userA.id;
+
+      // Создаём запись платежа
+      const { data: payment, error: paymentErr } = await supabaseAdmin
+        .from("payments")
+        .insert({
+          user_id: userAId,
+          order_id: `ord-test-${Date.now()}`,
+          amount: 1000,
+          months: 1,
+          status: "pending",
+          tariff_id: "start",
+        })
+        .select("id")
+        .single();
+      assert.ifError(paymentErr);
+      paymentId = payment.id;
+
+      const res = await api("/api/auth/register", {
+        method: "POST",
+        body: {
+          accountType: "personal",
+          email: attackerEmail,
+          phone,
+          password: "StrongPassword123!",
+          firstName: "Attacker",
+          lastName: "G",
+        },
+      });
+
+      assert.equal(res.status, 409, "Аккаунт с историей платежей нельзя удалить");
+      assert.match(res.body.message, /номер.*телефон|уже существует/i);
+    } finally {
+      if (paymentId) await supabaseAdmin.from("payments").delete().eq("id", paymentId);
+      if (userAId) await supabaseAdmin.from("users").delete().eq("id", userAId);
+    }
+  }
+);
+
+test(
+  "Phone Reservation H: нельзя забрать номер, если у аккаунта есть профиль (user_profiles > 0)",
+  { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false },
+  async () => {
+    const emailA = `has-profile-${Date.now()}@example.local`;
+    const attackerEmail = `attacker-h-${Date.now()}@example.local`;
+    const phone = `+996555${Math.floor(100000 + Math.random() * 900000)}`;
+    const twentyMinsAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+
+    let userAId = null;
+    try {
+      const { data: userA } = await supabaseAdmin
+        .from("users")
+        .insert({
+          email: emailA,
+          phone,
+          password_hash: "$2b$10$abcdefghijklmnopqrstuu",
+          account_type: "personal",
+          is_verified: false,
+          is_email_verified: false,
+          created_at: twentyMinsAgo,
+        })
+        .select("id")
+        .single();
+      userAId = userA.id;
+
+      // Создаём запись профиля
+      await supabaseAdmin.from("user_profiles").insert({
+        user_id: userAId,
+        first_name: "Original",
+        last_name: "User",
+      });
+
+      const res = await api("/api/auth/register", {
+        method: "POST",
+        body: {
+          accountType: "personal",
+          email: attackerEmail,
+          phone,
+          password: "StrongPassword123!",
+          firstName: "Attacker",
+          lastName: "H",
+        },
+      });
+
+      assert.equal(res.status, 409, "Аккаунт с профилем (user_profiles > 0) нельзя удалить");
+      assert.match(res.body.message, /номер.*телефон|уже существует/i);
+    } finally {
+      if (userAId) {
+        await supabaseAdmin.from("user_profiles").delete().eq("user_id", userAId);
+        await supabaseAdmin.from("users").delete().eq("id", userAId);
+      }
+    }
+  }
+);
+
