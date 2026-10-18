@@ -52,6 +52,11 @@ export async function recordUploadOwner(objectPath, userId) {
 export async function isUploadOwnedBy(objectPath, userId) {
   if (!objectPath || !userId) return false;
 
+  // Файлы из временного анонимного хранилища (avatars/pending/) никогда не могут быть частью объявлений или ЖК
+  if (objectPath.startsWith("pending/") || objectPath.includes("/pending/")) {
+    return false;
+  }
+
   try {
     const { data, error } = await supabase
       .from("upload_ownership")

@@ -38,7 +38,7 @@ export function resolveClientIp(req, res, next) {
   );
 
   if (isProxyTrusted) {
-    const rawXff = req.headers["x-forwarded-for"];
+    const rawXff = req.headers["x-vercel-forwarded-for"] || req.headers["x-forwarded-for"];
     if (typeof rawXff === "string" && rawXff.trim().length > 0) {
       const candidate = rawXff.split(",")[0].trim();
       const normCandidate = candidate.startsWith("::ffff:")

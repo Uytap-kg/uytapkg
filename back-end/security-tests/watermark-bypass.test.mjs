@@ -96,7 +96,13 @@ async function uploadMultipart(pathname, { token, fieldName, filename, buffer, c
   const tail = `\r\n--${boundary}--\r\n`;
   const body = Buffer.concat([Buffer.from(head, "utf-8"), buffer, Buffer.from(tail, "utf-8")]);
 
-  const headers = { "Content-Type": `multipart/form-data; boundary=${boundary}` };
+  const rotatingIp = `198.51.100.${Math.floor(10 + Math.random() * 200)}`;
+  const headers = {
+    "Content-Type": `multipart/form-data; boundary=${boundary}`,
+    "x-internal-proxy-secret": process.env.INTERNAL_PROXY_SECRET || "test-internal-proxy-secret-uytap-audit",
+    "x-vercel-forwarded-for": rotatingIp,
+    "x-forwarded-for": rotatingIp,
+  };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE_URL}${pathname}`, { method: "POST", headers, body });
@@ -132,7 +138,7 @@ test(
 );
 
 test(
-  "Watermark bypass: image uploaded via unauth /api/upload (no watermark) can be used as a listing photo",
+  "Watermark bypass: image uploaded via unauth /api/upload (no watermark) cannot be used as a listing photo",
   { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false },
   async () => {
     const { token, user } = await registerTestUser();
@@ -168,37 +174,27 @@ test(
       const bypassBytes = Buffer.from(await (await fetch(bypassUrl)).arrayBuffer());
 
       assert.ok(
-        bypassBytes.equals(png),
-        "expected bypass-uploaded image bytes to be identical to the original (no watermark applied)"
+        bypassBytes.length > 0,
+        "bypass-uploaded image was successfully retrieved from storage"
       );
       assert.ok(
         !watermarkedBytes.equals(png),
         "sanity check: the dedicated watermark endpoint should have actually modified the image"
       );
 
-      // 3) Подставляем ссылку как фото
+      // 3) Подставляем ссылку как фото: обязана быть отклонена!
       const listingRes = await api("/api/listings", {
         method: "POST",
         token,
         body: baseListingPayload({ photos: [bypassUrl] }),
       });
-      assert.equal(listingRes.status, 201, JSON.stringify(listingRes.body));
-      listingId = listingRes.body.data.id;
-
-      const getRes = await api(`/api/listings/${listingId}`);
-      assert.equal(getRes.status, 200);
-      const savedPhotoUrl = getRes.body.data.listing_photos?.[0]?.url;
       assert.equal(
-        savedPhotoUrl,
-        bypassUrl,
-        "listing should now be publicly showing an unwatermarked photo"
+        listingRes.status,
+        400,
+        "Unauthenticated /api/upload photo without watermark must be rejected with 400 Bad Request"
       );
-
-      const finalBytes = Buffer.from(await (await fetch(savedPhotoUrl)).arrayBuffer());
-      assert.ok(
-        finalBytes.equals(png),
-        "EXPLOIT CONFIRMED: publicly served listing photo has NO watermark, bypassing the mandatory watermark feature"
-      );
+      assert.equal(listingRes.body.success, false);
+      assert.match(listingRes.body.message, /Все фото должны быть загружены вами/i);
     } finally {
       if (listingId) await deleteTestListing(listingId);
       if (uploadedPath && supabaseAdmin) {
