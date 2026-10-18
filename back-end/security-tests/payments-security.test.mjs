@@ -78,21 +78,43 @@ test(
       );
 
       // ------------------------------------------------------------------------
-      // 3. ЗАЩИТА WEBHOOK: Валидация подписи (хэша)
+      // 3. ЗАЩИТА WEBHOOK: Pull-reconciliation вместо доверия телу запроса
       // ------------------------------------------------------------------------
-      // Атакующий шлёт webhook с поддельным хэшем
-      const fakeHashRes = await api("/api/payments/webhook", {
+      // Атакующий шлёт невалидный order_id
+      const invalidOrderRes = await api("/api/payments/webhook", {
+        method: "POST",
+        body: { order_id: "invalid order id with <bad> chars!" },
+      });
+      assert.equal(
+        invalidOrderRes.status,
+        400,
+        "Webhook with invalid order_id format must be rejected with 400 Bad Request"
+      );
+
+      // Атакующий шлёт webhook с телом status: 'approved' для ещё неоплаченного счёта.
+      // Бэкенд НЕ должен верить телу запроса, а обязан проверить статус в O!Dengi.
+      const spoofedWebhookRes = await api("/api/payments/webhook", {
         method: "POST",
         body: {
           order_id: createdOrderId,
-          hash: "deadbeef000011112222333344445555",
+          status: "approved",
+          amount: 0,
         },
       });
+      assert.equal(spoofedWebhookRes.status, 200, "Webhook endpoint returns 200 to acknowledge notification");
+
+      // Проверяем в БД: статус НЕ изменился на approved, а остался processing (ожидание оплаты)
+      const { data: stillPendingPayment } = await supabaseAdmin
+        .from("payments")
+        .select("status, fulfilled_at")
+        .eq("order_id", createdOrderId)
+        .single();
       assert.equal(
-        fakeHashRes.status,
-        400,
-        "Webhook with invalid signature hash must be rejected with 400 Bad Request"
+        stillPendingPayment.status,
+        "processing",
+        "PULL-RECONCILIATION: Webhook body must NOT be trusted to mark payment approved!"
       );
+      assert.equal(stillPendingPayment.fulfilled_at, null);
 
       // ------------------------------------------------------------------------
       // 4. ПЕРЕХОДЫ СТАТУСОВ: Отменённый счёт (canceled) нельзя перевести в approved
@@ -111,21 +133,14 @@ test(
         .single();
       assert.equal(canceledPayment.status, "canceled");
 
-      // Теперь эмулируем провайдерский webhook или reconcile попытку подтвердить уже отменённый платёж
-      const mockSecret = process.env.ODENGI_PASSWORD || "test_password";
-      const validHash = crypto
-        .createHmac("md5", mockSecret)
-        .update(JSON.stringify({ order_id: createdOrderId }))
-        .digest("hex");
-
+      // Теперь эмулируем webhook для уже отменённого платежа
       const delayedWebhookRes = await api("/api/payments/webhook", {
         method: "POST",
         body: {
           order_id: createdOrderId,
-          hash: validHash,
         },
       });
-      assert.ok([200, 400].includes(delayedWebhookRes.status));
+      assert.equal(delayedWebhookRes.status, 200);
 
       // Проверяем в БД: статус ДОЛЖЕН остаться "canceled", ни в коем случае не "approved"!
       const { data: postWebhookPayment } = await supabaseAdmin
@@ -163,22 +178,17 @@ test(
         body: JSON.stringify({ orderId: secondOrderId, status: "approved" }),
       });
 
-      const secondHash = crypto
-        .createHmac("md5", mockSecret)
-        .update(JSON.stringify({ order_id: secondOrderId }))
-        .digest("hex");
-
       // 1-й webhook
       const wb1 = await api("/api/payments/webhook", {
         method: "POST",
-        body: { order_id: secondOrderId, hash: secondHash },
+        body: { order_id: secondOrderId },
       });
       assert.equal(wb1.status, 200);
 
       // 2-й webhook (дубликат)
       const wb2 = await api("/api/payments/webhook", {
         method: "POST",
-        body: { order_id: secondOrderId, hash: secondHash },
+        body: { order_id: secondOrderId },
       });
       assert.equal(wb2.status, 200, "Duplicate webhook must respond with 200 OK without errors");
 
