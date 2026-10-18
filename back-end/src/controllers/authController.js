@@ -560,6 +560,7 @@ export const login = async (req, res) => {
         email: user.email,
         phone: user.phone,
         isVerified: user.is_verified,
+        isEmailVerified: user.is_email_verified,
         profile: profile || {},
       },
     });
@@ -600,7 +601,7 @@ export const getMe = async (req, res) => {
 
     const { data: user, error: userError } = await supabase
       .from("users")
-      .select("id, account_type, email, phone, show_phone, is_verified, role, created_at")
+      .select("id, account_type, email, phone, show_phone, is_verified, is_email_verified, role, created_at")
       .eq("id", userId)
       .single();
 
@@ -626,6 +627,7 @@ export const getMe = async (req, res) => {
         phone: user.phone,
         showPhone: Boolean(user.show_phone),
         isVerified: user.is_verified,
+        isEmailVerified: user.is_email_verified,
         role: user.role || "user",
         profile: formatProfileWithMetadata(profile),
       },
@@ -757,7 +759,10 @@ export const updateMe = async (req, res) => {
           message: "Пользователь с таким номером телефона уже существует",
         });
       }
-      userUpdates.phone = formattedPhone;
+      if (formattedPhone !== currentUser.phone) {
+        userUpdates.phone = formattedPhone;
+        userUpdates.is_verified = false;
+      }
     }
 
     const targetShowPhone = data.showPhone !== undefined ? data.showPhone : data.show_phone;
@@ -931,7 +936,7 @@ export const updateMe = async (req, res) => {
 
     const { data: updatedUser, error: fetchUserError } = await supabase
       .from("users")
-      .select("id, account_type, email, phone, is_verified, created_at")
+      .select("id, account_type, email, phone, is_verified, is_email_verified, created_at")
       .eq("id", userId)
       .single();
 
@@ -957,6 +962,7 @@ export const updateMe = async (req, res) => {
         email: updatedUser.email,
         phone: updatedUser.phone,
         isVerified: updatedUser.is_verified,
+        isEmailVerified: updatedUser.is_email_verified,
         profile: formatProfileWithMetadata(profile),
       },
     });
@@ -1129,8 +1135,25 @@ export const sendOtp = async (req, res) => {
 
     // 1. Отправка SMS OTP через Nikita
     if (rawPhone) {
+      const formattedPhone = normalizePhone(rawPhone);
+      if (req.user?.id) {
+        const { data: phoneConflict } = await supabase
+          .from("users")
+          .select("id")
+          .eq("phone", formattedPhone)
+          .neq("id", req.user.id)
+          .maybeSingle();
+
+        if (phoneConflict) {
+          return res.status(400).json({
+            success: false,
+            message: "Этот номер телефона уже привязан к другому аккаунту",
+          });
+        }
+      }
+
       const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "127.0.0.1";
-      const result = await nikitaService.sendOtp({ phone: rawPhone, ip: clientIp });
+      const result = await nikitaService.sendOtp({ phone: formattedPhone, ip: clientIp });
 
       if (!result.success) {
         const httpStatus = result.rateLimited ? 429 : (result.status === 7 ? 400 : 400);
@@ -1217,12 +1240,38 @@ export const verifyOtp = async (req, res) => {
 
       // Если пользователь авторизован, подтверждаем телефон в профиле
       if (req.user?.id) {
-        await supabase
-          .from("users")
-          .update({ is_verified: true, updated_at: new Date().toISOString() })
-          .eq("id", req.user.id);
+        const targetPhone = rawPhone ? normalizePhone(rawPhone) : null;
+        if (targetPhone) {
+          const { data: conflict } = await supabase
+            .from("users")
+            .select("id")
+            .eq("phone", targetPhone)
+            .neq("id", req.user.id)
+            .maybeSingle();
+
+          if (conflict) {
+            return res.status(400).json({
+              success: false,
+              message: "Этот номер телефона уже привязан к другому аккаунту",
+            });
+          }
+
+          await supabase
+            .from("users")
+            .update({
+              phone: targetPhone,
+              is_verified: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", req.user.id);
+        } else {
+          await supabase
+            .from("users")
+            .update({ is_verified: true, updated_at: new Date().toISOString() })
+            .eq("id", req.user.id);
+        }
       } else if (rawPhone) {
-        const formattedPhone = rawPhone.startsWith("+") ? rawPhone : `+${rawPhone}`;
+        const formattedPhone = normalizePhone(rawPhone);
         await supabase
           .from("users")
           .update({ is_verified: true, updated_at: new Date().toISOString() })
@@ -1322,7 +1371,6 @@ export const verifyOtp = async (req, res) => {
       .from("users")
       .update({
         is_email_verified: true,
-        is_verified: true,
         updated_at: new Date().toISOString(),
       });
 
@@ -1333,7 +1381,7 @@ export const verifyOtp = async (req, res) => {
     }
 
     const { data: user, error: userError } = await userQuery
-      .select("id, account_type, email, phone, is_verified, token_version")
+      .select("id, account_type, email, phone, is_verified, is_email_verified, token_version")
       .maybeSingle();
 
     if (userError || !user) {
@@ -1367,6 +1415,7 @@ export const verifyOtp = async (req, res) => {
         email: user.email,
         phone: user.phone,
         isVerified: user.is_verified,
+        isEmailVerified: user.is_email_verified,
         profile: profile || {},
       },
     });

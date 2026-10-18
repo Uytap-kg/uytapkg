@@ -155,7 +155,7 @@ export const authLimiter = rateLimit({
 // Публичные эндпоинты
 router.post("/register", authLimiter, register);
 router.post("/login", loginLimiter, login);
-router.post("/send-otp", sendOtpLimiter, sendOtp);
+router.post("/send-otp", sendOtpLimiter, optionalAuth, sendOtp);
 router.post("/verify-otp", rateLimitVerify, optionalAuth, verifyOtp);
 router.post("/forgot-password", sendOtpLimiter, forgotPassword);
 router.post("/verify-reset-code", rateLimitVerify, verifyResetCode);
