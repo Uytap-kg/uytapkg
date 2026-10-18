@@ -146,15 +146,16 @@ test("Register A-2: Успешная регистрация вызывает RPC
           }),
         }),
         insert: async () => ({ error: null }),
-        select: () => ({
-          eq: () => ({
-            gte: () => ({
-              order: () => ({
-                eq: async () => ({ data: [], error: null }),
-              }),
-            }),
-          }),
-        }),
+        select: () => {
+          const createQuery = () => {
+            const p = Promise.resolve({ data: [], count: 0, error: null });
+            p.eq = () => createQuery();
+            p.gte = () => createQuery();
+            p.order = () => createQuery();
+            return p;
+          };
+          return createQuery();
+        },
       };
     }
     return origFrom.call(supabase, table);
@@ -225,15 +226,16 @@ test("Register A-2: Перерегистрация unverified email вызыва
           }),
         }),
         insert: async () => ({ error: null }),
-        select: () => ({
-          eq: () => ({
-            gte: () => ({
-              order: () => ({
-                eq: async () => ({ data: [], error: null }),
-              }),
-            }),
-          }),
-        }),
+        select: () => {
+          const createQuery = () => {
+            const p = Promise.resolve({ data: [], count: 0, error: null });
+            p.eq = () => createQuery();
+            p.gte = () => createQuery();
+            p.order = () => createQuery();
+            return p;
+          };
+          return createQuery();
+        },
       };
     }
     return origFrom.call(supabase, table);

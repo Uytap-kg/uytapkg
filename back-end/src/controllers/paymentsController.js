@@ -203,7 +203,7 @@ export const cancelPayment = async (req, res) => {
 // =======================================================
 export const handleResultUrl = async (req, res) => {
   try {
-    const orderId = req.body?.order_id;
+    const orderId = req.body?.order_id || req.body?.data?.order_id;
     const result = await handleWebhookService(orderId);
 
     if (result.invalid) {
