@@ -190,7 +190,7 @@ export async function claimPaymentApproved(paymentId, { transId, paidAt, provide
       updated_at: new Date().toISOString(),
     })
     .eq("id", paymentId)
-    .neq("status", "approved")
+    .in("status", ["pending", "processing"])
     .select()
     .maybeSingle();
 }
@@ -239,7 +239,7 @@ export async function cancelPaymentRecord(paymentId) {
     .from("payments")
     .update({ status: "canceled", updated_at: new Date().toISOString() })
     .eq("id", paymentId)
-    .neq("status", "approved");
+    .in("status", ["pending", "processing"]);
 }
 
 /**

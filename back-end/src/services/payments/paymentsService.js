@@ -9,6 +9,7 @@ import {
   markPromotionOrderStatus,
 } from "../../utils/promotionOrders.js";
 import * as odengi from "../odengiService.js";
+import { odengiConfig } from "../../config/odengi.js";
 import { alerts } from "../../utils/alerts.js";
 import { logger } from "../../utils/logger.js";
 import * as repo from "./paymentsRepo.js";
@@ -380,7 +381,7 @@ export async function reconcilePaymentStatus(payment) {
     return payment;
   }
 
-  if (payment.status === "canceled") {
+  if (payment.status === "canceled" || payment.status === "failed") {
     return payment;
   }
 
@@ -521,17 +522,69 @@ export async function cancelPaymentService({ orderId, userId }) {
   return { success: true };
 }
 
+export function verifyOdengiWebhookHash(body) {
+  if (!body || typeof body !== "object") return false;
+  const incomingHash = body.hash;
+  if (!incomingHash || typeof incomingHash !== "string") {
+    return true; // хэш не передан
+  }
+
+  const secret = odengiConfig.password;
+  if (!secret) return false;
+
+  // 1. Формат O!Dengi { cmd, version, sid, mktime, lang, data, hash }
+  if (body.cmd && body.data) {
+    const payload = {
+      cmd: body.cmd,
+      version: body.version,
+      sid: body.sid,
+      mktime: body.mktime,
+      lang: body.lang,
+      data: body.data,
+    };
+    const expected = crypto.createHmac("md5", secret).update(JSON.stringify(payload)).digest("hex");
+    return expected.toLowerCase() === incomingHash.toLowerCase();
+  }
+
+  // 2. Формат JSON без hash
+  const copy = { ...body };
+  delete copy.hash;
+  const expected = crypto.createHmac("md5", secret).update(JSON.stringify(copy)).digest("hex");
+  if (expected.toLowerCase() === incomingHash.toLowerCase()) {
+    return true;
+  }
+
+  // 3. Формат HMAC от order_id
+  const orderId = body.order_id || body.data?.order_id;
+  if (orderId) {
+    const orderExpected = crypto.createHmac("md5", secret).update(String(orderId)).digest("hex");
+    if (orderExpected.toLowerCase() === incomingHash.toLowerCase()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
- * 7. Обработка входящего webhook от O!Dengi.
+ * 7. Обработка входящего webhook от O!Dengi с валидацией подписи.
  */
-export async function handleWebhookService(orderId) {
+export async function handleWebhookService(orderId, body = null) {
   if (
     !orderId ||
     typeof orderId !== "string" ||
     orderId.length > 100 ||
     !/^[a-zA-Z0-9_\-]+$/.test(orderId)
   ) {
-    return { invalid: true };
+    return { invalid: true, message: "Некорректный order_id" };
+  }
+
+  if (body && body.hash) {
+    const isHashValid = verifyOdengiWebhookHash(body);
+    if (!isHashValid) {
+      logger.warn("Webhook rejected: invalid HMAC hash", { orderId });
+      return { invalid: true, message: "Неверная подпись webhook" };
+    }
   }
 
   const { data: payment } = await repo.findPaymentByOrderId(orderId);

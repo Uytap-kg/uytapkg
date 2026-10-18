@@ -204,10 +204,10 @@ export const cancelPayment = async (req, res) => {
 export const handleResultUrl = async (req, res) => {
   try {
     const orderId = req.body?.order_id || req.body?.data?.order_id;
-    const result = await handleWebhookService(orderId);
+    const result = await handleWebhookService(orderId, req.body);
 
     if (result.invalid) {
-      return res.status(400).json({ success: false });
+      return res.status(400).json({ success: false, message: result.message || "Некорректный запрос" });
     }
 
     return res.status(200).json({ success: true });
