@@ -1,6 +1,7 @@
 import { supabase } from "../config/db.js";
 import alerts from "../utils/alerts.js";
 import { refundTariffListing } from "./subscriptionsService.js";
+import { cleanupOrphanedPendingAvatars } from "../utils/storage.js";
 
 // Интервал запуска очистки — раз в 15 минут (Дефект 3.1)
 export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
@@ -14,6 +15,7 @@ let maintenanceTimer = null;
  * 2. Сбрасывает просроченные промо-статусы (promotion_status = 'regular', is_urgent = false, priority_rank = 3),
  *    где promotion_expires_at <= NOW() или urgent_expires_at <= NOW().
  * 3. Проверяет зависшие подтверждённые платежи (status = 'approved' без fulfilled_at старше 10 минут) и шлёт алерт.
+ * 4. Очищает невостребованные временные аватары в Storage (старше 24 часов).
  */
 export async function runMaintenanceJob() {
   const nowIso = new Date().toISOString();
@@ -22,6 +24,7 @@ export async function runMaintenanceJob() {
     resetPromotionsCount: 0,
     resetUrgentCount: 0,
     stuckPaymentsCount: 0,
+    cleanedPendingAvatarsCount: 0,
   };
 
   try {
@@ -111,6 +114,14 @@ export async function runMaintenanceJob() {
       console.error("Cron Maintenance: error resetting urgent flags:", urgentError);
     } else {
       summary.resetUrgentCount = urgentRows?.length || 0;
+    }
+
+    // 4. Очистка невостребованных временных аватаров в Storage (старше 24 часов)
+    try {
+      const { cleanedCount } = await cleanupOrphanedPendingAvatars();
+      summary.cleanedPendingAvatarsCount = cleanedCount || 0;
+    } catch (cleanErr) {
+      console.warn("Cron Maintenance: cleanupOrphanedPendingAvatars error:", cleanErr?.message || cleanErr);
     }
   } catch (error) {
     console.error("Cron Maintenance: unhandled error in runMaintenanceJob:", error);

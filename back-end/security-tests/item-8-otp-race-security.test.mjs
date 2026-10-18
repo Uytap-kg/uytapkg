@@ -709,7 +709,7 @@ test("Критерий 3.1: keyGenerator для rateLimitVerify извлекае
   assert.equal(fallbackKey, "192.168.1.50", "При отсутствии email должен происходить fallback на нормализованный IP");
 });
 
-test("Критерий 3.2: rateLimitVerify — превышение 10 попыток на один email блокирует верификацию независимо от смены IP", async () => {
+test("Критерий 3.2: rateLimitVerify — превышение попыток с одного IP блокирует атакующего (429), но НЕ блокирует законного владельца с другого IP (защита от DoS)", async () => {
   const targetEmail = `email-rate-victim-${Date.now()}@example.com`;
 
   // Хелпер симуляции прохождения через Express rateLimit middleware
@@ -744,29 +744,24 @@ test("Критерий 3.2: rateLimitVerify — превышение 10 попы
     });
   };
 
-  // Выполняем 10 неудачных запросов для targetEmail с 10 РАЗНЫХ IP-адресов
-  for (let i = 1; i <= 10; i++) {
-    const rotatingIp = `198.51.100.${i}`;
-    const result = await runRateLimit(rotatingIp, targetEmail, 400);
-    assert.equal(result.blocked, false, `Попытка ${i} с IP ${rotatingIp} должна быть допущена до контроллера`);
+  // Выполняем 15 неудачных запросов для targetEmail с одного IP атакующего
+  const attackerIp = "198.51.100.1";
+  for (let i = 1; i <= 15; i++) {
+    const result = await runRateLimit(attackerIp, targetEmail, 400);
+    assert.equal(result.blocked, false, `Попытка ${i} с IP ${attackerIp} должна быть допущена до контроллера`);
   }
 
-  // 11-я попытка для ТОГО ЖЕ email с совершенно нового 11-го IP-адреса
-  const attackerNewIp = "203.0.113.99";
-  const result11 = await runRateLimit(attackerNewIp, targetEmail, 400);
+  // 16-я попытка атакующего с того же IP должна быть заблокирована лимитером
+  const result16 = await runRateLimit(attackerIp, targetEmail, 400);
 
-  assert.equal(result11.blocked, true, "11-й запрос обязан быть заблокирован лимитером");
-  assert.equal(result11.statusCode, 429, "Статус блокировки должен быть 429 Too Many Requests");
-  assert.equal(result11.body.success, false);
-  assert.ok(
-    result11.body.message?.includes("Слишком много неудачных попыток ввода кода. Попробуйте снова через час."),
-    "Сообщение об ошибке должно информировать о блокировке"
-  );
+  assert.equal(result16.blocked, true, "16-й запрос обязан быть заблокирован лимитером");
+  assert.equal(result16.statusCode, 429, "Статус блокировки должен быть 429 Too Many Requests");
+  assert.equal(result16.body.success, false);
 
-  // Критерий 3.3: Изоляция пользователей — запрос для ДРУГОГО email с того же нового IP НЕ блокируется
-  const innocentEmail = `innocent-user-${Date.now()}@example.com`;
-  const innocentResult = await runRateLimit(attackerNewIp, innocentEmail, 400);
-  assert.equal(innocentResult.blocked, false, "Другой пользователь с того же IP не должен блокироваться");
+  // Критерий 3.3: Изоляция законного владельца — запрос для ТОГО ЖЕ email с IP владельца НЕ блокируется атакующим
+  const legitimateOwnerIp = "203.0.113.99";
+  const innocentResult = await runRateLimit(legitimateOwnerIp, targetEmail, 400);
+  assert.equal(innocentResult.blocked, false, "Законный владелец с другого IP не должен блокироваться из-за атак со стороннего IP");
 });
 
 // ==============================================================================

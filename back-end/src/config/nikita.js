@@ -33,10 +33,25 @@ export const nikitaConfig = {
     const val = Number(process.env.NIKITA_HOURLY_LIMIT_PHONE);
     return Number.isFinite(val) && val > 0 ? val : 5;
   },
-  // Лимит отправок с одного IP в час (по умолчанию 20)
+  // Суточный лимит отправок на один номер в 24 часа (по умолчанию 10)
+  get dailyLimitPhone() {
+    const val = Number(process.env.NIKITA_DAILY_LIMIT_PHONE);
+    return Number.isFinite(val) && val > 0 ? val : 10;
+  },
+  // Лимит отправок с одного IP в минуту (по умолчанию 30 для защиты от флуд-скриптов)
+  get minuteLimitIp() {
+    const val = Number(process.env.NIKITA_MINUTE_LIMIT_IP);
+    return Number.isFinite(val) && val > 0 ? val : 30;
+  },
+  // Лимит отправок с одного IP в час (по умолчанию 120 с учётом CGNAT мобильных операторов)
   get hourlyLimitIp() {
     const val = Number(process.env.NIKITA_HOURLY_LIMIT_IP);
-    return Number.isFinite(val) && val > 0 ? val : 20;
+    return Number.isFinite(val) && val > 0 ? val : 120;
+  },
+  // Общий суточный потолок SMS на весь сервис (защита от разорения баланса провайдера, по умолчанию 500)
+  get dailyServiceCeiling() {
+    const val = Number(process.env.NIKITA_DAILY_SERVICE_CEILING);
+    return Number.isFinite(val) && val > 0 ? val : 500;
   },
   // Максимальное количество попыток ввода кода на один токен (по умолчанию 5)
   get maxVerifyAttempts() {

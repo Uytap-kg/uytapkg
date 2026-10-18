@@ -180,3 +180,24 @@ export const requireAdmin = (req, res, next) => {
   next();
 };
 
+/**
+ * Опциональная авторизация: если передан заголовок Authorization, декодирует токен
+ * и прикрепляет req.user. Если токена нет, не блокирует запрос и передаёт управление дальше
+ * (безопасный fallback для неавторизованных сценариев).
+ */
+export const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) {
+    return next();
+  }
+
+  jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }, (err, decodedUser) => {
+    if (!err && decodedUser && decodedUser.typ === "access") {
+      req.user = decodedUser;
+    }
+    next();
+  });
+};
+

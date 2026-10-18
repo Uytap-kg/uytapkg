@@ -2,8 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict R0t4XFC0Y4lkKcgtBT757UXIzfhIWRxsI04jD4MEbghdfcSbqnjEvf4vP5DYmzK
-
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.11
 
@@ -23,7 +21,7 @@ SET row_security = off;
 -- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA public;
+CREATE SCHEMA IF NOT EXISTS public;
 
 
 --
@@ -1421,6 +1419,4 @@ ALTER TABLE public.verification_requests ENABLE ROW LEVEL SECURITY;
 --
 -- PostgreSQL database dump complete
 --
-
-\unrestrict R0t4XFC0Y4lkKcgtBT757UXIzfhIWRxsI04jD4MEbghdfcSbqnjEvf4vP5DYmzK
 

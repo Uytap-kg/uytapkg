@@ -17,6 +17,7 @@ import {
   stopCronService,
   MAINTENANCE_INTERVAL_MS,
 } from "../src/services/cronService.js";
+import { cleanupOrphanedPendingAvatars } from "../src/utils/storage.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -117,7 +118,17 @@ test("Дефект 3.1: runMaintenanceJob переводит просрочен�
         },
       };
     }
-    return origFrom(table);
+    return {
+      select: () => ({
+        eq: () => ({
+          is: () => ({ lte: async () => ({ data: [], error: null }) }),
+          maybeSingle: async () => ({ data: null, error: null }),
+          limit: async () => ({ data: [] }),
+        }),
+        is: () => ({ lte: async () => ({ data: [], error: null }) }),
+        ilike: () => ({ limit: async () => ({ data: [] }) }),
+      }),
+    };
   };
 
   try {
@@ -126,6 +137,7 @@ test("Дефект 3.1: runMaintenanceJob переводит просрочен�
     assert.equal(summary.expiredListingsCount, 1);
     assert.equal(summary.resetPromotionsCount, 1);
     assert.equal(summary.resetUrgentCount, 1);
+    assert.equal(typeof summary.cleanedPendingAvatarsCount, "number");
 
     // 1. Проверка очистки просроченных объявлений
     const expireJob = updatesExecuted.find((u) => u.updates.status === "expired");
@@ -157,6 +169,55 @@ test("Дефект 3.1: startCronService запускает таймер с unre
   assert.equal(typeof timer.unref, "function", "Таймер обязан поддерживать unref()");
 
   stopCronService();
+});
+
+test("Дефект 3.1: cleanupOrphanedPendingAvatars удаляет невостребованные временные аватары старше 24ч и сохраняет используемые", async () => {
+  const origStorage = supabase.storage;
+  const origFrom = supabase.from;
+  const removedPaths = [];
+
+  const now = Date.now();
+  const mockFiles = [
+    { name: "stale-orphaned.jpg", created_at: new Date(now - 30 * 60 * 60 * 1000).toISOString() }, // 30ч назад (удалить)
+    { name: "stale-referenced.jpg", created_at: new Date(now - 30 * 60 * 60 * 1000).toISOString() }, // 30ч назад, но используется (сохранить)
+    { name: "recent-unreferenced.jpg", created_at: new Date(now - 2 * 60 * 60 * 1000).toISOString() }, // 2ч назад (слишком свежий, сохранить)
+  ];
+
+  supabase.storage = {
+    from: (bucket) => ({
+      list: async (folder) => {
+        assert.equal(folder, "pending");
+        return { data: mockFiles, error: null };
+      },
+      remove: async (paths) => {
+        removedPaths.push(...paths);
+        return { data: paths, error: null };
+      },
+    }),
+  };
+
+  supabase.from = (table) => ({
+    select: () => ({
+      ilike: (_col, val) => ({
+        limit: async () => {
+          // Симулируем, что stale-referenced.jpg найден в БД
+          if (val.includes("stale-referenced.jpg")) {
+            return { data: [{ id: "user-123" }] };
+          }
+          return { data: [] };
+        },
+      }),
+    }),
+  });
+
+  try {
+    const res = await cleanupOrphanedPendingAvatars(24 * 60 * 60 * 1000);
+    assert.equal(res.cleanedCount, 1);
+    assert.deepEqual(removedPaths, ["pending/stale-orphaned.jpg"]);
+  } finally {
+    supabase.storage = origStorage;
+    supabase.from = origFrom;
+  }
 });
 
 test("Фаза 1: Наличие миграции 20261017000000_search_title_trgm_index.sql с GIN-индексом на title", () => {

@@ -19,22 +19,28 @@ export function isValidIp(val) {
 export function getTrustedClientIp(request) {
   if (!request) return null;
 
-  // 1. Cloudflare Edge: гарантированно реальный IP посетителя
-  const cfIp = request.headers?.get?.("cf-connecting-ip");
-  if (cfIp && isValidIp(cfIp)) {
-    return cfIp.trim();
+  // 1. Cloudflare Edge: гарантированно реальный IP посетителя ТОЛЬКО если Cloudflare явно включен в конфигурации
+  const isCloudflareEnabled =
+    process.env.ENABLE_CLOUDFLARE === "true" ||
+    process.env.BEHIND_CLOUDFLARE === "true";
+
+  if (isCloudflareEnabled) {
+    const cfIp = request.headers?.get?.("cf-connecting-ip");
+    if (cfIp && isValidIp(cfIp)) {
+      return cfIp.trim();
+    }
   }
 
-  // 2. Next.js Request.ip (если доступен в рантайме хостинга)
-  if (request.ip && isValidIp(request.ip)) {
-    return request.ip.trim();
-  }
-
-  // 3. Vercel Forwarded For
+  // 2. Vercel Forwarded For: первый IP в списке — это адрес клиента, подключившегося к Vercel Edge
   const vercelIp = request.headers?.get?.("x-vercel-forwarded-for");
   if (vercelIp) {
     const parts = vercelIp.split(",").map((p) => p.trim()).filter(isValidIp);
     if (parts.length > 0) return parts[0];
+  }
+
+  // 3. Next.js Request.ip (если доступен в рантайме хостинга Vercel)
+  if (request.ip && isValidIp(request.ip)) {
+    return request.ip.trim();
   }
 
   // 4. Nginx X-Real-IP (устанавливается директивой proxy_set_header X-Real-IP $remote_addr)
@@ -43,7 +49,7 @@ export function getTrustedClientIp(request) {
     return realIp.trim();
   }
 
-  // 5. X-Forwarded-For: берём последний элемент, валидируя IP
+  // 5. X-Forwarded-For: для локальной разработки без Vercel/Cloudflare
   const raw = request.headers?.get?.("x-forwarded-for");
   if (!raw) return null;
   const parts = raw
@@ -71,7 +77,7 @@ export function getTrustedClientIp(request) {
 
 /**
  * Удаляет все клиентские заголовки, указывающие на IP, и выставляет
- * единственное доверенное значение (если оно известно).
+ * единственное доверенное значение (если оно известно) вместе с секретом прокси.
  */
 export function applyTrustedForwardedFor(headers, request) {
   const trustedClientIp = getTrustedClientIp(request);
@@ -82,6 +88,11 @@ export function applyTrustedForwardedFor(headers, request) {
 
   if (trustedClientIp) {
     headers.set("x-forwarded-for", trustedClientIp);
+  }
+
+  const proxySecret = process.env.INTERNAL_PROXY_SECRET;
+  if (proxySecret) {
+    headers.set("x-internal-proxy-secret", proxySecret);
   }
 
   return headers;

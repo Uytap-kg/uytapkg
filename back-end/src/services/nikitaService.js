@@ -158,6 +158,16 @@ export async function sendOtp({ phone, ip }) {
   }
   const cleanPhone = normalized.phone;
 
+  // 2.1 Строгая проверка: для отправки SMS разрешены ИСКЛЮЧИТЕЛЬНО номера Кыргызстана (+996)
+  // Защита баланса провайдера ДО обращения к внешнему шлюзу
+  if (!cleanPhone.startsWith("996") || cleanPhone.length !== 12) {
+    return {
+      success: false,
+      status: NIKITA_STATUS.INVALID_PHONE,
+      message: "Разрешены только номера Кыргызстана (+996)",
+    };
+  }
+
   // 3. Защита от злоупотреблений и rate limit (кулдаун и лимиты в час)
   const limitCheck = phoneOtpStore.checkSendLimits({ phone: cleanPhone, ip });
   if (!limitCheck.allowed) {

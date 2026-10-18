@@ -380,7 +380,7 @@ export async function reconcilePaymentStatus(payment) {
     return payment;
   }
 
-  if (payment.status === "canceled") {
+  if (payment.status === "canceled" || payment.status === "failed") {
     return payment;
   }
 
@@ -522,7 +522,12 @@ export async function cancelPaymentService({ orderId, userId }) {
 }
 
 /**
- * 7. Обработка входящего webhook от O!Dengi.
+ * 7. Обработка входящего webhook (result_url) от O!Dengi.
+ *
+ * ВАЖНО: Тело webhook-запроса НЕ является источником истины и не меняет
+ * статус напрямую. Webhook служит исключительно как асинхронный триггер:
+ * бэкенд находит платёж и делает защищённый server-to-server запрос
+ * в O!Dengi (reconcilePaymentStatus), подтверждая реальный статус счёта.
  */
 export async function handleWebhookService(orderId) {
   if (
@@ -531,7 +536,7 @@ export async function handleWebhookService(orderId) {
     orderId.length > 100 ||
     !/^[a-zA-Z0-9_\-]+$/.test(orderId)
   ) {
-    return { invalid: true };
+    return { invalid: true, message: "Некорректный order_id" };
   }
 
   const { data: payment } = await repo.findPaymentByOrderId(orderId);

@@ -21,7 +21,7 @@ export function requestContext(req, res, next) {
 
   res.on("finish", () => {
     const durationMs = Date.now() - startTime;
-    const clientIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.socket?.remoteAddress;
+    const clientIp = req.ip || req.clientIp || req.socket?.remoteAddress || "127.0.0.1";
 
     logger.info("HTTP request completed", {
       requestId,
