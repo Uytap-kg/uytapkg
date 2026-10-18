@@ -11,6 +11,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import styles from "./Favorites.module.css";
 import ListingCard from "@/components/ui/ListingCard/ListingCard";
 import CompareListingsModal from "./CompareListingsModal/CompareListingsModal";
+import Header from "@/components/pageComponents/header/Header";
 
 const categories = [
   "Все",
@@ -193,19 +194,10 @@ export default function Favorites() {
 
   return (
     <main className={styles.page}>
-      {/* HEADER */}
+      <Header />
 
       <header className={styles.header}>
         <div className={styles.headerMain}>
-          <button
-            type="button"
-            className={styles.homeButton}
-            onClick={() => router.push("/")}
-          >
-            <House size={18} />
-            <span>{t("favorites.home")}</span>
-          </button>
-
           <div className={styles.titleRow}>
             <div className={styles.titleIcon}>
               <Heart fill="currentColor" />

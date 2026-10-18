@@ -22,6 +22,7 @@ import ProfileEditModal from "./profileEdit/ProfileEditModal";
 
 import { useLanguage } from "@/context/LanguageContext";
 import { logout as authLogout } from "@/utils/auth";
+import Header from "@/components/pageComponents/header/Header";
 
 export default function PersonalProfile({
   user,
@@ -56,13 +57,7 @@ export default function PersonalProfile({
 
   return (
     <main className={styles.page}>
-      <div className={styles.topBar}>
-        <Link href="/" className={styles.homeButton}>
-          <ArrowLeft />
-
-          {t("personalProfile.topBar.home")}
-        </Link>
-      </div>
+      <Header />
 
       <motion.section
         className={styles.profileCard}
