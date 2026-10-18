@@ -82,6 +82,7 @@ const OTP_MAX_ATTEMPTS = 5; // неверных попыток на один к�
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // не чаще 1 отправки в 60 секунд
 const OTP_HOURLY_LIMIT = 5; // не более 5 кодов в час на email
 const OTP_DAILY_LIMIT = 10; // не более 10 кодов в 24 часа на email
+export const UNVERIFIED_PHONE_RESERVATION_TTL_MS = 10 * 60 * 1000; // срок удержания неподтверждённого номера — 10 минут
 
 /**
  * Хэширование одноразового OTP-кода (HMAC-SHA256).
@@ -334,7 +335,7 @@ export const register = async (req, res) => {
 
     const { data: existingByPhone, error: phoneCheckError } = await supabase
       .from("users")
-      .select("id")
+      .select("id, is_verified, is_email_verified, created_at")
       .eq("phone", formattedPhone)
       .maybeSingle();
 
@@ -343,10 +344,25 @@ export const register = async (req, res) => {
     }
 
     if (existingByPhone && existingByPhone.id !== existingByEmail?.id) {
-      return res.status(409).json({
-        success: false,
-        message: "Пользователь с таким номером телефона уже существует",
-      });
+      const isVerified = existingByPhone.is_verified || existingByPhone.is_email_verified;
+      if (isVerified) {
+        return res.status(409).json({
+          success: false,
+          message: "Пользователь с таким номером телефона уже существует",
+        });
+      }
+
+      // Неподтверждённый номер: проверяем, истёк ли срок резервирования
+      const reservationAgeMs = Date.now() - new Date(existingByPhone.created_at).getTime();
+      if (reservationAgeMs < UNVERIFIED_PHONE_RESERVATION_TTL_MS) {
+        return res.status(409).json({
+          success: false,
+          message: "Этот номер телефона недавно зарезервирован. Завершите подтверждение или попробуйте позже",
+        });
+      }
+
+      // Срок брошенной неподтверждённой регистрации истёк: освобождаем номер
+      await supabase.from("users").delete().eq("id", existingByPhone.id);
     }
 
     // 2. Хэширование пароля
