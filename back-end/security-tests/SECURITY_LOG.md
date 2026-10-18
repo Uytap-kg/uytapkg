@@ -908,3 +908,5 @@ uytapkg, во время адверсариального ревью. Все с�
 - 2026-10-18T12:31:25.446Z CREATE users id=27b71a1e-ae79-49e3-8351-42cb5c0ff1bc email=sectest-d182583f@example-security-test.local (test account, accountType=personal)
 - 2026-10-18T12:31:25.910Z DELETE users id=ccdd8141-0512-4fca-aac0-7205065cf328 (cleanup)
 - 2026-10-18T12:31:25.972Z DELETE users id=27b71a1e-ae79-49e3-8351-42cb5c0ff1bc (cleanup)
+- 2026-10-18T13:10:34.393Z CREATE users id=7abb5e1c-22b2-43c4-ab1a-12a3d78bbe22 email=sectest-0be1837e@example-security-test.local (test account, accountType=personal)
+- 2026-10-18T13:10:34.599Z DELETE users id=7abb5e1c-22b2-43c4-ab1a-12a3d78bbe22 (cleanup)

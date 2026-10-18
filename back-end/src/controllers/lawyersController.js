@@ -28,9 +28,9 @@ export const getLawyers = async (req, res) => {
     const from = (pageNum - 1) * limitNum;
     const to = from + limitNum - 1;
 
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from("lawyers")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .range(from, to);
@@ -43,9 +43,17 @@ export const getLawyers = async (req, res) => {
       });
     }
 
+    const items = (data || []).map(toPublicLawyer);
+
     return res.json({
       success: true,
-      data: (data || []).map(toPublicLawyer),
+      data: items,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: count ?? items.length,
+        hasMore: count ? to + 1 < count : false,
+      },
     });
   } catch (error) {
     console.error("Get Lawyers Controller Error:", error);

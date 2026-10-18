@@ -35,6 +35,7 @@ test(
       const developersRes = await api("/api/developers?limit=500000");
       assert.equal(developersRes.status, 200);
       assert.ok(Array.isArray(developersRes.body.data));
+      assert.equal(developersRes.body.pagination.limit, 100);
       assert.ok(
         developersRes.body.data.length <= 100,
         `Expected /api/developers items count <= 100, got ${developersRes.body.data.length}`
@@ -44,6 +45,7 @@ test(
       const complexesRes = await api("/api/complexes?limit=500000");
       assert.equal(complexesRes.status, 200);
       assert.ok(Array.isArray(complexesRes.body.data));
+      assert.equal(complexesRes.body.pagination.limit, 100);
       assert.ok(
         complexesRes.body.data.length <= 100,
         `Expected /api/complexes items count <= 100, got ${complexesRes.body.data.length}`
@@ -53,6 +55,7 @@ test(
       const lawyersRes = await api("/api/lawyers?limit=500000");
       assert.equal(lawyersRes.status, 200);
       assert.ok(Array.isArray(lawyersRes.body.data));
+      assert.equal(lawyersRes.body.pagination.limit, 100);
       assert.ok(
         lawyersRes.body.data.length <= 100,
         `Expected /api/lawyers items count <= 100, got ${lawyersRes.body.data.length}`

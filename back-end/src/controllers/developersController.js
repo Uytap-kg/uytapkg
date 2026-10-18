@@ -57,12 +57,15 @@ export const getDevelopers = async (req, res) => {
     const from = (pageNum - 1) * limitNum;
     const to = from + limitNum - 1;
 
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from("developers")
-      .select(`
+      .select(
+        `
         *,
         residential_complexes (*)
-      `)
+      `,
+        { count: "exact" }
+      )
       .order("company_name", { ascending: true })
       .range(from, to);
 
@@ -79,6 +82,12 @@ export const getDevelopers = async (req, res) => {
     return res.json({
       success: true,
       data: enriched,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: count ?? enriched.length,
+        hasMore: count ? to + 1 < count : false,
+      },
     });
   } catch (error) {
     console.error("Get Developers Controller Error:", error);

@@ -41,13 +41,16 @@ export const getComplexes = async (req, res) => {
     const from = (pageNum - 1) * limitNum;
     const to = from + limitNum - 1;
 
-    const { data: complexes, error } = await supabase
+    const { data: complexes, error, count } = await supabase
       .from("residential_complexes")
-      .select(`
+      .select(
+        `
         *,
         developers (id, user_id, company_name, logo_url, is_verified),
         complex_layouts (*)
-      `)
+      `,
+        { count: "exact" }
+      )
       .order("created_at", { ascending: false })
       .range(from, to);
 
@@ -55,7 +58,18 @@ export const getComplexes = async (req, res) => {
       return res.status(500).json({ success: false, message: "Ошибка загрузки жилых комплексов" });
     }
 
-    return res.json({ success: true, data: await resolveDeveloperLogos(complexes) });
+    const resolved = await resolveDeveloperLogos(complexes);
+
+    return res.json({
+      success: true,
+      data: resolved,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: count ?? resolved.length,
+        hasMore: count ? to + 1 < count : false,
+      },
+    });
   } catch (error) {
     console.error("Get Complexes Error:", error);
     return res.status(500).json({ success: false, message: "Ошибка сервера при загрузке ЖК" });
