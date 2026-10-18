@@ -5,6 +5,7 @@ import { supabase } from "../config/db.js";
 import { registerSchema, loginSchema, updateMeSchema, normalizePhone } from "../utils/validation.js";
 import { generateSecureOtp, safeCompare } from "../utils/otp.js";
 import { sendOtpEmail } from "../services/emailService.js";
+import nikitaService from "../services/nikitaService.js";
 import { generateToken, invalidateUserAuthCache } from "../middleware/auth.js";
 import { validateImageMagicBytes } from "../middleware/upload.js";
 import {
@@ -1081,37 +1082,67 @@ export const deleteUserAvatar = async (req, res) => {
 };
 
 // =======================================================
-// 6. Email OTP: повторная отправка (sendOtp) и проверка (verifyOtp)
+// 6. Отправка (sendOtp) и проверка (verifyOtp) OTP кодов
 //
-// Раньше здесь была заглушка для телефона (с бэкдором "1111"/"1234").
-// Теперь — подтверждение email при регистрации.
+// Поддерживает два канала:
+// 1. SMS OTP через сервис Nikita (smspro.nikita.kg), если передан `phone` или `token`.
+// 2. Email OTP (через Resend/SMTP и таблицу email_verifications), если передан `email`.
 // =======================================================
 export const sendOtp = async (req, res) => {
   try {
-    const email = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
-    if (!email || !EMAIL_REGEX.test(email) || email.length > 255) {
-      return res.status(400).json({ success: false, message: "Укажите корректный email" });
+    const rawPhone = typeof req.body?.phone === "string" ? req.body.phone : "";
+    const rawEmail = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
+
+    // 1. Отправка SMS OTP через Nikita
+    if (rawPhone) {
+      const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "127.0.0.1";
+      const result = await nikitaService.sendOtp({ phone: rawPhone, ip: clientIp });
+
+      if (!result.success) {
+        const httpStatus = result.rateLimited ? 429 : (result.status === 7 ? 400 : 400);
+        return res.status(httpStatus).json({
+          success: false,
+          message: result.message,
+          ...(result.retryAfter ? { retryAfter: result.retryAfter } : {}),
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: result.message || "Код подтверждения отправлен по SMS",
+        token: result.token,
+      });
     }
 
-    // Отправляем только неподтверждённым аккаунтам. Для остальных отвечаем
-    // так же, как при успехе, — чтобы эндпоинт не выдавал, какие email
-    // зарегистрированы, и не использовался для спама чужих ящиков.
-    const { data: user } = await supabase
-      .from("users")
-      .select("id, is_email_verified")
-      .eq("email", email)
-      .maybeSingle();
+    // 2. Отправка Email OTP
+    if (rawEmail) {
+      const email = rawEmail;
+      if (!EMAIL_REGEX.test(email) || email.length > 255) {
+        return res.status(400).json({ success: false, message: "Укажите корректный email" });
+      }
 
-    if (!user || user.is_email_verified !== false) {
-      return res.json({ success: true, message: "Если аккаунт существует, код отправлен" });
+      // Отправляем только неподтверждённым аккаунтам. Для остальных отвечаем
+      // так же, как при успехе, — чтобы эндпоинт не выдавал, какие email
+      // зарегистрированы, и не использовался для спама чужих ящиков.
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, is_email_verified")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (!user || user.is_email_verified !== false) {
+        return res.json({ success: true, message: "Если аккаунт существует, код отправлен" });
+      }
+
+      const limit = await guardedIssueOtp(email);
+      if (limit) {
+        return res.status(429).json({ success: false, message: limit.message });
+      }
+
+      return res.json({ success: true, message: "Код подтверждения отправлен", email });
     }
 
-    const limit = await guardedIssueOtp(email);
-    if (limit) {
-      return res.status(429).json({ success: false, message: limit.message });
-    }
-
-    return res.json({ success: true, message: "Код подтверждения отправлен", email });
+    return res.status(400).json({ success: false, message: "Укажите номер телефона или email" });
   } catch (error) {
     console.error("Send OTP Error:", error);
     return res.status(500).json({
@@ -1123,11 +1154,49 @@ export const sendOtp = async (req, res) => {
 
 export const verifyOtp = async (req, res) => {
   try {
-    const email = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
+    const rawPhone = typeof req.body?.phone === "string" ? req.body.phone : "";
+    const rawToken = typeof req.body?.token === "string" ? req.body.token.trim() : "";
+    const rawEmail = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
     const code = typeof req.body?.code === "string" || typeof req.body?.code === "number"
       ? String(req.body.code).trim()
       : "";
 
+    // 1. Проверка SMS OTP через Nikita (если указан phone или token)
+    if (rawPhone || rawToken) {
+      if (!code) {
+        return res.status(400).json({ success: false, message: "Укажите код подтверждения" });
+      }
+
+      const result = await nikitaService.verifyOtp({
+        token: rawToken,
+        phone: rawPhone,
+        code,
+      });
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.message,
+          ...(result.attemptsLeft !== undefined ? { attemptsLeft: result.attemptsLeft } : {}),
+        });
+      }
+
+      // Если пользователь авторизован, подтверждаем телефон в профиле
+      if (req.user?.id) {
+        await supabase
+          .from("users")
+          .update({ is_verified: true, updated_at: new Date().toISOString() })
+          .eq("id", req.user.id);
+      }
+
+      return res.json({
+        success: true,
+        message: "Номер телефона успешно подтвержден",
+      });
+    }
+
+    // 2. Проверка Email OTP
+    const email = rawEmail;
     if (!email || !code) {
       return res.status(400).json({ success: false, message: "Укажите email и код" });
     }

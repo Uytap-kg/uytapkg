@@ -91,10 +91,11 @@ cp front-end/.env.example front-end/.env.local
 - `DATABASE_URL` — прямое подключение к PostgreSQL для миграций.
 - `JWT_SECRET` — криптографический секрет для подписи JWT (минимум 32–64 символа).
 - `OTP_SECRET` — секрет для HMAC-хэширования кодов подтверждения.
+- `NIKITA_*` — API-ключ и параметры SMS-шлюза Nikita OTP (см. [`docs/nikita-otp.md`](docs/nikita-otp.md)).
 - `ODENGI_*` — реквизиты платёжного шлюза O!Dengi.
 - `ALERT_TELEGRAM_*` — (опционально) токены для Telegram-оповещений об ошибках.
 
-Подробное описание параметров приведено в [`docs/deploy.md`](docs/deploy.md).
+Подробное описание параметров приведено в [`docs/deploy.md`](docs/deploy.md) и [`docs/nikita-otp.md`](docs/nikita-otp.md).
 
 ---
 

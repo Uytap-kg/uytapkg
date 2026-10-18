@@ -90,7 +90,9 @@ export const rateLimitVerify = rateLimit({
   skipSuccessfulRequests: true, // Учитываем только неудачные попытки (статус >= 400)
   keyGenerator: (req) => {
     const email = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
-    return email || ipKeyGenerator(req);
+    const phone = typeof req.body?.phone === "string" ? req.body.phone.replace(/\D/g, "") : "";
+    const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
+    return email || phone || token || ipKeyGenerator(req);
   },
   message: {
     success: false,
@@ -120,7 +122,8 @@ export const sendOtpLimiter = rateLimit({
   max: 3,
   keyGenerator: (req) => {
     const email = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
-    return email || ipKeyGenerator(req);
+    const phone = typeof req.body?.phone === "string" ? req.body.phone.replace(/\D/g, "") : "";
+    return email || phone || ipKeyGenerator(req);
   },
   message: {
     success: false,
