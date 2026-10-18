@@ -1,4 +1,5 @@
 import net from "node:net";
+import logger from "../utils/logger.js";
 
 export function isValidIp(val) {
   if (!val || typeof val !== "string") return false;
@@ -47,6 +48,24 @@ export function resolveClientIp(req, res, next) {
       if (isValidIp(normCandidate)) {
         clientIp = normCandidate;
       }
+    }
+  } else {
+    const hasProxyHeaders = Boolean(
+      req.headers["x-forwarded-for"] ||
+      req.headers["x-real-ip"] ||
+      req.headers["x-vercel-forwarded-for"] ||
+      incomingSecret
+    );
+    if (hasProxyHeaders) {
+      logger.warn(
+        "Untrusted proxy headers or invalid proxy secret detected; ignoring forwarded headers and falling back to direct socket IP",
+        {
+          remoteSocketIp: normalizedSocketIp,
+          hasForwardedFor: Boolean(req.headers["x-forwarded-for"]),
+          hasVercelForwardedFor: Boolean(req.headers["x-vercel-forwarded-for"]),
+          hasSecretHeader: Boolean(incomingSecret),
+        }
+      );
     }
   }
 
