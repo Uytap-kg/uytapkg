@@ -126,9 +126,42 @@ export async function registerTestUser({ accountType = "personal", prefix = "sec
     throw new Error(`Failed to register test user: ${status} ${JSON.stringify(body)}`);
   }
 
-  logDbOp(`CREATE users id=${body.user?.id} email=${email} (test account, accountType=${accountType})`);
+  let token = body.token;
+  let user = body.user;
 
-  return { token: body.token, user: body.user, email, phone, password };
+  // Если регистрация требует подтверждения email (актуальная логика продукта)
+  if (body.needVerification || !token) {
+    const testCode = "123456";
+    const secret =
+      process.env.OTP_SECRET ||
+      "local-test-otp-secret-with-at-least-32-chars-long";
+    const testHash = crypto.createHmac("sha256", secret).update(testCode).digest("hex");
+
+    if (supabaseAdmin) {
+      await supabaseAdmin
+        .from("email_verifications")
+        .update({ code_hash: testHash })
+        .eq("email", email)
+        .eq("type", "registration")
+        .eq("is_used", false);
+    }
+
+    const verifyRes = await api("/api/auth/verify-otp", {
+      method: "POST",
+      body: { email, code: testCode },
+    });
+
+    if (verifyRes.status !== 200 || !verifyRes.body?.success) {
+      throw new Error(`Failed to verify test user email OTP: ${verifyRes.status} ${JSON.stringify(verifyRes.body)}`);
+    }
+
+    token = verifyRes.body.token;
+    user = verifyRes.body.user;
+  }
+
+  logDbOp(`CREATE users id=${user?.id} email=${email} (test account, accountType=${accountType})`);
+
+  return { token, user, email, phone, password };
 }
 
 /** 

@@ -21,15 +21,17 @@ import { startCronService, stopCronService } from "./services/cronService.js";
 import { supabase } from "./config/db.js";
 import logger from "./utils/logger.js";
 import requestContext from "./middleware/requestContext.js";
+import resolveClientIp from "./middleware/clientIp.js";
 
 dotenv.config();
 
 const app = express();
+// Отключаем слепое доверие к заголовкам X-Forwarded-* со стороны Express.
+// Определение IP клиента выполняет resolveClientIp, доверяя X-Forwarded-For
+// только при наличии корректного X-Internal-Proxy-Secret.
+app.set("trust proxy", false);
+app.use(resolveClientIp);
 app.use(requestContext);
-// When running behind a proxy (e.g., local dev proxies or hosting), allow
-// express to trust the X-Forwarded-* headers so express-rate-limit can
-// correctly determine the remote IP. See express-rate-limit docs.
-app.set("trust proxy", 1);
 const PORT = process.env.PORT || 5000;
 
 // Базовые защитные HTTP-заголовки (X-Content-Type-Options, отключение
