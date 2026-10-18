@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { BASE_URL } from "./helpers.mjs";
 import nikitaService, { normalizeNikitaPhone } from "../src/services/nikitaService.js";
 import { phoneOtpStore } from "../src/utils/phoneOtpStore.js";
+import logger from "../src/utils/logger.js";
 
 process.env.NIKITA_API_KEY = process.env.NIKITA_API_KEY || "test_nikita_key";
 
@@ -131,6 +132,33 @@ test("Send Limits: Global daily SMS ceiling for the whole service protects provi
     "Global service daily ceiling must reject new SMS when reached"
   );
   assert.equal(check.reason, "service_daily_limit");
+});
+
+test("Send Limits: Logs warning when daily service SMS ceiling reaches 70% threshold", () => {
+  phoneOtpStore.reset();
+  const now = Date.now();
+  let warned = false;
+  let warnMsg = "";
+  const originalWarn = logger.warn;
+  logger.warn = (msg, ctx) => {
+    warned = true;
+    warnMsg = msg;
+    originalWarn(msg, ctx);
+  };
+
+  try {
+    // 350 SMS из 500 = 70%
+    for (let i = 0; i < 350; i++) {
+      phoneOtpStore.recordServiceSms(now - i * 1000);
+    }
+    const check = phoneOtpStore.checkSendLimits({ phone: "996700123999", ip: "192.0.2.100" });
+    assert.equal(check.allowed, true); // Должно быть разрешено (потолок 500 ещё не достигнут)
+    assert.equal(warned, true, "Warning must be logged when reaching >= 70% ceiling");
+    assert.match(warnMsg, /70%/);
+  } finally {
+    logger.warn = originalWarn;
+    phoneOtpStore.reset();
+  }
 });
 
 test("Send Limits (API Integration): POST /api/auth/send-otp with non-Kyrgyz phone is rejected with 400", async () => {

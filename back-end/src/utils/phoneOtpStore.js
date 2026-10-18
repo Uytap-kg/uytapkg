@@ -1,4 +1,5 @@
 import { nikitaConfig } from "../config/nikita.js";
+import logger from "./logger.js";
 
 // =======================================================
 // Хранилище сессий OTP и защита от злоупотреблений SMS.
@@ -76,6 +77,16 @@ class PhoneOtpStore {
       (ts) => now - ts < oneDayMs
     );
     this.serviceDailyHistory = freshServiceSms;
+
+    const warningThreshold = Math.floor(nikitaConfig.dailyServiceCeiling * 0.7);
+    if (freshServiceSms.length >= warningThreshold) {
+      logger.warn("SMS daily ceiling threshold reached (>= 70%)", {
+        currentCount: freshServiceSms.length,
+        ceiling: nikitaConfig.dailyServiceCeiling,
+        percent: Math.round((freshServiceSms.length / nikitaConfig.dailyServiceCeiling) * 100),
+      });
+    }
+
     if (freshServiceSms.length >= nikitaConfig.dailyServiceCeiling) {
       return {
         allowed: false,

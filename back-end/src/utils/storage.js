@@ -59,6 +59,82 @@ export const uploadPendingAvatarToStorage = async (file) => {
 export const uploadAnonymousImageToStorage = uploadPendingAvatarToStorage;
 
 /**
+ * Очищает файлы из временной папки `pending/` бакета `avatars`, которые:
+ * 1) Старше maxAgeMs (по умолчанию 24 часа);
+ * 2) Не используются ни в user_profiles (avatar_url), ни в developers (logo_url).
+ */
+export const cleanupOrphanedPendingAvatars = async (maxAgeMs = 24 * 60 * 60 * 1000) => {
+  try {
+    const { data: files, error } = await supabase.storage.from(AVATARS_BUCKET).list("pending", {
+      limit: 100,
+      sortBy: { column: "created_at", order: "asc" },
+    });
+
+    if (error) {
+      console.warn("Storage cleanup pending: list error:", error.message);
+      return { cleanedCount: 0 };
+    }
+
+    if (!files || files.length === 0) {
+      return { cleanedCount: 0 };
+    }
+
+    const now = Date.now();
+    const staleFiles = files.filter((f) => {
+      if (!f.created_at) return false;
+      const age = now - new Date(f.created_at).getTime();
+      return age >= maxAgeMs;
+    });
+
+    if (staleFiles.length === 0) {
+      return { cleanedCount: 0 };
+    }
+
+    const toDelete = [];
+    for (const file of staleFiles) {
+      const pendingPath = `pending/${file.name}`;
+
+      const { data: userWithAvatar } = await supabase
+        .from("user_profiles")
+        .select("id")
+        .ilike("avatar_url", `%${pendingPath}%`)
+        .limit(1);
+
+      if (userWithAvatar && userWithAvatar.length > 0) {
+        continue;
+      }
+
+      const { data: devWithLogo } = await supabase
+        .from("developers")
+        .select("id")
+        .ilike("logo_url", `%${pendingPath}%`)
+        .limit(1);
+
+      if (devWithLogo && devWithLogo.length > 0) {
+        continue;
+      }
+
+      toDelete.push(pendingPath);
+    }
+
+    if (toDelete.length > 0) {
+      const { error: removeError } = await supabase.storage.from(AVATARS_BUCKET).remove(toDelete);
+      if (removeError) {
+        console.warn("Storage cleanup pending: remove error:", removeError.message);
+      } else {
+        return { cleanedCount: toDelete.length };
+      }
+    }
+
+    return { cleanedCount: 0 };
+  } catch (err) {
+    console.error("Storage cleanup pending: unhandled error:", err);
+    return { cleanedCount: 0 };
+  }
+};
+
+
+/**
  * Удаляет файл из Storage, если URL принадлежит нашему бакету.
  */
 export const removeImageFromStorage = async (imageUrl) => {
