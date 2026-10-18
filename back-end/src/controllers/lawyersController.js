@@ -22,11 +22,18 @@ export function toPublicLawyer(row) {
 // =======================================================
 export const getLawyers = async (req, res) => {
   try {
+    const { page = 1, limit = 100 } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
     const { data, error } = await supabase
       .from("lawyers")
       .select("*")
       .eq("is_active", true)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (error) {
       console.error("Get Lawyers Error:", error);

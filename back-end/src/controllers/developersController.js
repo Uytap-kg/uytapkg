@@ -51,13 +51,20 @@ async function attachProfileData(developers) {
 // =======================================================
 export const getDevelopers = async (req, res) => {
   try {
+    const { page = 1, limit = 100 } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
     const { data, error } = await supabase
       .from("developers")
       .select(`
         *,
         residential_complexes (*)
       `)
-      .order("company_name", { ascending: true });
+      .order("company_name", { ascending: true })
+      .range(from, to);
 
     if (error) {
       console.error("Get Developers Error:", error);

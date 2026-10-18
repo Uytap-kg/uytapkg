@@ -100,6 +100,7 @@ export const rateLimitVerify = rateLimit({
   max: 15,
   skipSuccessfulRequests: true, // Учитываем только неудачные попытки (статус >= 400)
   keyGenerator: verifyKeyGenerator,
+  validate: { xForwardedForHeader: false },
   message: {
     success: false,
     message: "Слишком много неудачных попыток ввода кода с вашего IP-адреса. Попробуйте снова через 15 минут.",
@@ -116,6 +117,7 @@ export const loginLimiter = rateLimit({
     // посторонний не может заблокировать вход жертве со своего IP.
     return `${ipKeyGenerator(req)}|${identifier}`;
   },
+  validate: { xForwardedForHeader: false },
   message: {
     success: false,
     message: "Слишком много попыток входа. Попробуйте снова через 15 минут.",
@@ -131,6 +133,7 @@ export const sendOtpLimiter = rateLimit({
     const phone = typeof req.body?.phone === "string" ? req.body.phone.replace(/\D/g, "") : "";
     return email || phone || ipKeyGenerator(req);
   },
+  validate: { xForwardedForHeader: false },
   message: {
     success: false,
     message: "Слишком много запросов на отправку кода. Подождите минуту.",
@@ -142,6 +145,7 @@ export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   keyGenerator: (req) => ipKeyGenerator(req),
+  validate: { xForwardedForHeader: false },
   message: {
     success: false,
     message: "Слишком много запросов. Попробуйте снова через 15 минут.",

@@ -35,6 +35,12 @@ async function resolveDeveloperLogos(complexes) {
 // =======================================================
 export const getComplexes = async (req, res) => {
   try {
+    const { page = 1, limit = 100 } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
     const { data: complexes, error } = await supabase
       .from("residential_complexes")
       .select(`
@@ -42,7 +48,8 @@ export const getComplexes = async (req, res) => {
         developers (id, user_id, company_name, logo_url, is_verified),
         complex_layouts (*)
       `)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (error) {
       return res.status(500).json({ success: false, message: "Ошибка загрузки жилых комплексов" });

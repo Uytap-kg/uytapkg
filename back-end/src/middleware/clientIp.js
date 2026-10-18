@@ -48,11 +48,13 @@ export function resolveClientIp(req, res, next) {
         clientIp = normCandidate;
       }
     }
-  } else {
-    // Прямой запрос или неверный секрет — удаляем потенциально поддельный заголовок
-    delete req.headers["x-forwarded-for"];
-    delete req.headers["x-real-ip"];
   }
+
+  // Удаляем заголовки прокси из req.headers, так как доверенный IP уже надёжно
+  // зафиксирован в req.ip и req.clientIp, предотвращая конфликты с express-rate-limit
+  delete req.headers["x-forwarded-for"];
+  delete req.headers["x-real-ip"];
+  delete req.headers["x-vercel-forwarded-for"];
 
   // Переопределяем req.ip, чтобы express-rate-limit и auth-лимитеры брали именно доверенный IP
   Object.defineProperty(req, "ip", {
