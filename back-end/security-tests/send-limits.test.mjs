@@ -78,12 +78,12 @@ test("Send Limits: Per-phone daily limit (max 10 in 24h) and cooldown (60s)", ()
   assert.equal(dailyCheck.reason, "phone_daily_limit");
 });
 
-test("Send Limits: IP limits (10/min, 60/hr) protect provider without blocking mobile operators", () => {
+test("Send Limits: IP limits (30/min, 120/hr) protect provider without blocking mobile operators", () => {
   phoneOtpStore.reset();
   const sharedCarrierIp = "192.0.2.55";
 
-  // Отправляем 10 SMS с одного IP за 1 минуту
-  for (let i = 0; i < 10; i++) {
+  // Отправляем 30 SMS с одного IP за 1 минуту
+  for (let i = 0; i < 30; i++) {
     const check = phoneOtpStore.checkSendLimits({
       phone: `9967000000${i.toString().padStart(2, "0")}`,
       ip: sharedCarrierIp,
@@ -96,7 +96,7 @@ test("Send Limits: IP limits (10/min, 60/hr) protect provider without blocking m
     });
   }
 
-  // 11-й запрос за минуту с этого же IP должен быть отклонен (защита от флуда/скриптов)
+  // 31-й запрос за минуту с этого же IP должен быть отклонен (защита от флуда/скриптов)
   const minuteFloodCheck = phoneOtpStore.checkSendLimits({
     phone: "996700000099",
     ip: sharedCarrierIp,
@@ -104,7 +104,7 @@ test("Send Limits: IP limits (10/min, 60/hr) protect provider without blocking m
   assert.equal(
     minuteFloodCheck.allowed,
     false,
-    "11th SMS from same IP in 1 minute must be blocked"
+    "31st SMS from same IP in 1 minute must be blocked"
   );
   assert.equal(minuteFloodCheck.reason, "ip_minute_limit");
 });

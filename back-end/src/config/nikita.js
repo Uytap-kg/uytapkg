@@ -38,15 +38,15 @@ export const nikitaConfig = {
     const val = Number(process.env.NIKITA_DAILY_LIMIT_PHONE);
     return Number.isFinite(val) && val > 0 ? val : 10;
   },
-  // Лимит отправок с одного IP в минуту (по умолчанию 10 для защиты от флуд-скриптов)
+  // Лимит отправок с одного IP в минуту (по умолчанию 30 для защиты от флуд-скриптов)
   get minuteLimitIp() {
     const val = Number(process.env.NIKITA_MINUTE_LIMIT_IP);
-    return Number.isFinite(val) && val > 0 ? val : 10;
+    return Number.isFinite(val) && val > 0 ? val : 30;
   },
-  // Лимит отправок с одного IP в час (по умолчанию 60 с учётом CGNAT мобильных операторов)
+  // Лимит отправок с одного IP в час (по умолчанию 120 с учётом CGNAT мобильных операторов)
   get hourlyLimitIp() {
     const val = Number(process.env.NIKITA_HOURLY_LIMIT_IP);
-    return Number.isFinite(val) && val > 0 ? val : 60;
+    return Number.isFinite(val) && val > 0 ? val : 120;
   },
   // Общий суточный потолок SMS на весь сервис (защита от разорения баланса провайдера, по умолчанию 500)
   get dailyServiceCeiling() {
