@@ -1205,6 +1205,12 @@ export const verifyOtp = async (req, res) => {
           .from("users")
           .update({ is_verified: true, updated_at: new Date().toISOString() })
           .eq("id", req.user.id);
+      } else if (rawPhone) {
+        const formattedPhone = rawPhone.startsWith("+") ? rawPhone : `+${rawPhone}`;
+        await supabase
+          .from("users")
+          .update({ is_verified: true, updated_at: new Date().toISOString() })
+          .eq("phone", formattedPhone);
       }
 
       return res.json({
@@ -1295,10 +1301,22 @@ export const verifyOtp = async (req, res) => {
       });
     }
 
-    const { data: user, error: userError } = await supabase
+    const targetUserId = req.user?.id;
+    let userQuery = supabase
       .from("users")
-      .update({ is_email_verified: true, updated_at: new Date().toISOString() })
-      .eq("email", email)
+      .update({
+        is_email_verified: true,
+        is_verified: true,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (targetUserId) {
+      userQuery = userQuery.eq("id", targetUserId);
+    } else {
+      userQuery = userQuery.eq("email", email);
+    }
+
+    const { data: user, error: userError } = await userQuery
       .select("id, account_type, email, phone, is_verified, token_version")
       .maybeSingle();
 

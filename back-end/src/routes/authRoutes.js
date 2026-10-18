@@ -18,7 +18,7 @@ import {
   submitVerificationRequest,
   uploadVerificationDocument,
 } from "../controllers/authController.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, optionalAuth } from "../middleware/auth.js";
 import { uploadAvatar, uploadVerificationDocument as uploadVerificationDocumentFile } from "../middleware/upload.js";
 
 const router = express.Router();
@@ -152,7 +152,7 @@ export const authLimiter = rateLimit({
 router.post("/register", authLimiter, register);
 router.post("/login", loginLimiter, login);
 router.post("/send-otp", sendOtpLimiter, sendOtp);
-router.post("/verify-otp", rateLimitVerify, verifyOtp);
+router.post("/verify-otp", rateLimitVerify, optionalAuth, verifyOtp);
 router.post("/forgot-password", sendOtpLimiter, forgotPassword);
 router.post("/verify-reset-code", rateLimitVerify, verifyResetCode);
 router.post("/reset-password", authLimiter, resetPassword);
