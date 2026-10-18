@@ -793,12 +793,18 @@ export function sanitizeAuthorPII(author) {
 export function getClientIp(req) {
   if (req?.clientIp) return req.clientIp;
   if (!req) return "unknown";
+  const forwarded = req.headers?.["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    const firstIp = forwarded.split(",")[0].trim();
+    if (firstIp) return firstIp;
+  }
   const realIp = req.headers?.["x-real-ip"];
   if (typeof realIp === "string" && realIp.trim()) {
     return realIp.trim();
   }
   return req.ip || req.socket?.remoteAddress || "unknown";
 }
+
 
 // Защита от спама просмотров: не чаще 1 инкремента с одного IP на объявление за 10 минут
 export const VIEW_THROTTLE_MS = 10 * 60 * 1000;
