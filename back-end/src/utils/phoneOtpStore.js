@@ -246,27 +246,14 @@ class PhoneOtpStore {
     record.attempts += 1;
     const maxAttempts = nikitaConfig.maxVerifyAttempts;
 
-    if (record.attempts >= maxAttempts) {
-      // При достижении 5-й попытки токен сгорает (удаляется из памяти)
-      const attempts = record.attempts;
-      const isExhausted = attempts > maxAttempts;
+    if (record.attempts > maxAttempts) {
+      // Превышен лимит попыток: инвалидируем токен навсегда
       this.invalidateToken(token);
-
-      if (isExhausted) {
-        return {
-          allowed: false,
-          attempts,
-          attemptsLeft: 0,
-          exhausted: true,
-        };
-      }
-
-      // Ровно 5-я попытка (последняя разрешенная)
       return {
-        allowed: true,
-        attempts: 5,
+        allowed: false,
+        attempts: record.attempts,
         attemptsLeft: 0,
-        exhausted: false,
+        exhausted: true,
       };
     }
 

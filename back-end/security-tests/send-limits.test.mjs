@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { BASE_URL } from "./helpers.mjs";
-import { normalizeNikitaPhone } from "../src/services/nikitaService.js";
+import nikitaService, { normalizeNikitaPhone } from "../src/services/nikitaService.js";
 import { phoneOtpStore } from "../src/utils/phoneOtpStore.js";
 
-test("Send Limits: normalizeNikitaPhone strictly allows only Kyrgyz numbers (+996)", () => {
+process.env.NIKITA_API_KEY = process.env.NIKITA_API_KEY || "test_nikita_key";
+
+test("Send Limits: nikitaService strictly allows only Kyrgyz numbers (+996) before calling gateway", async () => {
   // Номера других стран (США, РФ, Великобритания) должны отклоняться ДО вызова провайдера
   const foreignNumbers = [
     "+14155552671", // США
@@ -15,12 +17,13 @@ test("Send Limits: normalizeNikitaPhone strictly allows only Kyrgyz numbers (+99
   ];
 
   for (const num of foreignNumbers) {
-    const res = normalizeNikitaPhone(num);
+    const res = await nikitaService.sendOtp({ phone: num, ip: "127.0.0.1" });
     assert.equal(
-      res.valid,
+      res.success,
       false,
       `Foreign number ${num} must be rejected before reaching SMS gateway`
     );
+    assert.match(res.message, /Кыргызстан/i);
   }
 
   // Корректные форматы Кыргызстана должны успешно проходить валидацию

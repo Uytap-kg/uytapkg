@@ -72,12 +72,21 @@ export function normalizeNikitaPhone(rawPhone) {
     cleaned = "996" + cleaned;
   }
 
-  // Строгая защита баланса провайдера: разрешены ИСКЛЮЧИТЕЛЬНО номера Кыргызстана (+996, ровно 12 цифр)
-  if (!cleaned.startsWith("996") || cleaned.length !== 12) {
+  // Международный номер: от 10 до 15 цифр без плюса
+  if (!/^\d{10,15}$/.test(cleaned)) {
     return {
       valid: false,
       phone: cleaned,
-      error: "Разрешены только номера Кыргызстана (+996)",
+      error: "Некорректный номер телефона",
+    };
+  }
+
+  // Для номеров Кыргызстана (префикс 996) строго 12 цифр
+  if (cleaned.startsWith("996") && cleaned.length !== 12) {
+    return {
+      valid: false,
+      phone: cleaned,
+      error: "Некорректный номер телефона Кыргызстана (должно быть 9 цифр после 996)",
     };
   }
 
@@ -148,6 +157,16 @@ export async function sendOtp({ phone, ip }) {
     };
   }
   const cleanPhone = normalized.phone;
+
+  // 2.1 Строгая проверка: для отправки SMS разрешены ИСКЛЮЧИТЕЛЬНО номера Кыргызстана (+996)
+  // Защита баланса провайдера ДО обращения к внешнему шлюзу
+  if (!cleanPhone.startsWith("996") || cleanPhone.length !== 12) {
+    return {
+      success: false,
+      status: NIKITA_STATUS.INVALID_PHONE,
+      message: "Разрешены только номера Кыргызстана (+996)",
+    };
+  }
 
   // 3. Защита от злоупотреблений и rate limit (кулдаун и лимиты в час)
   const limitCheck = phoneOtpStore.checkSendLimits({ phone: cleanPhone, ip });
