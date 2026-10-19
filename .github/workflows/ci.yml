@@ -197,3 +197,84 @@ jobs:
           ignore-unfixed: true
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
+
+  test-db-migrations:
+    name: Clean DB Migrations Verification
+    needs: lint-and-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: test_uytap
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.1.0
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Cache backend dependencies
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-backend-npm-${{ hashFiles('back-end/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-backend-npm-
+
+      - name: Install backend dependencies
+        working-directory: back-end
+        run: npm ci
+
+      - name: Run migrations on clean database
+        working-directory: back-end
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_uytap
+          NODE_ENV: test
+        run: npm run migrate
+
+      - name: Verify migration idempotency (run second time)
+        working-directory: back-end
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_uytap
+          NODE_ENV: test
+        run: npm run migrate
+
+  deploy-to-render:
+    name: Trigger Render Production Deploy
+    needs: [lint-and-audit, backend-tests, test-db-migrations, build-frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Trigger Backend Deploy Hook
+        if: env.RENDER_BACKEND_DEPLOY_HOOK != ''
+        env:
+          RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+        run: |
+          echo "Triggering backend deploy hook..."
+          curl -fsS -X POST "$RENDER_BACKEND_DEPLOY_HOOK"
+
+      - name: Trigger Frontend Deploy Hook
+        if: env.RENDER_FRONTEND_DEPLOY_HOOK != ''
+        env:
+          RENDER_FRONTEND_DEPLOY_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
+        run: |
+          echo "Triggering frontend deploy hook..."
+          curl -fsS -X POST "$RENDER_FRONTEND_DEPLOY_HOOK"
+

@@ -1,0 +1,13 @@
+# CODEOWNERS for UyTap Production Repository
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repository
+* @<GITHUB_TEAM_OR_TECHLEAD>
+
+# Database migrations require techlead or DBA approval
+/supabase/migrations/ @<GITHUB_DBA_OR_TECHLEAD>
+/back-end/scripts/migrate.js @<GITHUB_DBA_OR_TECHLEAD>
+
+# Security-critical configurations
+/render.yaml @<GITHUB_DEVOPS_OR_TECHLEAD>
+/.github/workflows/ @<GITHUB_DEVOPS_OR_TECHLEAD>
