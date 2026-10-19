@@ -9,6 +9,7 @@ import Footer from "@/components/pageComponents/footer/Footer";
 
 export default function PrivacyPolicyPage() {
   useDocumentTitle("Политика конфиденциальности и защиты данных | UyTap");
+
   return (
     <main className={styles.page}>
       <div className={styles.container}>
@@ -169,12 +170,27 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section>
-              <h2>10. Контакты</h2>
+              <h2>10. Оператор персональных данных и контакты</h2>
 
               <p>
-                Если у вас есть вопросы относительно обработки персональных
-                данных, вы можете обратиться в службу поддержки UyTap через
-                доступные на платформе контактные данные.
+                Оператором платформы UyTap является ИП Жолдошбекова Ж.С.
+              </p>
+
+              <p>
+                По вопросам обработки, изменения и удаления персональных данных,
+                а также реализации прав пользователя можно обратиться по
+                следующим контактам:
+              </p>
+
+              <p>
+                Электронная почта:{" "}
+                <a href="mailto:uytap.official@gmail.com">
+                  uytap.official@gmail.com
+                </a>
+              </p>
+
+              <p>
+                Телефон: <a href="tel:+996553554541">0553 55 45 41</a>
               </p>
             </section>
 
@@ -184,6 +200,7 @@ export default function PrivacyPolicyPage() {
           </div>
         </article>
       </div>
+
       <Footer />
     </main>
   );
