@@ -9,6 +9,7 @@ import Footer from "@/components/pageComponents/footer/Footer";
 
 export default function TermsPage() {
   useDocumentTitle("Условия использования сервиса и правила платформы | UyTap");
+
   return (
     <main className={styles.page}>
       <div className={styles.container}>
@@ -184,12 +185,28 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2>12. Контакты</h2>
+              <h2>12. Информация об операторе платформы и контакты</h2>
 
               <p>
-                По вопросам работы платформы и настоящего соглашения
-                пользователь может обратиться в службу поддержки UyTap через
-                доступные контактные данные.
+                Платформа UyTap предоставляется ИП
+                Жолдошбековой Ж.С.
+              </p>
+
+              <p>
+                По вопросам использования платформы, размещения объявлений и
+                исполнения настоящего Пользовательского соглашения можно
+                обратиться к администрации UyTap:
+              </p>
+
+              <p>
+                Электронная почта:{" "}
+                <a href="mailto:uytap.official@gmail.com">
+                  uytap.official@gmail.com
+                </a>
+              </p>
+
+              <p>
+                Телефон: <a href="tel:+996553554541">0553 55 45 41</a>
               </p>
             </section>
 
@@ -199,6 +216,7 @@ export default function TermsPage() {
           </div>
         </article>
       </div>
+
       <Footer />
     </main>
   );
