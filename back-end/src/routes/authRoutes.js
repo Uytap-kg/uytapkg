@@ -18,7 +18,7 @@ import {
   submitVerificationRequest,
   uploadVerificationDocument,
 } from "../controllers/authController.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, optionalAuth } from "../middleware/auth.js";
 import { uploadAvatar, uploadVerificationDocument as uploadVerificationDocumentFile } from "../middleware/upload.js";
 
 const router = express.Router();
@@ -81,22 +81,29 @@ export const ipKeyGenerator = (req) => {
 // Раздельные лимитеры для разных операций
 // =======================================================
 
+// Функция генерации составного ключа лимитера проверки кодов.
+// Защита от DoS: используем составной ключ «IP + номер/email».
+// Это троттлит частоту подбора с конкретного IP злоумышленника, но НЕ
+// блокирует возможность подтверждения для законного владельца с другого IP/устройства.
+export const verifyKeyGenerator = (req) => {
+  const email = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
+  const phone = typeof req.body?.phone === "string" ? req.body.phone.replace(/\D/g, "") : "";
+  const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
+  const target = email || phone || token || "any";
+  return `${ipKeyGenerator(req)}|${target}`;
+};
+
 // 1. Лимитер проверки кодов (/verify-otp, /verify-reset-code):
-// Ограничение не только по IP, но и по email (ключ req.body.email || req.ip):
-// максимум 10 неудачных попыток в час на email.
+// Ограничение по составному ключу «IP + цель»: максимум 15 неудачных попыток за 15 минут
 export const rateLimitVerify = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 час
-  max: 10,
+  windowMs: 15 * 60 * 1000, // 15 минут
+  max: 15,
   skipSuccessfulRequests: true, // Учитываем только неудачные попытки (статус >= 400)
-  keyGenerator: (req) => {
-    const email = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
-    const phone = typeof req.body?.phone === "string" ? req.body.phone.replace(/\D/g, "") : "";
-    const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
-    return email || phone || token || ipKeyGenerator(req);
-  },
+  keyGenerator: verifyKeyGenerator,
+  validate: { xForwardedForHeader: false },
   message: {
     success: false,
-    message: "Слишком много неудачных попыток ввода кода. Попробуйте снова через час.",
+    message: "Слишком много неудачных попыток ввода кода с вашего IP-адреса. Попробуйте снова через 15 минут.",
   },
 });
 
@@ -110,6 +117,7 @@ export const loginLimiter = rateLimit({
     // посторонний не может заблокировать вход жертве со своего IP.
     return `${ipKeyGenerator(req)}|${identifier}`;
   },
+  validate: { xForwardedForHeader: false },
   message: {
     success: false,
     message: "Слишком много попыток входа. Попробуйте снова через 15 минут.",
@@ -125,6 +133,7 @@ export const sendOtpLimiter = rateLimit({
     const phone = typeof req.body?.phone === "string" ? req.body.phone.replace(/\D/g, "") : "";
     return email || phone || ipKeyGenerator(req);
   },
+  validate: { xForwardedForHeader: false },
   message: {
     success: false,
     message: "Слишком много запросов на отправку кода. Подождите минуту.",
@@ -136,6 +145,7 @@ export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   keyGenerator: (req) => ipKeyGenerator(req),
+  validate: { xForwardedForHeader: false },
   message: {
     success: false,
     message: "Слишком много запросов. Попробуйте снова через 15 минут.",
@@ -145,8 +155,8 @@ export const authLimiter = rateLimit({
 // Публичные эндпоинты
 router.post("/register", authLimiter, register);
 router.post("/login", loginLimiter, login);
-router.post("/send-otp", sendOtpLimiter, sendOtp);
-router.post("/verify-otp", rateLimitVerify, verifyOtp);
+router.post("/send-otp", sendOtpLimiter, optionalAuth, sendOtp);
+router.post("/verify-otp", rateLimitVerify, optionalAuth, verifyOtp);
 router.post("/forgot-password", sendOtpLimiter, forgotPassword);
 router.post("/verify-reset-code", rateLimitVerify, verifyResetCode);
 router.post("/reset-password", authLimiter, resetPassword);

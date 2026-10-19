@@ -81,6 +81,8 @@ const OTP_TTL_MS = 10 * 60 * 1000; // срок жизни кода — 10 мин
 const OTP_MAX_ATTEMPTS = 5; // неверных попыток на один код
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // не чаще 1 отправки в 60 секунд
 const OTP_HOURLY_LIMIT = 5; // не более 5 кодов в час на email
+const OTP_DAILY_LIMIT = 10; // не более 10 кодов в 24 часа на email
+export const UNVERIFIED_PHONE_RESERVATION_TTL_MS = 10 * 60 * 1000; // срок удержания неподтверждённого номера — 10 минут
 
 /**
  * Хэширование одноразового OTP-кода (HMAC-SHA256).
@@ -97,9 +99,26 @@ export function hashOtpCode(code) {
 // Защита от параллельных запросов на один email внутри процесса
 const otpInFlight = new Set();
 
-// Проверка кулдауна и часового лимита отправки кодов для email.
+// Проверка кулдауна, часового и суточного лимитов отправки кодов для email.
 // Возвращает { message } при превышении, иначе null.
 async function checkOtpSendLimits(email, type = "registration") {
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  let dailyQuery = supabase
+    .from("email_verifications")
+    .select("id", { count: "exact", head: true })
+    .eq("email", email)
+    .gte("created_at", dayAgo);
+
+  if (type) {
+    dailyQuery = dailyQuery.eq("type", type);
+  }
+
+  const { count: dailyCount, error: dailyErr } = await dailyQuery;
+  if (dailyErr) throw dailyErr;
+  if (typeof dailyCount === "number" && dailyCount >= OTP_DAILY_LIMIT) {
+    return { message: "Превышен суточный лимит запроса кодов на этот email. Попробуйте завтра." };
+  }
+
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   let query = supabase
     .from("email_verifications")
@@ -316,7 +335,7 @@ export const register = async (req, res) => {
 
     const { data: existingByPhone, error: phoneCheckError } = await supabase
       .from("users")
-      .select("id")
+      .select("id, is_verified, is_email_verified, token_version, created_at")
       .eq("phone", formattedPhone)
       .maybeSingle();
 
@@ -325,10 +344,73 @@ export const register = async (req, res) => {
     }
 
     if (existingByPhone && existingByPhone.id !== existingByEmail?.id) {
-      return res.status(409).json({
-        success: false,
-        message: "Пользователь с таким номером телефона уже существует",
-      });
+      // 1. Неподтверждённый email и телефон
+      const isVerified = existingByPhone.is_verified || existingByPhone.is_email_verified;
+      if (isVerified) {
+        return res.status(409).json({
+          success: false,
+          message: "Пользователь с таким номером телефона уже существует",
+        });
+      }
+
+      // 2. Срок резервирования
+      const reservationAgeMs = Date.now() - new Date(existingByPhone.created_at).getTime();
+      if (reservationAgeMs < UNVERIFIED_PHONE_RESERVATION_TTL_MS) {
+        return res.status(409).json({
+          success: false,
+          message: "Этот номер телефона недавно зарезервирован. Завершите подтверждение или попробуйте позже",
+        });
+      }
+
+      // 3. 0 логинов (token_version === 0)
+      if ((existingByPhone.token_version || 0) > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Пользователь с таким номером телефона уже существует",
+        });
+      }
+
+      // 4. 0 объявлений
+      const { count: listingsCount } = await supabase
+        .from("listings")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", existingByPhone.id);
+
+      if (listingsCount && listingsCount > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Пользователь с таким номером телефона уже существует",
+        });
+      }
+
+      // 5. 0 платежей
+      const { count: paymentsCount } = await supabase
+        .from("payments")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", existingByPhone.id);
+
+      if (paymentsCount && paymentsCount > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Пользователь с таким номером телефона уже существует",
+        });
+      }
+
+      // 6. 0 профилей
+      const { count: profilesCount } = await supabase
+        .from("user_profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", existingByPhone.id);
+
+      if (profilesCount && profilesCount > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Пользователь с таким номером телефона уже существует",
+        });
+      }
+
+      // Все строгие условия соблюдены: брошенная регистрация освобождает номер
+      await supabase.from("users").delete().eq("id", existingByPhone.id);
     }
 
     // 2. Хэширование пароля
@@ -526,6 +608,7 @@ export const login = async (req, res) => {
         email: user.email,
         phone: user.phone,
         isVerified: user.is_verified,
+        isEmailVerified: user.is_email_verified,
         profile: profile || {},
       },
     });
@@ -566,7 +649,7 @@ export const getMe = async (req, res) => {
 
     const { data: user, error: userError } = await supabase
       .from("users")
-      .select("id, account_type, email, phone, show_phone, is_verified, role, created_at")
+      .select("id, account_type, email, phone, show_phone, is_verified, is_email_verified, role, created_at")
       .eq("id", userId)
       .single();
 
@@ -592,6 +675,7 @@ export const getMe = async (req, res) => {
         phone: user.phone,
         showPhone: Boolean(user.show_phone),
         isVerified: user.is_verified,
+        isEmailVerified: user.is_email_verified,
         role: user.role || "user",
         profile: formatProfileWithMetadata(profile),
       },
@@ -723,7 +807,10 @@ export const updateMe = async (req, res) => {
           message: "Пользователь с таким номером телефона уже существует",
         });
       }
-      userUpdates.phone = formattedPhone;
+      if (formattedPhone !== currentUser.phone) {
+        userUpdates.phone = formattedPhone;
+        userUpdates.is_verified = false;
+      }
     }
 
     const targetShowPhone = data.showPhone !== undefined ? data.showPhone : data.show_phone;
@@ -897,7 +984,7 @@ export const updateMe = async (req, res) => {
 
     const { data: updatedUser, error: fetchUserError } = await supabase
       .from("users")
-      .select("id, account_type, email, phone, is_verified, created_at")
+      .select("id, account_type, email, phone, is_verified, is_email_verified, created_at")
       .eq("id", userId)
       .single();
 
@@ -923,6 +1010,7 @@ export const updateMe = async (req, res) => {
         email: updatedUser.email,
         phone: updatedUser.phone,
         isVerified: updatedUser.is_verified,
+        isEmailVerified: updatedUser.is_email_verified,
         profile: formatProfileWithMetadata(profile),
       },
     });
@@ -1095,8 +1183,25 @@ export const sendOtp = async (req, res) => {
 
     // 1. Отправка SMS OTP через Nikita
     if (rawPhone) {
+      const formattedPhone = normalizePhone(rawPhone);
+      if (req.user?.id) {
+        const { data: phoneConflict } = await supabase
+          .from("users")
+          .select("id")
+          .eq("phone", formattedPhone)
+          .neq("id", req.user.id)
+          .maybeSingle();
+
+        if (phoneConflict) {
+          return res.status(400).json({
+            success: false,
+            message: "Этот номер телефона уже привязан к другому аккаунту",
+          });
+        }
+      }
+
       const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "127.0.0.1";
-      const result = await nikitaService.sendOtp({ phone: rawPhone, ip: clientIp });
+      const result = await nikitaService.sendOtp({ phone: formattedPhone, ip: clientIp });
 
       if (!result.success) {
         const httpStatus = result.rateLimited ? 429 : (result.status === 7 ? 400 : 400);
@@ -1183,10 +1288,42 @@ export const verifyOtp = async (req, res) => {
 
       // Если пользователь авторизован, подтверждаем телефон в профиле
       if (req.user?.id) {
+        const targetPhone = rawPhone ? normalizePhone(rawPhone) : null;
+        if (targetPhone) {
+          const { data: conflict } = await supabase
+            .from("users")
+            .select("id")
+            .eq("phone", targetPhone)
+            .neq("id", req.user.id)
+            .maybeSingle();
+
+          if (conflict) {
+            return res.status(400).json({
+              success: false,
+              message: "Этот номер телефона уже привязан к другому аккаунту",
+            });
+          }
+
+          await supabase
+            .from("users")
+            .update({
+              phone: targetPhone,
+              is_verified: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", req.user.id);
+        } else {
+          await supabase
+            .from("users")
+            .update({ is_verified: true, updated_at: new Date().toISOString() })
+            .eq("id", req.user.id);
+        }
+      } else if (rawPhone) {
+        const formattedPhone = normalizePhone(rawPhone);
         await supabase
           .from("users")
           .update({ is_verified: true, updated_at: new Date().toISOString() })
-          .eq("id", req.user.id);
+          .eq("phone", formattedPhone);
       }
 
       return res.json({
@@ -1277,11 +1414,22 @@ export const verifyOtp = async (req, res) => {
       });
     }
 
-    const { data: user, error: userError } = await supabase
+    const targetUserId = req.user?.id;
+    let userQuery = supabase
       .from("users")
-      .update({ is_email_verified: true, updated_at: new Date().toISOString() })
-      .eq("email", email)
-      .select("id, account_type, email, phone, is_verified, token_version")
+      .update({
+        is_email_verified: true,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (targetUserId) {
+      userQuery = userQuery.eq("id", targetUserId);
+    } else {
+      userQuery = userQuery.eq("email", email);
+    }
+
+    const { data: user, error: userError } = await userQuery
+      .select("id, account_type, email, phone, is_verified, is_email_verified, token_version")
       .maybeSingle();
 
     if (userError || !user) {
@@ -1315,6 +1463,7 @@ export const verifyOtp = async (req, res) => {
         email: user.email,
         phone: user.phone,
         isVerified: user.is_verified,
+        isEmailVerified: user.is_email_verified,
         profile: profile || {},
       },
     });

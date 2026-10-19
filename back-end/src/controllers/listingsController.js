@@ -791,6 +791,7 @@ export function sanitizeAuthorPII(author) {
 
 // Извлечение реального IP клиента с учётом заголовков прокси
 export function getClientIp(req) {
+  if (req?.clientIp) return req.clientIp;
   if (!req) return "unknown";
   const forwarded = req.headers?.["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded.trim()) {
@@ -803,6 +804,7 @@ export function getClientIp(req) {
   }
   return req.ip || req.socket?.remoteAddress || "unknown";
 }
+
 
 // Защита от спама просмотров: не чаще 1 инкремента с одного IP на объявление за 10 минут
 export const VIEW_THROTTLE_MS = 10 * 60 * 1000;
@@ -1359,8 +1361,10 @@ export const getMyListings = async (req, res) => {
       query = query.eq("status", status);
     }
 
-    const from = (Number(page) - 1) * Number(limit);
-    const to = from + Number(limit) - 1;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
 
     query = query
       .order("created_at", { ascending: false })
@@ -1434,8 +1438,8 @@ export const getMyListings = async (req, res) => {
       data: listingsWithFavorites,
       pagination: {
         total: count || (listings ? listings.length : 0),
-        page: Number(page),
-        limit: Number(limit),
+        page: pageNum,
+        limit: limitNum,
       },
     });
   } catch (error) {

@@ -152,13 +152,22 @@ export async function sendOtpEmail(toEmail, code, type = "registration") {
     }
   }
 
-  // 3. Dev Fallback (для локальной разработки или если ключи не заданы в .env)
-  console.log(`\n======================================================`);
-  console.log(` [DEV EMAIL OTP] [${type.toUpperCase()}]`);
-  console.log(` Получатель: ${toEmail}`);
-  console.log(` Код:        ${code}`);
-  console.log(` (Письмо не отправлено в сеть, т.к. не заданы RESEND_API_KEY или SMTP_*)`);
-  console.log(`======================================================\n`);
-  return { provider: "dev_console", dev: true };
+  // 3. Dev Fallback (для локальной разработки или тестовой среды)
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`\n======================================================`);
+    console.log(` [DEV EMAIL OTP] [${type.toUpperCase()}]`);
+    console.log(` Получатель: ${toEmail}`);
+    console.log(` Код:        ${code}`);
+    console.log(` (Письмо не отправлено в сеть, т.к. не заданы RESEND_API_KEY или SMTP_*)`);
+    console.log(`======================================================\n`);
+    return { provider: "dev_console", dev: true };
+  }
+
+  // В production окружении логировать коды в консоль категорически запрещено,
+  // а отправка без реального почтового шлюза недопустима.
+  console.error(
+    `[EmailService] Критическая ошибка конфигурации: почтовый шлюз (Resend или SMTP) не настроен в production окружении`
+  );
+  throw new Error("Сервис отправки email не настроен: почтовый провайдер недоступен");
 }
 

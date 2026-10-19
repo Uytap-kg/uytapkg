@@ -409,8 +409,13 @@ export async function createListing(token, payload) {
 }
 
 // 5. Жилые комплексы
-export async function getComplexes() {
-  const response = await fetch(`${API_URL}/complexes`);
+export async function getComplexes({ page, limit } = {}) {
+  const params = new URLSearchParams();
+  if (page) params.set("page", page);
+  if (limit) params.set("limit", limit);
+  const qs = params.toString();
+  const url = `${API_URL}/complexes${qs ? `?${qs}` : ""}`;
+  const response = await fetch(url);
   return response.json();
 }
 
@@ -620,8 +625,13 @@ export async function getComplexListings(id) {
   return response.json();
 }
 
-export async function getDevelopers() {
-  const response = await fetch(`${API_URL}/developers`);
+export async function getDevelopers({ page, limit } = {}) {
+  const params = new URLSearchParams();
+  if (page) params.set("page", page);
+  if (limit) params.set("limit", limit);
+  const qs = params.toString();
+  const url = `${API_URL}/developers${qs ? `?${qs}` : ""}`;
+  const response = await fetch(url);
   return response.json();
 }
 
@@ -1078,8 +1088,13 @@ export async function toggleIndividualTariff(token, id) {
 // 12. Юристы
 
 // Публичный список — только активные (страница /lawyers)
-export async function getLawyers() {
-  const response = await fetch(`${API_URL}/lawyers`);
+export async function getLawyers({ page, limit } = {}) {
+  const params = new URLSearchParams();
+  if (page) params.set("page", page);
+  if (limit) params.set("limit", limit);
+  const qs = params.toString();
+  const url = `${API_URL}/lawyers${qs ? `?${qs}` : ""}`;
+  const response = await fetch(url);
   return response.json();
 }
 
