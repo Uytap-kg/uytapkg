@@ -31,11 +31,14 @@ export async function POST(request) {
       );
     }
 
+    const incomingLanguage = incomingForm.get("language");
+    const languageCode = incomingLanguage === "rus" ? "rus" : "kir";
+
     const form = new FormData();
 
     form.append("file", audio, audio.name || "speech.webm");
     form.append("model_id", "scribe_v2");
-    form.append("language_code", "kir");
+    form.append("language_code", languageCode);
 
     const upstream = await fetch(
       "https://api.elevenlabs.io/v1/speech-to-text",

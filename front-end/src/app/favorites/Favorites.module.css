@@ -1169,7 +1169,7 @@
 
 @media (max-width: 1200px) {
   .page {
-    padding-top: 48px;
+    padding-top: 100px;
   }
 
   .grid {
@@ -1187,7 +1187,7 @@
 
 @media (max-width: 900px) {
   .page {
-    padding-top: 36px;
+    padding-top: 90px;
     padding-bottom: 60px;
   }
 
@@ -1221,7 +1221,7 @@
 
 @media (max-width: 700px) {
   .page {
-    padding: 26px 16px 50px;
+    padding: 86px 16px 50px;
   }
 
   .header {
@@ -1534,7 +1534,7 @@
 
 @media (max-width: 380px) {
   .page {
-    padding: 20px 10px 44px;
+    padding: 80px 10px 44px;
   }
 
   .titleRow {

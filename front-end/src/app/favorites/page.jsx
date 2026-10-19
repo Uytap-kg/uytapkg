@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, Search, House, GitCompare, Check } from "lucide-react";
+import { Heart, Search, GitCompare, Check } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getFavorites, removeFavorite as removeFavoriteApi } from "@/utils/api";

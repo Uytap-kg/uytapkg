@@ -982,7 +982,7 @@
 
 @media (max-width: 1200px) {
   .page {
-    padding: 80px 50px;
+    padding: 95px 50px;
   }
 
   .profileCard {
@@ -1011,7 +1011,7 @@
 
 @media (max-width: 950px) {
   .page {
-    padding: 65px 32px;
+    padding: 90px 32px;
   }
 
   .profileCard {
@@ -1105,7 +1105,7 @@
 
 @media (max-width: 650px) {
   .page {
-    padding: 20px 10px 45px;
+    padding: 86px 10px 45px;
   }
 
   .topBar {
@@ -1289,7 +1289,7 @@
 
 @media (max-width: 430px) {
   .page {
-    padding: 16px 7px 40px;
+    padding: 80px 7px 40px;
   }
 
   .profileCard {
@@ -1425,7 +1425,7 @@
 
 @media (max-width: 360px) {
   .page {
-    padding: 13px 5px 36px;
+    padding: 78px 5px 36px;
   }
 
   .homeButton {

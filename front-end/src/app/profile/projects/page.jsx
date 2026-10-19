@@ -15,7 +15,6 @@ import {
   TrendingUp,
   X,
   Save,
-  UserRoundArrowLeft,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";

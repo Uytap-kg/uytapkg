@@ -11,7 +11,6 @@ import {
   AlertCircle,
   Home,
   Layers3,
-  UserRoundArrowLeft,
   Rocket,
   RotateCw,
   Crown,

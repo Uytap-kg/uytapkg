@@ -13,7 +13,6 @@ import {
   Home,
   CreditCard,
   LogOut,
-  ArrowLeft,
 } from "lucide-react";
 
 import styles from "./PersonalProfile.module.css";

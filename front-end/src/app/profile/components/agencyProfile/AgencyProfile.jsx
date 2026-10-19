@@ -13,7 +13,6 @@ import {
   Home,
   CreditCard,
   LogOut,
-  ArrowLeft,
   Mail,
   MapPin,
   Globe,

@@ -1715,7 +1715,7 @@
 
 @media (max-width: 1200px) {
   .page {
-    padding: 80px 50px;
+    padding: 95px 50px;
   }
 
   .profileCard {
@@ -1737,7 +1737,7 @@
 
 @media (max-width: 950px) {
   .page {
-    padding: 65px 32px;
+    padding: 90px 32px;
   }
 
   .profileCard {
@@ -1817,7 +1817,7 @@
 
 @media (max-width: 700px) {
   .page {
-    padding: 24px 12px 50px;
+    padding: 86px 12px 50px;
   }
 
   .profileCard {
@@ -2082,7 +2082,7 @@
 
 @media (max-width: 480px) {
   .page {
-    padding: 18px 8px 42px;
+    padding: 80px 8px 42px;
   }
 
   .profileCard {
@@ -2265,7 +2265,7 @@
 
 @media (max-width: 380px) {
   .page {
-    padding: 14px 6px 38px;
+    padding: 78px 6px 38px;
   }
 
   .profileCard {
