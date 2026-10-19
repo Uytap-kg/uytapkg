@@ -26,6 +26,7 @@ import AgencyEditModal from "./agencyEdit/AgencyEditModal";
 
 import { useLanguage } from "@/context/LanguageContext";
 import { logout as authLogout } from "@/utils/auth";
+import Header from "@/components/pageComponents/header/Header";
 
 export default function AgencyProfile({
   user,
@@ -69,16 +70,7 @@ export default function AgencyProfile({
 
   return (
     <main className={styles.page}>
-      {/* TOP BAR */}
-
-      <div className={styles.topBar}>
-        <Link href="/" className={styles.homeButton}>
-          <ArrowLeft />
-          {t("agencyProfile.topBar.home")}
-        </Link>
-      </div>
-
-      {/* MAIN PROFILE */}
+      <Header />
 
       <motion.section
         className={styles.profileCard}

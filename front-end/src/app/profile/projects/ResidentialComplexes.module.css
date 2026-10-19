@@ -11,18 +11,21 @@
 
   padding: 50px;
 
-  background:
-    radial-gradient(circle at 8% 0%, rgba(72, 61, 246, 0.09), transparent 28%),
-    radial-gradient(
-      circle at 92% 15%,
-      rgba(72, 61, 246, 0.055),
-      transparent 25%
-    ),
-    #f7f8fc;
+  background: linear-gradient(
+    to bottom,
+    #1403d4bc 0%,
+    #6d61d6a1 5%,
+    #9289f049 10%,
+    #d8d4fa 18%,
+    #f4f2ff 30%,
+    #fff 58%,
+    #fff 100%
+  );
 
   color: #171923;
 
   box-sizing: border-box;
+  padding-top: 120px;
 
   overflow-x: clip;
 }
@@ -1768,7 +1771,7 @@
     width: 100%;
 
     height: 52px;
-padding: 10px;
+    padding: 10px;
   }
 
   .statusSelect {

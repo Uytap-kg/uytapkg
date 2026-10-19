@@ -30,6 +30,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import styles from "./ResidentialComplexes.module.css";
 import DeleteModal from "@/components/ui/deleteModal/DeleteMidal";
 import CustomSelect from "@/components/ui/customSelect/CustomSelect";
+import Header from "@/components/pageComponents/header/Header";
 
 const statusValues = ["Проект", "Строительство", "Сдан"];
 
@@ -399,24 +400,11 @@ export default function ResidentialComplexes() {
 
   return (
     <main className={styles.page}>
+      <Header />
       <div className={styles.container}>
-        {/* =========================================================
-            HEADER
-        ========================================================= */}
-
         <header className={styles.header}>
           <div className={styles.headerText}>
             <div className={styles.btns}>
-              <button
-                type="button"
-                className={styles.homeButton}
-                onClick={() => router.push("/profile")}
-              >
-                <UserRoundArrowLeft size={18} />
-
-                {t("residentialComplexes.header.profile")}
-              </button>
-
               <span className={styles.eyebrow}>
                 <Building2 />
 

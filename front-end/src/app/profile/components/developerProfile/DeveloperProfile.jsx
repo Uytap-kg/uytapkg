@@ -33,6 +33,7 @@ import styles from "./DeveloperProfile.module.css";
 
 import DeveloperEditModal from "./developerEdit/DeveloperEditModal";
 import { useLanguage } from "@/context/LanguageContext";
+import Header from "@/components/pageComponents/header/Header";
 
 export default function DeveloperProfile({ user, adsCount = 0 }) {
   const router = useRouter();
@@ -189,6 +190,7 @@ export default function DeveloperProfile({ user, adsCount = 0 }) {
   return (
     <main className={styles.page}>
       {/* PROFILE */}
+      <Header />
 
       <section className={styles.profileCard}>
         <div className={styles.glow} />

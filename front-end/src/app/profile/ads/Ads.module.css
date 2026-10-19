@@ -12,16 +12,19 @@
   box-sizing: border-box;
   overflow-x: hidden;
 
-  background:
-    radial-gradient(circle at 8% 0%, rgba(72, 61, 246, 0.08), transparent 28%),
-    radial-gradient(
-      circle at 95% 35%,
-      rgba(72, 61, 246, 0.045),
-      transparent 25%
-    ),
-    #f7f8fc;
+  background: linear-gradient(
+    to bottom,
+    #1403d4bc 0%,
+    #6d61d6a1 5%,
+    #9289f049 10%,
+    #d8d4fa 18%,
+    #f4f2ff 30%,
+    #fff 58%,
+    #fff 100%
+  );
 
   color: #171923;
+  padding-top: 120px;
 }
 
 .page *,
@@ -2348,7 +2351,7 @@
   }
 
   .detailsButton {
-    font-size: 10px !important; 
+    font-size: 10px !important;
   }
 
   .iconButton svg {

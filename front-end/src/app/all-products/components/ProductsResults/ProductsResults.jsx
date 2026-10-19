@@ -31,7 +31,8 @@ export default function ProductsResults({
   const { t } = useLanguage();
 
   const safeListings = Array.isArray(listings) ? listings : [];
-  const displayCount = total !== undefined && total !== null ? total : safeListings.length;
+  const displayCount =
+    total !== undefined && total !== null ? total : safeListings.length;
 
   return (
     <>
@@ -50,9 +51,6 @@ export default function ProductsResults({
 
         {searchQuery && (
           <div className={styles.activeSearchBadge}>
-            <span>
-              {t("productsResults.activeSearch", "Поиск")}: &laquo;{searchQuery}&raquo;
-            </span>
             <button
               type="button"
               onClick={onClearSearchQuery}

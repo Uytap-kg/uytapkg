@@ -1,6 +1,6 @@
 .page {
   min-height: 100vh;
-  padding: 40px 20px 80px;
+  padding-top: 50px;
 
   background: #ffffff;
   color: #111111;
@@ -10,6 +10,7 @@
   width: 100%;
   max-width: 920px;
   margin: 0 auto;
+  margin-bottom: 50px;
 }
 
 .backButton {

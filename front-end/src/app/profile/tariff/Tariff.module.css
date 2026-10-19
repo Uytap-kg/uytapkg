@@ -13,14 +13,17 @@
 
   color: #111118;
 
-  background:
-    radial-gradient(circle at 7% 0%, rgba(72, 61, 246, 0.085), transparent 28%),
-    radial-gradient(
-      circle at 93% 18%,
-      rgba(72, 61, 246, 0.055),
-      transparent 30%
-    ),
-    #f7f7fb;
+  background: linear-gradient(
+    to bottom,
+    #1403d4bc 0%,
+    #6d61d6a1 5%,
+    #9289f049 10%,
+    #d8d4fa 18%,
+    #f4f2ff 30%,
+    #fff 58%,
+    #fff 100%
+  );
+  padding-top: 120px;
 
   overflow-x: clip;
 }

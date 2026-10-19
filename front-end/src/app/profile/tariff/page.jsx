@@ -17,6 +17,7 @@ import {
 
 import styles from "./Tariff.module.css";
 import { getMySubscription } from "@/utils/api";
+import Header from "@/components/pageComponents/header/Header";
 
 const formatDate = (value) => {
   if (!value) return "—";
@@ -78,18 +79,16 @@ export default function MyTariffPage() {
 
   return (
     <main className={styles.page}>
+      <Header />
       <div className={styles.topBar}>
         <Link href="/profile" className={styles.homeButton}>
-          <ArrowLeft />
-          В профиль
+          <ArrowLeft />В профиль
         </Link>
       </div>
 
       {loading && <div className={styles.stateMessage}>Загрузка тарифа...</div>}
 
-      {!loading && error && (
-        <div className={styles.stateMessage}>{error}</div>
-      )}
+      {!loading && error && <div className={styles.stateMessage}>{error}</div>}
 
       {!loading && !error && subscription && (
         <>
@@ -108,7 +107,9 @@ export default function MyTariffPage() {
               <div className={styles.statusInfo}>
                 <span
                   className={`${styles.statusBadge} ${
-                    subscription.active ? styles.badgeActive : styles.badgeInactive
+                    subscription.active
+                      ? styles.badgeActive
+                      : styles.badgeInactive
                   }`}
                 >
                   {subscription.active ? "Тариф активен" : "Тариф не активен"}
@@ -123,7 +124,8 @@ export default function MyTariffPage() {
                 {subscription.active && (
                   <p className={styles.period}>
                     <CalendarRange size={15} />
-                    {formatDate(subscription.startedAt)} — {formatDate(subscription.expiresAt)}
+                    {formatDate(subscription.startedAt)} —{" "}
+                    {formatDate(subscription.expiresAt)}
                   </p>
                 )}
 
@@ -147,7 +149,8 @@ export default function MyTariffPage() {
               const Icon = stat.icon;
               const limit = stat.limit || 0;
               const used = stat.used || 0;
-              const percent = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
+              const percent =
+                limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
               const remaining = Math.max(limit - used, 0);
 
               return (

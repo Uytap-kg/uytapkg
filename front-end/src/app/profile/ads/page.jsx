@@ -35,6 +35,7 @@ import styles from "./Ads.module.css";
 import DeleteModal from "@/components/ui/deleteModal/DeleteMidal";
 import AdsEditModal from "./AdsEditModal/AdsEditModal";
 import PromoteListingModal from "./PromoteListingModal/PromoteListingModal";
+import Header from "@/components/pageComponents/header/Header";
 
 export default function Ads() {
   const router = useRouter();
@@ -463,21 +464,12 @@ export default function Ads() {
 
   return (
     <main className={styles.page}>
+      <Header />
       <div className={styles.container}>
         {/* HEADER */}
 
         <header className={styles.header}>
           <div className={styles.headerText}>
-            <button
-              type="button"
-              className={styles.homeButton}
-              onClick={() => router.push("/profile")}
-            >
-              <UserRoundArrowLeft size={19} />
-
-              {t("ads.header.profile")}
-            </button>
-
             <span className={styles.eyebrow}>{t("ads.header.eyebrow")}</span>
 
             <h1>{t("ads.header.title")}</h1>
@@ -581,21 +573,27 @@ export default function Ads() {
 
                   <div className={styles.badges}>
                     {item.isVip && (
-                      <span className={`${styles.statusBadge} ${styles.badgeVip}`}>
+                      <span
+                        className={`${styles.statusBadge} ${styles.badgeVip}`}
+                      >
                         <Crown size={13} />
                         VIP
                       </span>
                     )}
 
                     {item.isUrgent && (
-                      <span className={`${styles.statusBadge} ${styles.badgeUrgent}`}>
+                      <span
+                        className={`${styles.statusBadge} ${styles.badgeUrgent}`}
+                      >
                         <Zap size={13} />
                         {language === "ky" ? "Шашылыш" : "Срочно"}
                       </span>
                     )}
 
                     {item.isTop && (
-                      <span className={`${styles.statusBadge} ${styles.badgeTop}`}>
+                      <span
+                        className={`${styles.statusBadge} ${styles.badgeTop}`}
+                      >
                         <TrendingUp size={13} />
                         TOP
                       </span>
@@ -699,8 +697,8 @@ export default function Ads() {
                             ? "Узартылууда..."
                             : "Продление..."
                           : language === "ky"
-                          ? "40 күнгө узартуу"
-                          : "Продлить на 40 дней"}
+                            ? "40 күнгө узартуу"
+                            : "Продлить на 40 дней"}
                       </button>
                     </div>
                   )}

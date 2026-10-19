@@ -933,101 +933,19 @@ export default function SmartSearch({
   useEffect(() => {
     mountedRef.current = true;
 
-    if (typeof window === "undefined") return undefined;
+    if (typeof window === "undefined") return;
 
-    // Кыргызча үн браузердин SpeechRecognition'уна көз каранды эмес.
-    if (isKyrgyz) {
-      const canRecord =
-        typeof window.MediaRecorder !== "undefined" &&
-        typeof navigator !== "undefined" &&
-        Boolean(navigator.mediaDevices?.getUserMedia);
+    const canRecord =
+      typeof window.MediaRecorder !== "undefined" &&
+      typeof navigator !== "undefined" &&
+      Boolean(navigator.mediaDevices?.getUserMedia);
 
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSupported(canRecord);
-      recognitionRef.current = null;
-
-      return undefined;
-    }
-
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSupported(false);
-      recognitionRef.current = null;
-
-      return undefined;
-    }
-
-    const recognition = new SpeechRecognition();
-
-    recognition.lang = "ru-RU";
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      if (!mountedRef.current) return;
-      setListening(true);
-      setError("");
-    };
-
-    recognition.onresult = (event) => {
-      let resultText = "";
-
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        resultText += event.results[i][0]?.transcript || "";
-      }
-
-      const value = resultText.trim();
-
-      if (value && mountedRef.current) {
-        setText(value.slice(0, SAFE_MAX_TEXT_LENGTH));
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event);
-
-      if (!mountedRef.current) return;
-
-      setListening(false);
-
-      if (
-        event.error === "not-allowed" ||
-        event.error === "service-not-allowed"
-      ) {
-        setError(t("smartSearch.errors.microphonePermission"));
-      } else if (event.error === "no-speech") {
-        setError(t("smartSearch.errors.noSpeech"));
-      } else if (event.error === "audio-capture") {
-        setError(t("smartSearch.errors.microphoneNotFound"));
-      } else {
-        setError(t("smartSearch.errors.voiceRecognition"));
-      }
-    };
-
-    recognition.onend = () => {
-      if (mountedRef.current) setListening(false);
-    };
-
-    recognitionRef.current = recognition;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSupported(true);
+    setSupported(canRecord);
 
-    return () => {
-      try {
-        recognition.stop();
-      } catch {
-        // Recognition may already be stopped.
-      }
-
-      if (recognitionRef.current === recognition) {
-        recognitionRef.current = null;
-      }
-    };
-  }, [isKyrgyz, t]);
+    // Браузерный SpeechRecognition больше не используется.
+    recognitionRef.current = null;
+  }, []);
 
   /* =========================================================
      KYRGYZ VOICE -> /api/speech-to-text -> TEXT FIELD

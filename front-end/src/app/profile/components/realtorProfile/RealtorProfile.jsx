@@ -24,6 +24,7 @@ import RealtorEditModal from "./realtorEdit/RealtorEditModal";
 
 import { useLanguage } from "@/context/LanguageContext";
 import { logout as authLogout } from "@/utils/auth";
+import Header from "@/components/pageComponents/header/Header";
 
 export default function RealtorProfile({
   user,
@@ -60,6 +61,7 @@ export default function RealtorProfile({
 
   return (
     <main className={styles.page}>
+      <Header />
       <section className={styles.profileCard}>
         <div className={styles.glow} />
 
