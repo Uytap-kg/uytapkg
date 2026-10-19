@@ -1,7 +1,8 @@
-# Папка для очищенных файлов (не коммитится)
+# Папка для очищенных файлов и ревью (никогда не коммитить в репозиторий)
+_cleanup_review/
 _cleanup/
 
-# Секреты — никогда не коммитить
+# Секреты и локальные окружения — никогда не коммитить
 .env
 .env.*
 *.env
@@ -13,27 +14,43 @@ back-end.env
 node_modules/
 .pnpm-store/
 
-# Сборки и кэши
+# Сборки, артефакты и кэши
 .next/
+out/
 dist/
 build/
 .cache/
 .pytest_cache/
 coverage/
+.turbo/
 
 # Логи и временные файлы
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 *.tmp
 *.bak
+*.old
 *.orig
 *~
+*.swp
+*.swo
+
+# IDE и операционная система
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
-.temp/
+desktop.ini
 
-# Локальные scratch/debug-файлы
+# Локальные служебные файлы Supabase CLI
+.temp/
+.branches/
+
+# Локальные scratch/debug-файлы и деплой
 **/scratch/
+.vercel/
+
 

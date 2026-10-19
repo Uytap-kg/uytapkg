@@ -1,0 +1,133 @@
+# ==============================================================================
+# Render Blueprint — uy-tap Full-Stack Platform
+# Docs: https://render.com/docs/blueprint-spec
+# ==============================================================================
+# Этот файл автоматически разворачивает бэкенд (Express API) и фронтенд (Next.js)
+# на платформе Render из нового репозитория.
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. UyTap Backend API (Node.js Express)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: uytap-backend
+    runtime: node
+    plan: starter
+    region: frankfurt
+    rootDir: back-end
+    buildCommand: npm ci --omit=dev
+    preDeployCommand: npm run migrate
+    startCommand: node src/index.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: ALLOWED_ORIGINS
+        sync: false # Укажите домен вашего фронтенда, например: https://uytap-frontend.onrender.com
+      - key: INTERNAL_PROXY_SECRET
+        sync: false # Минимум 32 случайных символа (должен совпадать с фронтендом)
+      - key: SUPABASE_URL
+        sync: false # REST API URL Supabase (например: https://xyz.supabase.co)
+      - key: SUPABASE_KEY
+        sync: false # Service Role Key Supabase для серверных операций
+      - key: DATABASE_URL
+        sync: false # Прямое подключение к PostgreSQL для пула соединений pg
+      - key: JWT_SECRET
+        sync: false # 32-64 случайных символа для подписи JWT токенов
+      - key: OTP_SECRET
+        sync: false # 32-64 случайных символа для HMAC-хэширования OTP
+      - key: AI_PROVIDER
+        value: claude
+      - key: ANTHROPIC_API_KEY
+        sync: false # API-ключ Anthropic Claude для умного поиска
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-5-5
+      - key: GEMINI_API_KEY
+        sync: false # (Резерв) Google Gemini API Key
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: ODENGI_API_URL
+        value: https://api.odengi.kg
+      - key: ODENGI_SID
+        sync: false # SID мерчанта O!Dengi
+      - key: ODENGI_PASSWORD
+        sync: false # Пароль мерчанта O!Dengi
+      - key: ODENGI_VERSION
+        value: "1005"
+      - key: ODENGI_TEST
+        value: "1"
+      - key: ODENGI_RESULT_URL
+        sync: false # Callback URL бэкенда для O!Dengi
+      - key: NIKITA_API_KEY
+        sync: false # API-ключ SMS-шлюза Nikita OTP
+      - key: NIKITA_BASE_URL
+        value: https://smspro.nikita.kg
+      - key: NIKITA_TIMEOUT_MS
+        value: "10000"
+      - key: NIKITA_RESEND_COOLDOWN_SEC
+        value: "60"
+      - key: NIKITA_HOURLY_LIMIT_PHONE
+        value: "5"
+      - key: NIKITA_HOURLY_LIMIT_IP
+        value: "120"
+      - key: NIKITA_DAILY_SERVICE_CEILING
+        value: "500"
+      - key: RESEND_API_KEY
+        sync: false # API-ключ Resend для отправки email с кодами
+      - key: RESEND_FROM
+        value: UyTap <onboarding@resend.dev>
+      - key: ALERT_TELEGRAM_BOT_TOKEN
+        sync: false # (Опционально) Токен бота Telegram для алертов
+      - key: ALERT_TELEGRAM_CHAT_ID
+        sync: false # (Опционально) Chat ID Telegram для алертов
+
+  # ----------------------------------------------------------------------------
+  # 2. UyTap Frontend (Next.js 16 / React 19)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: uytap-frontend
+    runtime: node
+    plan: starter
+    region: frankfurt
+    rootDir: front-end
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start -- -p $PORT -H 0.0.0.0
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        sync: false # Публичный URL бэкенда, например: https://uytap-backend.onrender.com/api
+      - key: BACKEND_API_URL
+        sync: false # Внутренний URL бэкенда (Render Private Network или https://uytap-backend.onrender.com/api)
+      - key: INTERNAL_PROXY_SECRET
+        sync: false # Тот же секрет, что и на бэкенде (>= 16-32 символа)
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false # URL Supabase для оптимизатора изображений
+      - key: SUPABASE_URL
+        sync: false # URL Supabase для серверной оптимизации изображений
+      - key: ELEVENLABS_API_KEY
+        sync: false # Ключ ElevenLabs для голосового поиска Speech-to-Text
+      - key: ENABLE_CLOUDFLARE
+        value: "false"
+
+# ------------------------------------------------------------------------------
+# 3. База данных и кэш (Опционально)
+# ------------------------------------------------------------------------------
+# По умолчанию UyTap подключается к проекту Supabase (см. SUPABASE_URL и DATABASE_URL).
+# Если вы хотите развернуть базу PostgreSQL непосредственно внутри Render:
+#
+# databases:
+#   - name: uytap-postgres
+#     databaseName: uytap
+#     user: uytap
+#     plan: starter
+#     region: frankfurt
