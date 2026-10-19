@@ -5,6 +5,7 @@ import { ArrowLeft, ShieldCheck } from "lucide-react";
 
 import styles from "./PrivacyPolicy.module.css";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import Footer from "@/components/pageComponents/footer/Footer";
 
 export default function PrivacyPolicyPage() {
   useDocumentTitle("Политика конфиденциальности и защиты данных | UyTap");
@@ -183,6 +184,7 @@ export default function PrivacyPolicyPage() {
           </div>
         </article>
       </div>
+      <Footer />
     </main>
   );
 }
