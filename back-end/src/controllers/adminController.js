@@ -687,6 +687,22 @@ export const completeInstagramRequestAdmin = async (req, res) => {
       publishedBy: adminUserId,
     });
 
+    if (existing.listingId) {
+      try {
+        await supabase
+          .from("promotion_orders")
+          .update({
+            status: "applied",
+            applied_at: new Date().toISOString(),
+          })
+          .eq("listing_id", existing.listingId)
+          .eq("service_type", "instagram")
+          .eq("status", "fulfillment_pending");
+      } catch (orderUpdateError) {
+        console.warn("Failed to sync promotion_orders status upon instagram completion:", orderUpdateError);
+      }
+    }
+
     return res.json({
       success: true,
       message: "Заявка отмечена как выполненная",

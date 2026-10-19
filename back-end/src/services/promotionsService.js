@@ -1,6 +1,7 @@
 import { supabase } from "../config/db.js";
 import { markPromotionOrderStatus } from "../utils/promotionOrders.js";
 import { activateListingSlot } from "./subscriptionsService.js";
+import { createInstagramRequest } from "../utils/instagramRequests.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -100,6 +101,58 @@ export async function applyPromotion(order) {
   const { listingId, serviceType, days } = order;
 
   if (serviceType === "instagram") {
+    let targetUserId = order.userId || order.user_id;
+
+    if (!targetUserId && listingId) {
+      const { data: listing } = await supabase
+        .from("listings")
+        .select("user_id, status")
+        .eq("id", listingId)
+        .maybeSingle();
+
+      if (listing) {
+        targetUserId = listing.user_id;
+        if (listing.status === "draft" || listing.status === "hidden") {
+          const slot = await activateListingSlot(listing.user_id, listingId);
+          if (slot.granted) {
+            await supabase
+              .from("listings")
+              .update({ status: "active", updated_at: new Date().toISOString() })
+              .eq("id", listingId);
+          }
+        }
+      }
+    } else if (listingId) {
+      const { data: listing } = await supabase
+        .from("listings")
+        .select("status")
+        .eq("id", listingId)
+        .maybeSingle();
+
+      if (listing && (listing.status === "draft" || listing.status === "hidden")) {
+        const slot = await activateListingSlot(targetUserId, listingId);
+        if (slot.granted) {
+          await supabase
+            .from("listings")
+            .update({ status: "active", updated_at: new Date().toISOString() })
+            .eq("id", listingId);
+        }
+      }
+    }
+
+    if (listingId && targetUserId) {
+      try {
+        await createInstagramRequest({ listingId, userId: targetUserId });
+      } catch (err) {
+        if (err.status === 409 || err.code === "23505") {
+          console.warn("Instagram request already exists for listing:", listingId);
+        } else {
+          console.error("Failed to create instagram request in applyPromotion:", err);
+          throw err;
+        }
+      }
+    }
+
     await markPromotionOrderStatus(order.orderId, "fulfillment_pending");
     return;
   }

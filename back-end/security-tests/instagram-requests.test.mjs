@@ -181,3 +181,263 @@ test("AdminController & Routes: контроллеры и роуты заяво�
   assert.equal(typeof adminController.createInstagramRequestAdmin, "function");
   assert.ok(adminRouter, "adminRouter должен быть экспортирован");
 });
+
+test("applyPromotion: при serviceType === 'instagram' создаёт запись в instagram_requests и переводит заказ в fulfillment_pending", async () => {
+  const { applyPromotion } = await import("../src/services/promotionsService.js");
+  const { supabase } = await import("../src/config/db.js");
+
+  const origFrom = supabase.from;
+  const insertedInstagram = [];
+  const updatedOrders = [];
+
+  supabase.from = (table) => {
+    if (table === "listings") {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: {
+                id: "0e5b9f7a-8b1a-4d2c-9a1b-123456789abc",
+                status: "active",
+                user_id: "1f2e3d4c-5b6a-4890-a1cd-ef0123456789",
+              },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
+    if (table === "instagram_requests") {
+      return {
+        insert: (payload) => {
+          insertedInstagram.push(payload);
+          return {
+            select: () => ({
+              single: async () => ({
+                data: {
+                  id: "c7a4e69b-891a-4c2e-9d22-1d5427976829",
+                  listing_id: payload.listing_id,
+                  user_id: payload.user_id,
+                  status: "pending",
+                  created_at: new Date().toISOString(),
+                },
+                error: null,
+              }),
+            }),
+          };
+        },
+      };
+    }
+    if (table === "promotion_orders") {
+      return {
+        update: (updates) => {
+          updatedOrders.push(updates);
+          return {
+            eq: () => ({
+              select: () => {
+                const res = async () => ({
+                  data: {
+                    order_id: "UT-TEST-ORDER-1",
+                    status: updates.status,
+                    applied_at: updates.applied_at,
+                  },
+                  error: null,
+                });
+                return { single: res, maybeSingle: res };
+              },
+            }),
+          };
+        },
+      };
+    }
+    return origFrom.call(supabase, table);
+  };
+
+  try {
+    await applyPromotion({
+      orderId: "UT-TEST-ORDER-1",
+      listingId: "0e5b9f7a-8b1a-4d2c-9a1b-123456789abc",
+      userId: "1f2e3d4c-5b6a-4890-a1cd-ef0123456789",
+      serviceType: "instagram",
+      days: 1,
+    });
+
+    assert.equal(insertedInstagram.length, 1, "Должна быть создана одна запись в instagram_requests");
+    assert.equal(insertedInstagram[0].listing_id, "0e5b9f7a-8b1a-4d2c-9a1b-123456789abc");
+    assert.equal(insertedInstagram[0].user_id, "1f2e3d4c-5b6a-4890-a1cd-ef0123456789");
+    assert.equal(insertedInstagram[0].status, "pending");
+
+    assert.equal(updatedOrders.length, 1, "Статус заказа должен быть обновлен");
+    assert.equal(updatedOrders[0].status, "fulfillment_pending");
+  } finally {
+    supabase.from = origFrom;
+  }
+});
+
+test("applyPromotion: при повторном вызове (код 23505) не падает с ошибкой, а переводит заказ в fulfillment_pending", async () => {
+  const { applyPromotion } = await import("../src/services/promotionsService.js");
+  const { supabase } = await import("../src/config/db.js");
+
+  const origFrom = supabase.from;
+  const updatedOrders = [];
+
+  supabase.from = (table) => {
+    if (table === "listings") {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: {
+                id: "0e5b9f7a-8b1a-4d2c-9a1b-123456789abc",
+                status: "active",
+                user_id: "1f2e3d4c-5b6a-4890-a1cd-ef0123456789",
+              },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
+    if (table === "instagram_requests") {
+      return {
+        insert: () => {
+          return {
+            select: () => ({
+              single: async () => ({
+                data: null,
+                error: { code: "23505", message: "unique constraint violation" },
+              }),
+            }),
+          };
+        },
+      };
+    }
+    if (table === "promotion_orders") {
+      return {
+        update: (updates) => {
+          updatedOrders.push(updates);
+          return {
+            eq: () => ({
+              select: () => {
+                const res = async () => ({
+                  data: {
+                    order_id: "UT-TEST-ORDER-2",
+                    status: updates.status,
+                    applied_at: updates.applied_at,
+                  },
+                  error: null,
+                });
+                return { single: res, maybeSingle: res };
+              },
+            }),
+          };
+        },
+      };
+    }
+    return origFrom.call(supabase, table);
+  };
+
+  try {
+    await applyPromotion({
+      orderId: "UT-TEST-ORDER-2",
+      listingId: "0e5b9f7a-8b1a-4d2c-9a1b-123456789abc",
+      userId: "1f2e3d4c-5b6a-4890-a1cd-ef0123456789",
+      serviceType: "instagram",
+      days: 1,
+    });
+
+    assert.equal(updatedOrders.length, 1);
+    assert.equal(updatedOrders[0].status, "fulfillment_pending");
+  } finally {
+    supabase.from = origFrom;
+  }
+});
+
+test("completeInstagramRequestAdmin: обновляет заявку в published и синхронизирует promotion_orders в applied", async () => {
+  const { completeInstagramRequestAdmin } = await import("../src/controllers/adminController.js");
+  const { supabase } = await import("../src/config/db.js");
+
+  const origFrom = supabase.from;
+  const updatedOrders = [];
+
+  supabase.from = (table) => {
+    if (table === "instagram_requests") {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: {
+                id: "c7a4e69b-891a-4c2e-9d22-1d5427976829",
+                listing_id: "0e5b9f7a-8b1a-4d2c-9a1b-123456789abc",
+                user_id: "1f2e3d4c-5b6a-7890-abcd-ef0123456789",
+                status: "pending",
+                created_at: new Date().toISOString(),
+              },
+              error: null,
+            }),
+          }),
+        }),
+        update: (payload) => ({
+          eq: () => ({
+            select: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: "c7a4e69b-891a-4c2e-9d22-1d5427976829",
+                  listing_id: "0e5b9f7a-8b1a-4d2c-9a1b-123456789abc",
+                  status: payload.status,
+                  published_at: payload.published_at,
+                  published_by: payload.published_by,
+                },
+                error: null,
+              }),
+            }),
+          }),
+        }),
+      };
+    }
+    if (table === "promotion_orders") {
+      return {
+        update: (updates) => {
+          updatedOrders.push(updates);
+          return {
+            eq: () => ({
+              eq: () => ({
+                eq: async () => ({ error: null }),
+              }),
+            }),
+          };
+        },
+      };
+    }
+    return origFrom.call(supabase, table);
+  };
+
+  try {
+    let responseStatus = 200;
+    let responseBody = null;
+    const req = {
+      params: { id: "c7a4e69b-891a-4c2e-9d22-1d5427976829" },
+      user: { id: "admin-user-uuid" },
+    };
+    const res = {
+      status: (code) => {
+        responseStatus = code;
+        return res;
+      },
+      json: (data) => {
+        responseBody = data;
+        return res;
+      },
+    };
+
+    await completeInstagramRequestAdmin(req, res);
+
+    assert.equal(responseStatus, 200);
+    assert.equal(responseBody.success, true);
+    assert.equal(responseBody.data.status, "published");
+    assert.equal(updatedOrders.length, 1, "Должен быть обновлен заказ promotion_orders");
+    assert.equal(updatedOrders[0].status, "applied");
+  } finally {
+    supabase.from = origFrom;
+  }
+});
