@@ -76,7 +76,10 @@ const isHttpsOrHttpUrl = (value) => {
 };
 
 const httpUrlField = (message = "Ссылка должна начинаться с http:// или https://") =>
-  z.string().refine((value) => !value || isHttpsOrHttpUrl(value), { message });
+  z
+    .string()
+    .trim()
+    .refine((value) => !value || isHttpsOrHttpUrl(value), { message });
 
 // Нормализация номера телефона (очистка от лишних символов)
 export const normalizePhone = (phone) => {
@@ -391,10 +394,9 @@ export const createComplexSchema = z
     ceilingHeight: z.union([z.number(), z.string()]).optional().nullable(),
     area: z.union([z.number(), z.string()]).optional().nullable(),
     areaSotka: z.union([z.number(), z.string()]).optional().nullable(),
-    documentsUrl: z
-      .string({ required_error: "Укажите ссылку на документы ЖК" })
-      .min(1, "Укажите ссылку на документы ЖК")
-      .refine(isHttpsOrHttpUrl, { message: "Ссылка на документы должна начинаться с http:// или https://" }),
+    documentsUrl: httpUrlField("Ссылка на документы должна начинаться с http:// или https://")
+      .optional()
+      .nullable(),
     amenities: z.array(z.string()).optional(),
     images: z.array(trustedImageUrl("Некорректная ссылка на фото ЖК")).optional(),
     features: z.record(z.any()).optional(),

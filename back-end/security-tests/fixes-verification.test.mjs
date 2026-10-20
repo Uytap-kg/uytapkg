@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 // 1. Тестирование валидации пароля (Bcrypt DoS Protection)
-import { registerSchema, loginSchema } from "../src/utils/validation.js";
+import { registerSchema, loginSchema, createComplexSchema } from "../src/utils/validation.js";
 
 test("Validation: пароль длиннее 72 символов должен отклоняться (Bcrypt DoS)", () => {
   const longPassword = "A".repeat(73);
@@ -338,4 +338,42 @@ test("Upload Security: защита эндпоинта анонимной заг
   assert.equal(typeof uploadPendingAvatarToStorage, "function");
 });
 
+// 13. Тестирование опциональности поля documentsUrl в createComplexSchema
+test("Complex Validation: поле documentsUrl является опциональным и безопасным", () => {
+  // 1. null разрешён
+  const resNull = createComplexSchema.safeParse({ name: "ЖК Ала-Тоо", documentsUrl: null });
+  assert.equal(resNull.success, true, "documentsUrl: null должен быть валидным");
 
+  // 2. undefined (поле не передано) разрешено
+  const resUndefined = createComplexSchema.safeParse({ name: "ЖК Ала-Тоо" });
+  assert.equal(resUndefined.success, true, "documentsUrl: undefined должен быть валидным");
+
+  // 3. пустая строка разрешена
+  const resEmpty = createComplexSchema.safeParse({ name: "ЖК Ала-Тоо", documentsUrl: "" });
+  assert.equal(resEmpty.success, true, "documentsUrl: '' должен быть валидным");
+
+  // 4. пробелы разрешены (нормализуются через trim)
+  const resSpaces = createComplexSchema.safeParse({ name: "ЖК Ала-Тоо", documentsUrl: "   " });
+  assert.equal(resSpaces.success, true, "documentsUrl с пробелами должен быть валидным");
+
+  // 5. корректный https URL разрешён
+  const resValid = createComplexSchema.safeParse({
+    name: "ЖК Ала-Тоо",
+    documentsUrl: "https://minstroy.gov.kg/ru/map",
+  });
+  assert.equal(resValid.success, true, "Валидный https URL должен приниматься");
+
+  // 6. XSS (javascript:) отклоняется
+  const resXss = createComplexSchema.safeParse({
+    name: "ЖК Ала-Тоо",
+    documentsUrl: "javascript:alert(1)",
+  });
+  assert.equal(resXss.success, false, "javascript: URL должен отклоняться");
+
+  // 7. некорректная ссылка отклоняется
+  const resBad = createComplexSchema.safeParse({
+    name: "ЖК Ала-Тоо",
+    documentsUrl: "not-a-valid-url",
+  });
+  assert.equal(resBad.success, false, "Невалидный URL должен отклоняться");
+});

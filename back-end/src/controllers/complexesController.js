@@ -503,7 +503,10 @@ export const updateComplex = async (req, res) => {
         construction: construction !== undefined ? construction : complex.features?.construction,
         area: area !== undefined ? area : complex.features?.area,
         areaSotka: areaSotka !== undefined ? areaSotka : complex.features?.areaSotka,
-        documentsUrl: documentsUrl !== undefined ? documentsUrl : complex.features?.documentsUrl,
+        documentsUrl:
+          documentsUrl !== undefined
+            ? (typeof documentsUrl === "string" ? documentsUrl.trim() || null : documentsUrl)
+            : complex.features?.documentsUrl,
         amenities: amenities || complex.features?.amenities || [],
         images: finalImages,
       },

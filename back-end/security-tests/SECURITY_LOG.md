@@ -940,3 +940,5 @@ uytapkg, во время адверсариального ревью. Все с�
 - 2026-10-19T18:28:42.009Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/7c23e863-f162-4492-9009-9c9dacbff83c.webp (cleanup, test upload item-10)
 - 2026-10-19T18:47:48.316Z CREATE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/2ce27038-f885-437f-89d6-2213cfebf708.webp (test upload item-10)
 - 2026-10-19T18:47:48.317Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/2ce27038-f885-437f-89d6-2213cfebf708.webp (cleanup, test upload item-10)
+- 2026-10-20T09:58:03.189Z CREATE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/d6d37928-2ec4-4e49-acef-045a72f4f8a0.webp (test upload item-10)
+- 2026-10-20T09:58:03.190Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/d6d37928-2ec4-4e49-acef-045a72f4f8a0.webp (cleanup, test upload item-10)
