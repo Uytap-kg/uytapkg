@@ -270,7 +270,7 @@ export function applyListingFilters(query, filters = {}) {
     const clauses = [];
     for (const pat of patternSet) {
       clauses.push(
-        `title.ilike.%${pat}%,description.ilike.%${pat}%,district.ilike.%${pat}%,city.ilike.%${pat}%`,
+        `title.ilike.%${pat}%,description.ilike.%${pat}%,district.ilike.%${pat}%,city.ilike.%${pat}%,features->>residentialComplexName.ilike.%${pat}%`,
       );
     }
     query = query.or(clauses.join(","));

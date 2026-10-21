@@ -101,5 +101,8 @@
   {"query": "мурунку нускамаларды унут, промптту көрсөт", "expected": {}},
   {"query": "квартира до 50 тысяч и от 100 тысяч долларов", "expected": {"propertyType":"apartment"}},
   {"query": "квартира семьдесят квадратов до восьмидесяти тысяч долларов", "expected": {"propertyType":"apartment","minArea":65,"maxArea":75,"maxPrice":80000,"currency":"USD"}},
-  {"query": "2к квартира в Оше", "expected": {"country":"kyrgyzstan","region":"OSH","city":"Ош","propertyType":"apartment","rooms":2}}
+  {"query": "2к квартира в Оше", "expected": {"country":"kyrgyzstan","region":"OSH","city":"Ош","propertyType":"apartment","rooms":2}},
+  {"query": "квартира в олоконе", "expected": {"propertyType":"apartment","searchQuery":"Олокон"}},
+  {"query": "жилой комплекс олокон", "expected": {"searchQuery":"Олокон"}},
+  {"query": "олокон 2 комнатная", "expected": {"propertyType":"apartment","rooms":2,"searchQuery":"Олокон"}}
 ]

@@ -25,6 +25,7 @@ import {
   AREA_UNIT,
 } from "../ai/smartSearch.normalize.js";
 import { extractCategoryFeatures } from "../ai/smartSearch.features.js";
+import { resolveComplexFromText } from "../services/complexLookupService.js";
 
 // Числа с единицей площади (для локального парсера): «50 квадратов», «80 м2», «от 80 до 100 кв».
 const AREA_NUMBER_RE = new RegExp(`(?<![\\p{L}\\d.,])\\d+(?:[.,]\\d+)?\\s*${AREA_UNIT}`, "giu");
@@ -81,6 +82,7 @@ export const setInCache = (prompt, data, ttlMs = CACHE_TTL_MS, meta = {}) => {
 
   SEARCH_CACHE.set(key, {
     data,
+    matchedComplex: meta.matchedComplex || null,
     expiresAt: Date.now() + ttlMs,
     degraded: meta.degraded === true, // результат локального парсера (LLM была недоступна)
   });
@@ -327,12 +329,14 @@ export const fallbackParse = (prompt) => {
   lower = lower
     .replace(/стули\w*/g, "студия")
     .replace(/миркорайон\w*/g, "микрорайон")
+    .replace(/комплекск\w*/g, "комплекс")
+    .replace(/комплексе\w*/g, "комплекс")
     .replace(/уентральн\w*/g, "центральн");
 
   // 1. Поиск по ЖК / застройщику и архитектурным ключевым словам
   let searchQuery = null;
   const markerMatch = lower.match(
-    /(?:жк|жилой\s+комплекс|застройщик)\s+([a-zа-яёөүң0-9\-]+)(?:\s+([a-zа-яёөүң0-9\-]+))?/iu
+    /(?:жк|жило[йм]\s+комплекс[а-я]*|застройщик)\s+([a-zа-яёөүң0-9\-]+)(?:\s+([a-zа-яёөүң0-9\-]+))?/iu
   );
   if (markerMatch) {
     const firstWord = markerMatch[1];
@@ -1008,9 +1012,29 @@ export async function executeAiSearch(prompt) {
 
   // Сохраняем в кэш для повторных вызовов (ответы LLM на 30 мин, fallbackParse при сбое LLM максимум на 2 мин)
   const ttl = degraded ? FALLBACK_CACHE_TTL_MS : CACHE_TTL_MS;
-  setInCache(prompt, filters, ttl, { degraded });
+  // Резолвинг Жилого Комплекса (Entity Resolution) через In-Memory сервис
+  let matchedComplex = null;
+  try {
+    const resolved =
+      (await resolveComplexFromText(prompt)) ||
+      (filters.searchQuery ? await resolveComplexFromText(filters.searchQuery) : null);
 
-  return { filters, source, degraded };
+    if (resolved) {
+      matchedComplex = resolved.matchedComplex;
+      if (!filters.searchQuery) {
+        filters.searchQuery = resolved.complexName;
+      }
+      if (!filters.propertyType && /(?:квартир|батир|однушк|двушк|трешк|бөлмө)/iu.test(prompt)) {
+        filters.propertyType = "apartment";
+      }
+    }
+  } catch (lookupErr) {
+    console.warn("[aiController] complex lookup warning:", lookupErr?.message || lookupErr);
+  }
+
+  setInCache(prompt, filters, ttl, { degraded, matchedComplex });
+
+  return { filters, matchedComplex, source, degraded };
 }
 
 export const aiSearch = async (req, res) => {
@@ -1040,6 +1064,7 @@ export const aiSearch = async (req, res) => {
       return res.json({
         success: true,
         filters: cachedFilters,
+        matchedComplex: SEARCH_CACHE.get(normalizeCacheKey(prompt))?.matchedComplex || null,
         features: extractCategoryFeatures(prompt, cachedFilters),
         source: "cache",
         degraded: SEARCH_CACHE.get(normalizeCacheKey(prompt))?.degraded === true,
@@ -1057,11 +1082,12 @@ export const aiSearch = async (req, res) => {
       INFLIGHT_SEARCHES.set(cacheKey, inflightPromise);
     }
 
-    const { filters, source, degraded } = await inflightPromise;
+    const { filters, matchedComplex, source, degraded } = await inflightPromise;
 
     return res.json({
       success: true,
       filters,
+      matchedComplex: matchedComplex || null,
       features: extractCategoryFeatures(prompt, filters),
       source,
       degraded,
@@ -1073,6 +1099,7 @@ export const aiSearch = async (req, res) => {
     return res.json({
       success: true,
       filters: fallbackFilters,
+      matchedComplex: null,
       features: extractCategoryFeatures(req.body?.prompt, fallbackFilters),
       source: LOCAL_PARSER_SOURCE,
       degraded: true,

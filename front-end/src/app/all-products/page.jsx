@@ -26,6 +26,7 @@ import ParkingFilters from "./components/ParkingFilters/ParkingFilters";
 
 import ProductsFilters from "./components/ProductsFilters/ProductsFilters";
 import ProductsResults from "./components/ProductsResults/ProductsResults";
+import MatchedComplexCard from "./components/MatchedComplexCard/MatchedComplexCard";
 
 import styles from "./AllProducts.module.css";
 import Footer from "@/components/pageComponents/footer/Footer";
@@ -612,6 +613,7 @@ export default function AllProducts() {
   const [searchMode, setSearchMode] = useState("filters");
 
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [matchedComplex, setMatchedComplex] = useState(null);
 
   const [listingsList, setListingsList] = useState([]);
   const [total, setTotal] = useState(0);
@@ -1072,6 +1074,7 @@ export default function AllProducts() {
       }
     }
 
+    setMatchedComplex(data.matchedComplex || null);
     setFilters(next);
     updateUrl(next);
   }
@@ -1101,6 +1104,7 @@ export default function AllProducts() {
         next.areaTo = "";
       } else if (filterKey === "searchQuery") {
         next.searchQuery = "";
+        setMatchedComplex(null);
       } else if (filterKey === "beachDistance") {
         next.beachDistanceFrom = "";
         next.beachDistanceTo = "";
@@ -1117,6 +1121,7 @@ export default function AllProducts() {
   }
 
   function handleClearSearchQuery() {
+    setMatchedComplex(null);
     setFilters((prev) => {
       const next = { ...prev, searchQuery: "" };
       updateUrl(next);
@@ -1241,6 +1246,7 @@ export default function AllProducts() {
   ======================================================= */
 
   function resetFilters() {
+    setMatchedComplex(null);
     setFilters({
       ...DEFAULT_FILTERS,
     });
@@ -1335,6 +1341,14 @@ export default function AllProducts() {
           CategoryFilters={CategoryFilters}
           showBeachDistance={showBeachDistance}
         />
+
+        {matchedComplex && (
+          <MatchedComplexCard
+            complex={matchedComplex}
+            onDismiss={() => setMatchedComplex(null)}
+            totalListings={total}
+          />
+        )}
 
         <ProductsResults
           loading={loading}

@@ -1327,6 +1327,7 @@ export default function SmartSearch({
       onFiltersDetected?.({
         query: trimmedText,
         filters: normalized,
+        matchedComplex: data.matchedComplex || null,
       });
     } catch (searchError) {
       if (searchError?.name === "AbortError") return;
