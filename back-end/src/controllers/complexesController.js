@@ -30,6 +30,19 @@ async function resolveDeveloperLogos(complexes) {
   return complexes;
 }
 
+// Нормализует поля локации ЖК (country, district, cityKey) на верхний уровень объекта
+export function normalizeComplexRow(c) {
+  if (!c || typeof c !== "object") return c;
+  const features = (c.features && typeof c.features === "object") ? c.features : {};
+  return {
+    ...c,
+    country: c.country || features.country || "kyrgyzstan",
+    district: c.district || features.district || null,
+    cityKey: features.cityKey || null,
+  };
+}
+
+
 // =======================================================
 // 1. Получение списка ЖК (GET /api/complexes)
 // =======================================================
@@ -60,9 +73,11 @@ export const getComplexes = async (req, res) => {
 
     const resolved = await resolveDeveloperLogos(complexes);
 
+    const normalized = (resolved || []).map(normalizeComplexRow);
+
     return res.json({
       success: true,
-      data: resolved,
+      data: normalized,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -98,7 +113,7 @@ export const getComplexById = async (req, res) => {
     }
 
     if (complex.developers) await resolveDeveloperLogos([complex]);
-    return res.json({ success: true, data: complex });
+    return res.json({ success: true, data: normalizeComplexRow(complex) });
   } catch (error) {
     console.error("Get Complex By ID Error:", error);
     return res.status(500).json({ success: false, message: "Ошибка сервера при загрузке ЖК" });
@@ -199,9 +214,10 @@ export const getMyComplexes = async (req, res) => {
       });
     }
 
+    const resolved = await resolveDeveloperLogos(complexes || []);
     return res.json({
       success: true,
-      data: await resolveDeveloperLogos(complexes || []),
+      data: (resolved || []).map(normalizeComplexRow),
     });
   } catch (error) {
     console.error("Get My Complexes Controller Error:", error);
@@ -269,8 +285,11 @@ export const createComplex = async (req, res) => {
     const {
       name,
       description,
+      country,
       region,
       city,
+      cityKey,
+      district,
       address,
       latitude,
       longitude,
@@ -310,12 +329,18 @@ export const createComplex = async (req, res) => {
     const cover_photo = Array.isArray(images) && images.length > 0 ? images[0] : null;
 
     // TODO: Временное решение для сохранения площади территории в двух единицах измерения (area в кв.м и areaSotka в сотках). Требуется обсудить единый стандарт измерения.
+    const resolvedCountry = (country && String(country).trim()) || "kyrgyzstan";
+    const resolvedDistrict = (district && String(district).trim()) || null;
+    const resolvedCityKey = (cityKey && String(cityKey).trim()) || null;
+
     const complexData = {
       developer_id: developer.id,
       name: name || "Без названия",
       description: description || "",
+      country: resolvedCountry,
       region: region || city || "Бишкек",
       city: city || "Бишкек",
+      district: resolvedDistrict,
       address: address || "",
       completion_status,
       completion_date: completionDate || "",
@@ -323,8 +348,9 @@ export const createComplex = async (req, res) => {
       cover_photo,
       features: {
         ...(features || {}),
-        // В таблице residential_complexes нет колонок latitude/longitude —
-        // храним координаты внутри features, как и остальные доп. поля.
+        country: resolvedCountry,
+        district: resolvedDistrict,
+        cityKey: resolvedCityKey,
         latitude: latitude ?? (features && features.latitude) ?? null,
         longitude: longitude ?? (features && features.longitude) ?? null,
         floors: floors || null,
@@ -341,11 +367,24 @@ export const createComplex = async (req, res) => {
       },
     };
 
-    const { data: newComplex, error: complexError } = await supabase
+    let { data: newComplex, error: complexError } = await supabase
       .from("residential_complexes")
       .insert([complexData])
       .select()
       .single();
+
+    if (complexError && (complexError.message?.includes("column") || complexError.code === "42703" || complexError.message?.includes("country") || complexError.message?.includes("district"))) {
+      const fallbackData = { ...complexData };
+      delete fallbackData.country;
+      delete fallbackData.district;
+      const fallbackResult = await supabase
+        .from("residential_complexes")
+        .insert([fallbackData])
+        .select()
+        .single();
+      newComplex = fallbackResult.data;
+      complexError = fallbackResult.error;
+    }
 
     if (complexError) {
       console.error("Create Complex Error:", complexError);
@@ -432,8 +471,11 @@ export const updateComplex = async (req, res) => {
     const {
       name,
       description,
+      country,
       region,
       city,
+      cityKey,
+      district,
       address,
       latitude,
       longitude,
@@ -482,6 +524,36 @@ export const updateComplex = async (req, res) => {
       if (status === "Сдан" || status === "completed") completion_status = "completed";
     }
 
+    const resolvedCountry =
+      country !== undefined ? (country && String(country).trim()) || "kyrgyzstan" : undefined;
+    const resolvedDistrict =
+      district !== undefined ? (district && String(district).trim()) || null : undefined;
+    const resolvedCityKey =
+      cityKey !== undefined ? (cityKey && String(cityKey).trim()) || null : undefined;
+
+    const nextFeatures = {
+      ...(complex.features || {}),
+      latitude: latitude !== undefined ? latitude : complex.features?.latitude,
+      longitude: longitude !== undefined ? longitude : complex.features?.longitude,
+      floors: floors !== undefined ? floors : complex.features?.floors,
+      blocks: blocks !== undefined ? blocks : complex.features?.blocks,
+      apartments: apartments !== undefined ? apartments : complex.features?.apartments,
+      parking: parking !== undefined ? parking : complex.features?.parking,
+      ceilingHeight: ceilingHeight !== undefined ? ceilingHeight : complex.features?.ceilingHeight,
+      construction: construction !== undefined ? construction : complex.features?.construction,
+      area: area !== undefined ? area : complex.features?.area,
+      areaSotka: areaSotka !== undefined ? areaSotka : complex.features?.areaSotka,
+      documentsUrl:
+        documentsUrl !== undefined
+          ? (typeof documentsUrl === "string" ? documentsUrl.trim() || null : documentsUrl)
+          : complex.features?.documentsUrl,
+      amenities: amenities || complex.features?.amenities || [],
+      images: finalImages,
+    };
+    if (resolvedCountry !== undefined) nextFeatures.country = resolvedCountry;
+    if (resolvedDistrict !== undefined) nextFeatures.district = resolvedDistrict;
+    if (resolvedCityKey !== undefined) nextFeatures.cityKey = resolvedCityKey;
+
     const updateData = {
       name: name || complex.name,
       description: description !== undefined ? description : complex.description,
@@ -491,34 +563,32 @@ export const updateComplex = async (req, res) => {
       completion_status,
       completion_date: completionDate !== undefined ? completionDate : complex.completion_date,
       housing_class: housingClass || complex.housing_class,
-      features: {
-        ...(complex.features || {}),
-        latitude: latitude !== undefined ? latitude : complex.features?.latitude,
-        longitude: longitude !== undefined ? longitude : complex.features?.longitude,
-        floors: floors !== undefined ? floors : complex.features?.floors,
-        blocks: blocks !== undefined ? blocks : complex.features?.blocks,
-        apartments: apartments !== undefined ? apartments : complex.features?.apartments,
-        parking: parking !== undefined ? parking : complex.features?.parking,
-        ceilingHeight: ceilingHeight !== undefined ? ceilingHeight : complex.features?.ceilingHeight,
-        construction: construction !== undefined ? construction : complex.features?.construction,
-        area: area !== undefined ? area : complex.features?.area,
-        areaSotka: areaSotka !== undefined ? areaSotka : complex.features?.areaSotka,
-        documentsUrl:
-          documentsUrl !== undefined
-            ? (typeof documentsUrl === "string" ? documentsUrl.trim() || null : documentsUrl)
-            : complex.features?.documentsUrl,
-        amenities: amenities || complex.features?.amenities || [],
-        images: finalImages,
-      },
+      features: nextFeatures,
       cover_photo: finalCover,
     };
+    if (resolvedCountry !== undefined) updateData.country = resolvedCountry;
+    if (resolvedDistrict !== undefined) updateData.district = resolvedDistrict;
 
-    const { data: updatedComplex, error: updateError } = await supabase
+    let { data: updatedComplex, error: updateError } = await supabase
       .from("residential_complexes")
       .update(updateData)
       .eq("id", id)
       .select()
       .single();
+
+    if (updateError && (updateError.message?.includes("column") || updateError.code === "42703" || updateError.message?.includes("country") || updateError.message?.includes("district"))) {
+      const fallbackData = { ...updateData };
+      delete fallbackData.country;
+      delete fallbackData.district;
+      const fallbackResult = await supabase
+        .from("residential_complexes")
+        .update(fallbackData)
+        .eq("id", id)
+        .select()
+        .single();
+      updatedComplex = fallbackResult.data;
+      updateError = fallbackResult.error;
+    }
 
     if (updateError) {
       console.error("Update Complex Error:", updateError);

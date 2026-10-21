@@ -942,3 +942,7 @@ uytapkg, во время адверсариального ревью. Все с�
 - 2026-10-19T18:47:48.317Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/2ce27038-f885-437f-89d6-2213cfebf708.webp (cleanup, test upload item-10)
 - 2026-10-20T09:58:03.189Z CREATE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/d6d37928-2ec4-4e49-acef-045a72f4f8a0.webp (test upload item-10)
 - 2026-10-20T09:58:03.190Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/d6d37928-2ec4-4e49-acef-045a72f4f8a0.webp (cleanup, test upload item-10)
+- 2026-10-21T15:30:31.941Z CREATE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/3763d9ce-836c-4d6f-9194-b4c9a5a7115f.webp (test upload item-10)
+- 2026-10-21T15:30:31.945Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/3763d9ce-836c-4d6f-9194-b4c9a5a7115f.webp (cleanup, test upload item-10)
+- 2026-10-21T15:43:40.762Z CREATE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/bd4fe4ab-e4eb-4b32-89ff-7e6b9a7a1862.webp (test upload item-10)
+- 2026-10-21T15:43:40.763Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/bd4fe4ab-e4eb-4b32-89ff-7e6b9a7a1862.webp (cleanup, test upload item-10)

@@ -123,8 +123,10 @@ CREATE TABLE IF NOT EXISTS residential_complexes (
     developer_id UUID NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    country VARCHAR(50) DEFAULT 'kyrgyzstan',
     region VARCHAR(100) NOT NULL,
     city VARCHAR(100),
+    district VARCHAR(100),
     address TEXT,
     completion_status VARCHAR(50) CHECK (completion_status IN ('building', 'completed')),
     completion_date VARCHAR(50),
@@ -261,6 +263,9 @@ CREATE INDEX IF NOT EXISTS idx_listings_region ON listings(region);
 CREATE INDEX IF NOT EXISTS idx_listings_property_type ON listings(property_type);
 CREATE INDEX IF NOT EXISTS idx_listings_promotion ON listings(promotion_status);
 CREATE INDEX IF NOT EXISTS idx_listings_created_at ON listings(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_residential_complexes_location ON residential_complexes(country, city, district);
+CREATE INDEX IF NOT EXISTS idx_residential_complexes_created_at ON residential_complexes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_residential_complexes_dev_created ON residential_complexes(developer_id, created_at DESC);
 
 -- Отзыв токенов (Token Revocation)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0;

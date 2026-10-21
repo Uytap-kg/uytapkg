@@ -63,6 +63,10 @@ export function mapComplexData(item) {
 
     city: item.city || null,
 
+    district: item.district || features.district || null,
+
+    country: item.country || features.country || "kyrgyzstan",
+
     region: item.region || null,
 
     // В residential_complexes нет колонок latitude/longitude — координаты

@@ -378,8 +378,11 @@ export const createComplexSchema = z
   .object({
     name: z.string({ required_error: "Укажите название ЖК" }).min(2, "Название ЖК слишком короткое"),
     description: z.string().optional().nullable(),
+    country: z.string().trim().max(50, "Название страны слишком длинное").optional().nullable(),
     region: z.string().optional().nullable(),
     city: z.string().optional().nullable(),
+    cityKey: z.string().trim().max(50).optional().nullable(),
+    district: z.string().trim().max(100, "Название района слишком длинное").optional().nullable(),
     address: z.string().optional().nullable(),
     latitude: z.number().optional().nullable(),
     longitude: z.number().optional().nullable(),

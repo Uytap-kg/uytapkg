@@ -541,6 +541,10 @@ export default function MyComplexDetail() {
 
       const payload = {
         name: updatedComplex.name,
+        country: updatedComplex.country || "kyrgyzstan",
+        region: updatedComplex.region || null,
+        city: updatedComplex.city || null,
+        district: updatedComplex.district || null,
 
         address: updatedComplex.address,
 
