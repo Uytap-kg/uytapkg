@@ -244,7 +244,11 @@ export default function Lawyers() {
                         {lawyer.specialization}
                       </div>
 
-                      {lawyer.description && <p>{lawyer.description}</p>}
+                      {lawyer.description && (
+                        <p className={styles.lawyerDescription}>
+                          {lawyer.description}
+                        </p>
+                      )}
                     </div>
 
                     <div className={styles.lawyerMeta}>
