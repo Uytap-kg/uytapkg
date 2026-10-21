@@ -48,7 +48,6 @@ function formatPhone(value) {
 
 function normalizePhone(phone) {
   const digits = phone.replace(/\D/g, "");
-
   return `+996${digits.slice(-9)}`;
 }
 
@@ -65,7 +64,6 @@ export default function Agency() {
   const [password, setPassword] = useState("");
 
   const [showPassword, setShowPassword] = useState(false);
-
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
@@ -75,35 +73,41 @@ export default function Agency() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     setError("");
 
-    /*
-    |--------------------------------------------------------------------------
-    | POLICY VALIDATION
-    |--------------------------------------------------------------------------
-    */
+    // Проверка обязательных полей
+    if (
+      !companyName.trim() ||
+      !directorName.trim() ||
+      !email.trim() ||
+      !officeAddress.trim() ||
+      !inn.trim() ||
+      !password
+    ) {
+      setError("Заполните все обязательные поля.");
+      return;
+    }
 
+    // Проверка принятия документов
     if (!privacyAccepted || !termsAccepted) {
       setError(
         "Необходимо принять Политику конфиденциальности и Пользовательское соглашение.",
       );
-
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | PHONE VALIDATION
-    |--------------------------------------------------------------------------
-    */
-
+    // Проверка телефона
     const normalizedPhone = normalizePhone(phone);
     const phoneDigits = normalizedPhone.replace(/\D/g, "");
 
     if (phoneDigits.length !== 12) {
-      setError("Введите полный номер телефона в формате +996 XXX XXX XXX");
+      setError("Введите полный номер телефона в формате +996 XXX XXX XXX.");
+      return;
+    }
 
+    // Проверка длины пароля
+    if (password.length < 8) {
+      setError("Пароль должен содержать не менее 8 символов.");
       return;
     }
 
@@ -112,22 +116,24 @@ export default function Agency() {
     try {
       const res = await registerUser({
         accountType: "agency",
-        companyName,
-        directorName,
+        companyName: companyName.trim(),
+        directorName: directorName.trim(),
         phone: normalizedPhone,
-        email,
-        officeAddress,
-        inn,
-        about,
+        email: email.trim().toLowerCase(),
+        officeAddress: officeAddress.trim(),
+        inn: inn.trim(),
+        about: about.trim(),
         password,
       });
 
-      // token и user сохраняются внутри registerUser()
-
+      // Если требуется подтверждение email
       if (res?.needVerification) {
         const verifyEmail = email.trim().toLowerCase();
+
         localStorage.setItem("register_email", verifyEmail);
+
         router.push(`/auth-code?email=${encodeURIComponent(verifyEmail)}`);
+
         return;
       }
 
@@ -137,7 +143,7 @@ export default function Agency() {
         router.push("/auth-code");
       }, 1200);
     } catch (err) {
-      setError(err.message || "Ошибка при регистрации агентства");
+      setError(err.message || "Ошибка при регистрации агентства.");
     } finally {
       setLoading(false);
     }
@@ -160,16 +166,19 @@ export default function Agency() {
 
       {/* FORM */}
 
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form className={styles.form} onSubmit={handleSubmit} noValidate={false}>
         {/* COMPANY NAME */}
 
         <div className={styles.inputBox}>
           <Building2 />
 
           <input
+            type="text"
+            name="companyName"
             placeholder="Название агентства"
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
+            autoComplete="organization"
             required
           />
         </div>
@@ -180,9 +189,12 @@ export default function Agency() {
           <User />
 
           <input
+            type="text"
+            name="directorName"
             placeholder="Имя руководителя"
             value={directorName}
             onChange={(e) => setDirectorName(e.target.value)}
+            autoComplete="name"
             required
           />
         </div>
@@ -193,9 +205,11 @@ export default function Agency() {
           <Phone />
 
           <input
-            placeholder="+996 000 000 000"
             type="tel"
+            name="phone"
+            placeholder="+996 000 000 000"
             inputMode="numeric"
+            autoComplete="tel"
             value={phone}
             onChange={(e) => setPhone(formatPhone(e.target.value))}
             required
@@ -209,9 +223,11 @@ export default function Agency() {
 
           <input
             type="email"
+            name="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
           />
         </div>
@@ -222,9 +238,13 @@ export default function Agency() {
           <MapPin />
 
           <input
+            type="text"
+            name="officeAddress"
             placeholder="Адрес офиса"
             value={officeAddress}
             onChange={(e) => setOfficeAddress(e.target.value)}
+            autoComplete="street-address"
+            required
           />
         </div>
 
@@ -234,6 +254,8 @@ export default function Agency() {
           <FileText />
 
           <input
+            type="text"
+            name="inn"
             placeholder="ИНН агентства"
             value={inn}
             onChange={(e) => setInn(e.target.value)}
@@ -248,9 +270,12 @@ export default function Agency() {
 
           <input
             type={showPassword ? "text" : "password"}
-            placeholder="Пароль"
+            name="password"
+            placeholder="Пароль (минимум 8 символов)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            minLength={8}
             required
           />
 
@@ -268,6 +293,7 @@ export default function Agency() {
 
         <textarea
           className={styles.textarea}
+          name="about"
           placeholder="Расскажите об агентстве: опыт работы, направления, районы и преимущества"
           value={about}
           onChange={(e) => setAbout(e.target.value)}
@@ -281,7 +307,7 @@ export default function Agency() {
 
             <span>
               Перед созданием профиля ознакомьтесь с условиями использования
-              UyTap
+              UyTap.
             </span>
           </div>
 
@@ -293,6 +319,7 @@ export default function Agency() {
               type="checkbox"
               checked={privacyAccepted}
               onChange={(e) => setPrivacyAccepted(e.target.checked)}
+              required
             />
 
             <label htmlFor="agency-privacy" className={styles.checkbox}>
@@ -319,6 +346,7 @@ export default function Agency() {
               type="checkbox"
               checked={termsAccepted}
               onChange={(e) => setTermsAccepted(e.target.checked)}
+              required
             />
 
             <label htmlFor="agency-terms" className={styles.checkbox}>
@@ -338,6 +366,7 @@ export default function Agency() {
 
         {error && (
           <div
+            role="alert"
             style={{
               color: "#ef4444",
               fontSize: "14px",
@@ -351,6 +380,7 @@ export default function Agency() {
 
         {success && (
           <div
+            role="status"
             style={{
               color: "#10b981",
               fontSize: "14px",
@@ -363,8 +393,6 @@ export default function Agency() {
             Профиль агентства создан! Перенаправление...
           </div>
         )}
-
-        {/* SUBMIT */}
 
         <button
           className={styles.submit}

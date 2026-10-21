@@ -48,7 +48,6 @@ function formatPhone(value) {
 
 function normalizePhone(phone) {
   const digits = phone.replace(/\D/g, "");
-
   return `+996${digits.slice(-9)}`;
 }
 
@@ -74,49 +73,56 @@ export default function DeveloperForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     setError("");
 
-    /*
-    |--------------------------------------------------------------------------
-    | POLICY VALIDATION
-    |--------------------------------------------------------------------------
-    */
+    // Проверка обязательных полей
+    if (
+      !companyName.trim() ||
+      !inn.trim() ||
+      !email.trim() ||
+      !officeAddress.trim() ||
+      !password
+    ) {
+      setError("Заполните все обязательные поля.");
+      return;
+    }
 
+    // Проверка принятия документов
     if (!privacyAccepted || !termsAccepted) {
       setError(
         "Необходимо принять Политику конфиденциальности и Пользовательское соглашение.",
       );
-
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | PHONE VALIDATION
-    |--------------------------------------------------------------------------
-    */
-
+    // Проверка телефона
     const normalizedPhone = normalizePhone(phone);
     const phoneDigits = normalizedPhone.replace(/\D/g, "");
 
     if (phoneDigits.length !== 12) {
-      setError("Введите полный номер телефона в формате +996 XXX XXX XXX");
+      setError("Введите полный номер телефона в формате +996 XXX XXX XXX.");
+      return;
+    }
 
+    // Проверка пароля
+    if (password.length < 8) {
+      setError("Пароль должен содержать не менее 8 символов.");
       return;
     }
 
     setLoading(true);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       const res = await registerUser({
         accountType: "developer",
-        companyName,
-        inn,
+        companyName: companyName.trim(),
+        inn: inn.trim(),
         phone: normalizedPhone,
-        email,
-        officeAddress,
-        about,
+        email: normalizedEmail,
+        officeAddress: officeAddress.trim(),
+        about: about.trim(),
         password,
       });
 
@@ -125,9 +131,10 @@ export default function DeveloperForm() {
       }
 
       if (res?.needVerification) {
-        const verifyEmail = email.trim().toLowerCase();
-        localStorage.setItem("register_email", verifyEmail);
-        router.push(`/auth-code?email=${encodeURIComponent(verifyEmail)}`);
+        localStorage.setItem("register_email", normalizedEmail);
+
+        router.push(`/auth-code?email=${encodeURIComponent(normalizedEmail)}`);
+
         return;
       }
 
@@ -137,7 +144,7 @@ export default function DeveloperForm() {
         router.push("/profile");
       }, 1200);
     } catch (err) {
-      setError(err.message || "Ошибка при регистрации застройщика");
+      setError(err.message || "Ошибка при регистрации застройщика.");
     } finally {
       setLoading(false);
     }
@@ -165,9 +172,12 @@ export default function DeveloperForm() {
           <Building />
 
           <input
+            type="text"
+            name="companyName"
             placeholder="Название компании"
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
+            autoComplete="organization"
             required
           />
         </div>
@@ -178,6 +188,8 @@ export default function DeveloperForm() {
           <FileCheck />
 
           <input
+            type="text"
+            name="inn"
             placeholder="ИНН компании"
             value={inn}
             onChange={(e) => setInn(e.target.value)}
@@ -192,10 +204,12 @@ export default function DeveloperForm() {
 
           <input
             type="tel"
+            name="phone"
             placeholder="+996 000 000 000"
             value={phone}
             onChange={(e) => setPhone(formatPhone(e.target.value))}
             inputMode="numeric"
+            autoComplete="tel"
             required
           />
         </div>
@@ -207,9 +221,11 @@ export default function DeveloperForm() {
 
           <input
             type="email"
+            name="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
           />
         </div>
@@ -220,9 +236,13 @@ export default function DeveloperForm() {
           <MapPin />
 
           <input
+            type="text"
+            name="officeAddress"
             placeholder="Адрес офиса"
             value={officeAddress}
             onChange={(e) => setOfficeAddress(e.target.value)}
+            autoComplete="street-address"
+            required
           />
         </div>
 
@@ -233,9 +253,12 @@ export default function DeveloperForm() {
 
           <input
             type={showPassword ? "text" : "password"}
-            placeholder="Пароль"
+            name="password"
+            placeholder="Пароль (минимум 8 символов)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            minLength={8}
             required
           />
 
@@ -250,11 +273,12 @@ export default function DeveloperForm() {
         </div>
       </div>
 
-      {/* ABOUT */}
+      {/* ABOUT — OPTIONAL */}
 
       <textarea
         className={styles.textarea}
-        placeholder="Описание компании"
+        name="about"
+        placeholder="Описание компании (необязательно)"
         value={about}
         onChange={(e) => setAbout(e.target.value)}
       />
@@ -266,7 +290,8 @@ export default function DeveloperForm() {
           <ShieldCheck />
 
           <span>
-            Перед созданием профиля ознакомьтесь с условиями использования UyTap
+            Перед созданием профиля ознакомьтесь с условиями использования
+            UyTap.
           </span>
         </div>
 
@@ -278,6 +303,7 @@ export default function DeveloperForm() {
             type="checkbox"
             checked={privacyAccepted}
             onChange={(e) => setPrivacyAccepted(e.target.checked)}
+            required
           />
 
           <label htmlFor="developer-privacy" className={styles.checkbox}>
@@ -304,6 +330,7 @@ export default function DeveloperForm() {
             type="checkbox"
             checked={termsAccepted}
             onChange={(e) => setTermsAccepted(e.target.checked)}
+            required
           />
 
           <label htmlFor="developer-terms" className={styles.checkbox}>
@@ -323,6 +350,7 @@ export default function DeveloperForm() {
 
       {error && (
         <div
+          role="alert"
           style={{
             color: "#ef4444",
             fontSize: "14px",
@@ -336,6 +364,7 @@ export default function DeveloperForm() {
 
       {success && (
         <div
+          role="status"
           style={{
             color: "#10b981",
             fontSize: "14px",
