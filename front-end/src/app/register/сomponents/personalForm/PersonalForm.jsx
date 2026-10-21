@@ -45,7 +45,6 @@ function formatPhone(value) {
 
 function normalizePhone(phone) {
   const digits = phone.replace(/\D/g, "");
-
   return `+996${digits.slice(-9)}`;
 }
 
@@ -67,58 +66,64 @@ export default function PersonalForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     setError("");
 
-    /*
-    |--------------------------------------------------------------------------
-    | POLICY VALIDATION
-    |--------------------------------------------------------------------------
-    */
+    // Проверка обязательных полей
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !password) {
+      setError("Заполните все обязательные поля.");
+      return;
+    }
 
+    // Проверка принятия документов
     if (!privacyAccepted || !termsAccepted) {
       setError(
         "Необходимо принять Политику конфиденциальности и Пользовательское соглашение.",
       );
-
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | PHONE VALIDATION
-    |--------------------------------------------------------------------------
-    */
-
+    // Проверка телефона
     const normalizedPhone = normalizePhone(phone);
     const phoneDigits = normalizedPhone.replace(/\D/g, "");
 
     if (phoneDigits.length !== 12) {
-      setError("Введите полный номер телефона в формате +996 XXX XXX XXX");
+      setError("Введите полный номер телефона в формате +996 XXX XXX XXX.");
+      return;
+    }
 
+    // Проверка пароля
+    if (password.length < 8) {
+      setError("Пароль должен содержать не менее 8 символов.");
       return;
     }
 
     setLoading(true);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       const res = await registerUser({
         accountType: "personal",
-        firstName,
-        lastName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         phone: normalizedPhone,
-        email,
+        email: normalizedEmail,
         password,
       });
 
       if (res?.token) {
-        saveAuth({ token: res.token, user: res.user });
+        saveAuth({
+          token: res.token,
+          user: res.user,
+        });
       }
 
+      // Подтверждение email
       if (res?.needVerification) {
-        const verifyEmail = email.trim().toLowerCase();
-        localStorage.setItem("register_email", verifyEmail);
-        router.push(`/auth-code?email=${encodeURIComponent(verifyEmail)}`);
+        localStorage.setItem("register_email", normalizedEmail);
+
+        router.push(`/auth-code?email=${encodeURIComponent(normalizedEmail)}`);
+
         return;
       }
 
@@ -128,7 +133,7 @@ export default function PersonalForm() {
         router.push("/profile");
       }, 1200);
     } catch (err) {
-      setError(err.message || "Ошибка при регистрации");
+      setError(err.message || "Ошибка при регистрации.");
     } finally {
       setLoading(false);
     }
@@ -143,6 +148,7 @@ export default function PersonalForm() {
         placeholder="Имя"
         value={firstName}
         setValue={setFirstName}
+        required
       />
 
       {/* LAST NAME */}
@@ -152,6 +158,7 @@ export default function PersonalForm() {
         placeholder="Фамилия"
         value={lastName}
         setValue={setLastName}
+        required
       />
 
       {/* PHONE */}
@@ -162,6 +169,7 @@ export default function PersonalForm() {
         value={phone}
         setValue={(value) => setPhone(formatPhone(value))}
         type="tel"
+        required
       />
 
       {/* EMAIL */}
@@ -172,16 +180,18 @@ export default function PersonalForm() {
         type="email"
         value={email}
         setValue={setEmail}
+        required
       />
 
       {/* PASSWORD */}
 
       <InputField
         icon={Lock}
-        placeholder="Пароль"
+        placeholder="Пароль (минимум 8 символов)"
         password
         value={password}
         setValue={setPassword}
+        required
       />
 
       {/* POLICIES */}
@@ -192,7 +202,7 @@ export default function PersonalForm() {
 
           <span>
             Перед созданием аккаунта ознакомьтесь с условиями использования
-            UyTap
+            UyTap.
           </span>
         </div>
 
@@ -204,6 +214,7 @@ export default function PersonalForm() {
             type="checkbox"
             checked={privacyAccepted}
             onChange={(e) => setPrivacyAccepted(e.target.checked)}
+            required
           />
 
           <label htmlFor="personal-privacy" className={styles.checkbox}>
@@ -230,6 +241,7 @@ export default function PersonalForm() {
             type="checkbox"
             checked={termsAccepted}
             onChange={(e) => setTermsAccepted(e.target.checked)}
+            required
           />
 
           <label htmlFor="personal-terms" className={styles.checkbox}>
@@ -249,6 +261,7 @@ export default function PersonalForm() {
 
       {error && (
         <div
+          role="alert"
           style={{
             color: "#ef4444",
             fontSize: "14px",
@@ -263,6 +276,7 @@ export default function PersonalForm() {
 
       {success && (
         <div
+          role="status"
           style={{
             color: "#10b981",
             fontSize: "14px",

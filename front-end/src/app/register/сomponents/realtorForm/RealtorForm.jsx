@@ -46,7 +46,6 @@ function formatPhone(value) {
 
 function normalizePhone(phone) {
   const digits = phone.replace(/\D/g, "");
-
   return `+996${digits.slice(-9)}`;
 }
 
@@ -72,6 +71,13 @@ export default function RealtorForm() {
     e.preventDefault();
     setError("");
 
+    // Проверка обязательных полей
+    if (!fullName.trim() || !email.trim() || !password) {
+      setError("Заполните все обязательные поля.");
+      return;
+    }
+
+    // Проверка согласий
     if (!privacyAccepted || !termsAccepted) {
       setError(
         "Необходимо принять Политику конфиденциальности и Пользовательское соглашение.",
@@ -79,31 +85,42 @@ export default function RealtorForm() {
       return;
     }
 
+    // Проверка телефона
     const normalizedPhone = normalizePhone(phone);
     const phoneDigits = normalizedPhone.replace(/\D/g, "");
 
     if (phoneDigits.length !== 12) {
-      setError("Введите полный номер телефона в формате +996 XXX XXX XXX");
+      setError("Введите полный номер телефона в формате +996 XXX XXX XXX.");
+      return;
+    }
+
+    // Проверка пароля
+    if (password.length < 8) {
+      setError("Пароль должен содержать не менее 8 символов.");
       return;
     }
 
     setLoading(true);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       const res = await registerUser({
         accountType: "realtor",
-        fullName,
+        fullName: fullName.trim(),
         phone: normalizedPhone,
-        email,
-        agencyName,
-        about,
+        email: normalizedEmail,
+        agencyName: agencyName.trim(),
+        about: about.trim(),
         password,
       });
 
+      // Подтверждение email
       if (res?.needVerification) {
-        const verifyEmail = email.trim().toLowerCase();
-        localStorage.setItem("register_email", verifyEmail);
-        router.push(`/auth-code?email=${encodeURIComponent(verifyEmail)}`);
+        localStorage.setItem("register_email", normalizedEmail);
+
+        router.push(`/auth-code?email=${encodeURIComponent(normalizedEmail)}`);
+
         return;
       }
 
@@ -113,7 +130,7 @@ export default function RealtorForm() {
         router.push("/auth-code");
       }, 1200);
     } catch (err) {
-      setError(err.message || "Ошибка при регистрации профиля риэлтора");
+      setError(err.message || "Ошибка при регистрации профиля риэлтора.");
     } finally {
       setLoading(false);
     }
@@ -121,6 +138,8 @@ export default function RealtorForm() {
 
   return (
     <form className={styles.wrapper} onSubmit={handleSubmit}>
+      {/* HEADER */}
+
       <div className={styles.header}>
         <Building2 />
 
@@ -130,61 +149,85 @@ export default function RealtorForm() {
         </div>
       </div>
 
+      {/* FIELDS */}
+
       <div className={styles.grid}>
+        {/* FULL NAME */}
+
         <div className={styles.inputBox}>
           <FileText />
 
           <input
+            type="text"
+            name="fullName"
             placeholder="ФИО"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
+            autoComplete="name"
             required
           />
         </div>
+
+        {/* PHONE */}
 
         <div className={styles.inputBox}>
           <Phone />
 
           <input
-            placeholder="+996 000 000 000"
             type="tel"
+            name="phone"
+            placeholder="+996 000 000 000"
             inputMode="numeric"
+            autoComplete="tel"
             value={phone}
             onChange={(e) => setPhone(formatPhone(e.target.value))}
             required
           />
         </div>
 
+        {/* EMAIL */}
+
         <div className={styles.inputBox}>
           <Mail />
 
           <input
             type="email"
+            name="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
           />
         </div>
+
+        {/* AGENCY — OPTIONAL */}
 
         <div className={styles.inputBox}>
           <Building2 />
 
           <input
-            placeholder="Название агентства (опционально)"
+            type="text"
+            name="agencyName"
+            placeholder="Название агентства (необязательно)"
             value={agencyName}
             onChange={(e) => setAgencyName(e.target.value)}
           />
         </div>
 
+        {/* PASSWORD */}
+
         <div className={styles.inputBox}>
           <Lock />
 
           <input
-            placeholder="Пароль"
             type={showPassword ? "text" : "password"}
+            name="password"
+            placeholder="Пароль (минимум 8 символов)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            minLength={8}
             required
           />
 
@@ -199,12 +242,17 @@ export default function RealtorForm() {
         </div>
       </div>
 
+      {/* ABOUT — OPTIONAL */}
+
       <textarea
         className={styles.textarea}
-        placeholder="О себе / опыт работы"
+        name="about"
+        placeholder="О себе / опыт работы (необязательно)"
         value={about}
         onChange={(e) => setAbout(e.target.value)}
       />
+
+      {/* POLICIES */}
 
       <div className={styles.policyBlock}>
         <div className={styles.policyHeader}>
@@ -212,9 +260,11 @@ export default function RealtorForm() {
 
           <span>
             Перед созданием аккаунта ознакомьтесь с условиями использования
-            UyTap
+            UyTap.
           </span>
         </div>
+
+        {/* PRIVACY */}
 
         <div className={styles.checkboxRow}>
           <input
@@ -222,6 +272,7 @@ export default function RealtorForm() {
             type="checkbox"
             checked={privacyAccepted}
             onChange={(e) => setPrivacyAccepted(e.target.checked)}
+            required
           />
 
           <label htmlFor="realtor-privacy" className={styles.checkbox}>
@@ -240,12 +291,15 @@ export default function RealtorForm() {
           </span>
         </div>
 
+        {/* TERMS */}
+
         <div className={styles.checkboxRow}>
           <input
             id="realtor-terms"
             type="checkbox"
             checked={termsAccepted}
             onChange={(e) => setTermsAccepted(e.target.checked)}
+            required
           />
 
           <label htmlFor="realtor-terms" className={styles.checkbox}>
@@ -261,8 +315,11 @@ export default function RealtorForm() {
         </div>
       </div>
 
+      {/* ERROR */}
+
       {error && (
         <div
+          role="alert"
           style={{
             color: "#ef4444",
             fontSize: "14px",
@@ -272,8 +329,11 @@ export default function RealtorForm() {
         </div>
       )}
 
+      {/* SUCCESS */}
+
       {success && (
         <div
+          role="status"
           style={{
             color: "#10b981",
             fontSize: "14px",
@@ -286,6 +346,8 @@ export default function RealtorForm() {
           Профиль риэлтора создан! Перенаправление...
         </div>
       )}
+
+      {/* SUBMIT */}
 
       <button
         className={styles.submit}

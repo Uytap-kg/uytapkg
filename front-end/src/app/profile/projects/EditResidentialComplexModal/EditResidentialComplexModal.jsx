@@ -9,23 +9,20 @@ import {
   Home,
   Car,
   CalendarDays,
-  Ruler,
   Check,
-  ImagePlus,
-  Upload,
-  Trash2,
   Warehouse,
   Maximize,
   Blocks,
+  Globe2,
+  Ruler,
 } from "lucide-react";
 
 import styles from "./EditResidentialComplexModal.module.css";
 import CustomSelect from "@/components/ui/customSelect/CustomSelect";
 import { useLanguage } from "@/context/LanguageContext";
-import { uploadComplexPhoto } from "@/utils/api";
+import { getConstants, uploadComplexPhoto } from "@/utils/api";
 
 const statuses = ["Проект", "Строительство", "Сдан"];
-
 const classes = ["Эконом", "Комфорт", "Бизнес", "Премиум"];
 
 const constructions = [
@@ -54,8 +51,405 @@ const amenities = [
 
 const MAX_IMAGES = 20;
 
+const bishkekDistrictsFallback = [
+  "Центр",
+  "Верхняя часть города",
+  "Нижняя часть города",
+  "Верхний Джал",
+  "Средний Джал",
+  "Нижний Джал",
+  "Арча-Бешик",
+  "Орто-Сай",
+  "Ак-Орго",
+  "Кызыл-Аскер",
+  "Ынтымак",
+  "Тенир-Тоо",
+  "Ак-Кеме",
+  "Пишпек",
+  "69-га",
+  "3–12 мкр",
+  "Асанбай",
+  "Кара-Жыгач",
+  "Кок-Жар",
+  "Тунгуч",
+  "Магистраль",
+  "Улан",
+  "Вефа",
+  "ЦУМ",
+  "Маевка",
+  "Политех",
+  "Юг-2",
+  "Достук",
+  "Золотой квадрат",
+  "КНУ",
+  "Тынчтык",
+  "Мурас-Ордо",
+  "Аламедин-1",
+  "Восток-5",
+  "Дордой",
+  "Лебединовка",
+  "Учкун",
+  "Таатан",
+  "Юбилейка",
+];
+
+const kyrgyzRegionsFallback = {
+  BISHKEK: { name: "Бишкек", type: "bishkek" },
+  CHUY: {
+    name: "Чуйская область",
+    type: "region",
+    settlements: [
+      "Токмок",
+      "Кант",
+      "Кара-Балта",
+      "Шопоков",
+      "Каинды",
+      "Кемин",
+      "Беловодское",
+      "Сокулук",
+      "Аламедин",
+      "Лебединовка",
+      "Военно-Антоновка",
+      "Новопавловка",
+      "Александровка",
+      "Петровка",
+      "Московское",
+      "Бишкекское",
+    ],
+  },
+  OSH_REGION: {
+    name: "Ошская область",
+    type: "region",
+    settlements: [
+      "Ош",
+      "Ноокат",
+      "Кара-Суу",
+      "Араванский район",
+      "Узгенский район",
+      "Чон-Алайский район",
+      "Кара-Сууйский район",
+      "Кара-Кульджинский район",
+      "Узген",
+      "Гульча",
+      "Жаны-Ноокат",
+      "Эркеш-Там",
+      "Гулбаар",
+    ],
+  },
+  ISSYK_KUL: {
+    name: "Иссык-Кульская область",
+    type: "region",
+    settlements: [
+      "Каракол",
+      "Чолпон-Ата",
+      "Бостери",
+      "Балыкчы",
+      "Каджи-Сай",
+      "Тамчы",
+      "Боконбаево",
+      "Тюп",
+      "Тамга",
+      "Григорьевка",
+      "Ананьево",
+      "Барскоон",
+      "Жыргалан",
+    ],
+  },
+  JALAL_ABAD: {
+    name: "Джалал-Абадская область",
+    type: "region",
+    settlements: [
+      "Джалал-Абад",
+      "Таш-Кумыр",
+      "Кара-Куль",
+      "Майлуу-Суу",
+      "Кочкор-Ата",
+      "Базар-Коргон",
+      "Кербен",
+      "Токтогул",
+      "Сузак",
+      "Ала-Бука",
+    ],
+  },
+  NARYN: {
+    name: "Нарынская область",
+    type: "region",
+    settlements: [
+      "Нарын",
+      "Кочкор",
+      "Ат-Башы",
+      "Чаек",
+      "Баетов",
+      "Казарман",
+      "Мин-Куш",
+      "Достук",
+    ],
+  },
+  TALAS: {
+    name: "Таласская область",
+    type: "region",
+    settlements: [
+      "Талас",
+      "Бакай-Ата",
+      "Покровка",
+      "Кара-Буура",
+      "Манас",
+      "Кызыл-Адыр",
+    ],
+  },
+  BATKEN: {
+    name: "Баткенская область",
+    type: "region",
+    settlements: [
+      "Баткен",
+      "Кызыл-Кыя",
+      "Сулюкта",
+      "Раззаков",
+      "Кадамжай",
+      "Айдаркен",
+      "Исфана",
+      "Самаркандек",
+    ],
+  },
+};
+
+const turkeyCities = {
+  istanbul: {
+    name: "Стамбул",
+    districts: [
+      "Авджилар",
+      "Адалар",
+      "Арнавуткёй",
+      "Аташехир",
+      "Багджилар",
+      "Байрампаша",
+      "Бакыркёй",
+      "Башакшехир",
+      "Бейкоз",
+      "Бейликдюзю",
+      "Бейоглу",
+      "Бешикташ",
+      "Бююкчекмедже",
+      "Газиосманпаша",
+      "Гюнгёрен",
+      "Зейтинбурну",
+      "Кадыкёй",
+      "Картал",
+      "Кючюкчекмедже",
+      "Кягытхане",
+      "Малтепе",
+      "Пендик",
+      "Санджактепе",
+      "Сарыер",
+      "Силиври",
+      "Султанбейли",
+      "Султангази",
+      "Тузла",
+      "Умрание",
+      "Ускюдар",
+      "Фатих",
+      "Чаталджа",
+      "Чекмекёй",
+      "Шиле",
+      "Шишли",
+      "Эсенлер",
+      "Эсеньюрт",
+      "Эюпсултан",
+    ],
+  },
+  ankara: {
+    name: "Анкара",
+    districts: [
+      "Акюрт",
+      "Алтындаг",
+      "Аяш",
+      "Бала",
+      "Бейпазары",
+      "Гёльбаши",
+      "Гюдюл",
+      "Енимахалле",
+      "Каледжик",
+      "Кахраманказан",
+      "Кечиорен",
+      "Кызылджахамам",
+      "Мамак",
+      "Наллыхан",
+      "Полатлы",
+      "Пурсаклар",
+      "Синджан",
+      "Хаймана",
+      "Чамлыдере",
+      "Чанкая",
+      "Чубук",
+      "Шерефликочхисар",
+      "Эврен",
+      "Эльмадаг",
+      "Эриаман",
+    ],
+  },
+  antalya: {
+    name: "Анталья",
+    districts: [
+      "Аксеки",
+      "Аксу",
+      "Аланья",
+      "Демре",
+      "Дёшемеалты",
+      "Ибрады",
+      "Каш",
+      "Кемер",
+      "Кепез",
+      "Коньяалты",
+      "Коркутели",
+      "Кумлуджа",
+      "Манавгат",
+      "Муратпаша",
+      "Серик",
+      "Финике",
+      "Газипаша",
+      "Гюндогмуш",
+      "Эльмалы",
+    ],
+  },
+  izmir: {
+    name: "Измир",
+    districts: [
+      "Алиага",
+      "Балчова",
+      "Байындыр",
+      "Байраклы",
+      "Бергама",
+      "Бейдаг",
+      "Борнова",
+      "Буджа",
+      "Чешме",
+      "Чигли",
+      "Дикили",
+      "Фоча",
+      "Газиэмир",
+      "Гюзелбахче",
+      "Карабаглар",
+      "Карабурун",
+      "Каршияка",
+      "Кемальпаша",
+      "Кынык",
+      "Кираз",
+      "Конак",
+      "Мендерес",
+      "Менемен",
+      "Нарлыдере",
+      "Одемиш",
+      "Сеферихисар",
+      "Селчук",
+      "Тире",
+      "Торбалы",
+      "Урла",
+    ],
+  },
+  bursa: {
+    name: "Бурса",
+    districts: [
+      "Бююк Орхан",
+      "Гемлик",
+      "Гюрсу",
+      "Изник",
+      "Караджабей",
+      "Келес",
+      "Кестель",
+      "Муданья",
+      "Мустафакемальпаша",
+      "Нилюфер",
+      "Орхангази",
+      "Орханели",
+      "Османгази",
+      "Енишехир",
+      "Инегёль",
+      "Харманджик",
+      "Йылдырым",
+    ],
+  },
+  mersin: {
+    name: "Аланья",
+    districts: [
+      "Авсаллар",
+      "Бекташ",
+      "Гюллер Пынары",
+      "Демирташ",
+      "Джикджилли",
+      "Инджекум",
+      "Кадипаша",
+      "Каргыджак",
+      "Кестель",
+      "Кизлар Пынары",
+      "Конаклы",
+      "Махмутлар",
+      "Оба",
+      "Окурджалар",
+      "Паяллар",
+      "Сарай",
+      "Сугёзю",
+      "Тосмур",
+      "Тюрклер",
+      "Хаджэт",
+      "Хисаричи",
+      "Чиплаклы",
+      "Шекерхане",
+    ],
+  },
+  mugla: {
+    name: "Бодрум",
+    districts: [
+      "Акьярлар",
+      "Битез",
+      "Гёльтюркбюкю",
+      "Гюмюшлюк",
+      "Гюндоган",
+      "Гюмбет",
+      "Давутлар",
+      "Ичмелер",
+      "Кадикалеси",
+      "Караова",
+      "Конаджик",
+      "Кумбахче",
+      "Мумджулар",
+      "Ортакент",
+      "Торба",
+      "Тургутреис",
+      "Тюркбюкю",
+      "Умюрча",
+      "Чарши",
+      "Чеч",
+      "Ялыкавак",
+    ],
+  },
+  adana: {
+    name: "Мармарис",
+    districts: [
+      "Армуталан",
+      "Бельдиби",
+      "Бозбурун",
+      "Ичмелер",
+      "Кемерсереф",
+      "Орхание",
+      "Селимие",
+      "Сителер",
+      "Согут",
+      "Тепе",
+      "Тургют",
+      "Турунч",
+      "Хатирими",
+      "Чамлы",
+      "Чилдыр",
+    ],
+  },
+};
+
 const initialForm = {
   name: "",
+  country: "kyrgyzstan",
+  region: "",
+  district: "",
+  settlement: "",
   address: "",
   city: "Бишкек",
   description: "",
@@ -83,6 +477,11 @@ export default function EditResidentialComplexModal({
   const [selectedAmenities, setSelectedAmenities] = useState([]);
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
+
+  const [locationsData, setLocationsData] = useState({
+    regions: kyrgyzRegionsFallback,
+    bishkekDistricts: bishkekDistrictsFallback,
+  });
 
   const translateStatus = (value) => {
     const map = {
@@ -144,6 +543,83 @@ export default function EditResidentialComplexModal({
   };
 
   useEffect(() => {
+    let active = true;
+
+    getConstants()
+      .then((res) => {
+        if (!active) return;
+
+        const locations =
+          res?.data?.locationsByRegion || res?.locationsByRegion;
+
+        if (!locations) return;
+
+        setLocationsData({
+          regions: {
+            BISHKEK: {
+              name: "Бишкек",
+              type: "bishkek",
+            },
+            CHUY: {
+              name: "Чуйская область",
+              type: "region",
+              settlements:
+                locations.CHUY || kyrgyzRegionsFallback.CHUY.settlements,
+            },
+            OSH_REGION: {
+              name: "Ошская область",
+              type: "region",
+              settlements: [
+                ...(locations.OSH_CITY || []),
+                ...(locations.OSH_REGION || []),
+              ],
+            },
+            ISSYK_KUL: {
+              name: "Иссык-Кульская область",
+              type: "region",
+              settlements:
+                locations.ISSYK_KUL ||
+                kyrgyzRegionsFallback.ISSYK_KUL.settlements,
+            },
+            JALAL_ABAD: {
+              name: "Джалал-Абадская область",
+              type: "region",
+              settlements:
+                locations.JALAL_ABAD ||
+                kyrgyzRegionsFallback.JALAL_ABAD.settlements,
+            },
+            NARYN: {
+              name: "Нарынская область",
+              type: "region",
+              settlements:
+                locations.NARYN || kyrgyzRegionsFallback.NARYN.settlements,
+            },
+            TALAS: {
+              name: "Таласская область",
+              type: "region",
+              settlements:
+                locations.TALAS || kyrgyzRegionsFallback.TALAS.settlements,
+            },
+            BATKEN: {
+              name: "Баткенская область",
+              type: "region",
+              settlements:
+                locations.BATKEN || kyrgyzRegionsFallback.BATKEN.settlements,
+            },
+          },
+          bishkekDistricts: locations.BISHKEK || bishkekDistrictsFallback,
+        });
+      })
+      .catch((err) => {
+        console.error("Не удалось загрузить список локаций:", err);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!complex) return;
 
     const f = complex.rawFeatures || complex.features || {};
@@ -169,8 +645,22 @@ export default function EditResidentialComplexModal({
       return cleaned || "";
     };
 
+    const savedCountry =
+      complex.country === "turkey" || complex.country === "kyrgyzstan"
+        ? complex.country
+        : "kyrgyzstan";
+
+    const savedRegion = complex.region || "";
+    const savedDistrict = complex.district || "";
+    const savedSettlement = complex.settlement || "";
+
     setForm({
+      ...initialForm,
       name: complex.name || "",
+      country: savedCountry,
+      region: savedRegion,
+      district: savedDistrict,
+      settlement: savedSettlement,
       address: complex.address || "",
       city: complex.city || "Бишкек",
       description: complex.description || "",
@@ -179,7 +669,7 @@ export default function EditResidentialComplexModal({
       construction:
         f.construction ||
         complex.constructionVal ||
-        (complex.constructionType !== "Не указано"
+        (complex.constructionType && complex.constructionType !== "Не указано"
           ? complex.constructionType
           : "Монолит"),
       completionDate: complex.completionDate || "",
@@ -206,16 +696,12 @@ export default function EditResidentialComplexModal({
     if (!complex) return;
 
     const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
+      if (event.key === "Escape") onClose();
     };
 
     document.addEventListener("keydown", handleEscape);
 
-    return () => {
-      document.removeEventListener("keydown", handleEscape);
-    };
+    return () => document.removeEventListener("keydown", handleEscape);
   }, [complex, onClose]);
 
   useEffect(() => {
@@ -243,6 +729,58 @@ export default function EditResidentialComplexModal({
     setForm((prev) => ({
       ...prev,
       [name]: value,
+    }));
+  }
+
+  function selectCountry(country) {
+    setForm((prev) => ({
+      ...prev,
+      country,
+      region: "",
+      district: "",
+      settlement: "",
+      city: "",
+    }));
+  }
+
+  function selectRegion(region) {
+    const selected = locationsData.regions[region];
+
+    setForm((prev) => ({
+      ...prev,
+      region,
+      district: "",
+      settlement: "",
+      city: selected?.type === "bishkek" ? "Бишкек" : "",
+    }));
+  }
+
+  function selectSettlement(settlement) {
+    setForm((prev) => ({
+      ...prev,
+      settlement,
+      city: settlement,
+      district: "",
+    }));
+  }
+
+  function selectTurkeyCity(cityKey) {
+    const selected = turkeyCities[cityKey];
+
+    setForm((prev) => ({
+      ...prev,
+      cityKey,
+      city: selected?.name || "",
+      region: "",
+      settlement: "",
+      district: "",
+    }));
+  }
+
+  function selectDistrict(district) {
+    setForm((prev) => ({
+      ...prev,
+      district,
     }));
   }
 
@@ -274,7 +812,6 @@ export default function EditResidentialComplexModal({
     }));
 
     setImages((prev) => [...prev, ...newImages]);
-
     event.target.value = "";
   }
 
@@ -296,24 +833,24 @@ export default function EditResidentialComplexModal({
     if (uploading) return;
 
     const parseNum = (val) => {
-      if (val === undefined || val === null || val === "") {
-        return null;
-      }
+      if (val === undefined || val === null || val === "") return null;
 
       const num = parseFloat(String(val).replace(",", "."));
 
-      return isNaN(num) ? val : num;
+      return Number.isNaN(num) ? val : num;
     };
 
     const token = localStorage.getItem("uytap_token");
     const finalUrls = [];
 
     setUploading(true);
+
     try {
       for (const img of images) {
         if (img.file instanceof File) {
           try {
             const uploadedUrl = await uploadComplexPhoto(token, img.file);
+
             if (uploadedUrl) finalUrls.push(uploadedUrl);
           } catch (err) {
             console.error("Ошибка загрузки фото ЖК:", err);
@@ -322,54 +859,101 @@ export default function EditResidentialComplexModal({
           finalUrls.push(img.url);
         }
       }
+
+      const updatedComplex = {
+        ...complex,
+        ...form,
+
+        // Структурированные данные локации для последующей фильтрации ЖК.
+        country: form.country,
+        region: form.region,
+        district: form.district,
+        settlement: form.settlement,
+        city: form.city,
+
+        floors: parseNum(form.floors),
+        blocks: parseNum(form.blocks),
+        apartments: parseNum(form.apartments),
+        parking: parseNum(form.parking),
+        area: parseNum(form.area),
+        landArea: parseNum(form.landArea),
+        ceilingHeight: parseNum(form.ceilingHeight),
+
+        amenities: selectedAmenities,
+        images: finalUrls,
+      };
+
+      await onSave(updatedComplex, token);
+    } catch (err) {
+      console.error("Ошибка сохранения ЖК:", err);
     } finally {
       setUploading(false);
     }
-
-    const updatedComplex = {
-      ...complex,
-      ...form,
-
-      floors: parseNum(form.floors),
-      blocks: parseNum(form.blocks),
-      apartments: parseNum(form.apartments),
-      parking: parseNum(form.parking),
-      area: parseNum(form.area),
-      landArea: parseNum(form.landArea),
-      ceilingHeight: parseNum(form.ceilingHeight),
-
-      amenities: selectedAmenities,
-
-      images: finalUrls,
-    };
-
-    onSave(updatedComplex, token);
   }
 
   function handleOverlayMouseDown(event) {
-    if (event.target === event.currentTarget) {
-      onClose();
-    }
+    if (event.target === event.currentTarget) onClose();
   }
 
-  const translatedStatuses = statuses.map(translateStatus);
+  const translateOptions = (values, translator) =>
+    values.map((value) => ({
+      value,
+      label: translator ? translator(value) : value,
+    }));
 
-  const translatedClasses = classes.map(translateClass);
-
-  const translatedConstructions = constructions.map(translateConstruction);
+  const translatedStatuses = translateOptions(statuses, translateStatus);
+  const translatedClasses = translateOptions(classes, translateClass);
+  const translatedConstructions = translateOptions(
+    constructions,
+    translateConstruction,
+  );
 
   const getOriginalValue = (translatedValue, values, translator) => {
-    const index = values.findIndex(
-      (value) => translator(value) === translatedValue,
-    );
+    const found = values.find((value) => translator(value) === translatedValue);
 
-    return index >= 0 ? values[index] : values[0];
+    return found || values[0];
   };
 
+  const selectedRegion = locationsData.regions[form.region];
+  const isKyrgyzstan = form.country === "kyrgyzstan";
+  const isTurkey = form.country === "turkey";
+  const isBishkek = isKyrgyzstan && selectedRegion?.type === "bishkek";
+
+  const turkeyCityKey =
+    form.cityKey ||
+    Object.keys(turkeyCities).find(
+      (key) => turkeyCities[key].name === form.city,
+    ) ||
+    "";
+
+  const selectedTurkeyCity = turkeyCities[turkeyCityKey];
+
+  const regionOptions = Object.entries(locationsData.regions).map(
+    ([value, item]) => ({
+      value,
+      label: item.name,
+    }),
+  );
+
+  const settlementOptions = (selectedRegion?.settlements || []).map(
+    (value) => ({ value, label: value }),
+  );
+
+  const districtOptions = (
+    isBishkek
+      ? locationsData.bishkekDistricts
+      : selectedTurkeyCity?.districts || []
+  ).map((value) => ({ value, label: value }));
+
+  const turkeyCityOptions = Object.entries(turkeyCities).map(
+    ([value, item]) => ({
+      value,
+      label: item.name,
+    }),
+  );
+
   const selectedStatusLabel = translateStatus(form.status);
-
   const selectedClassLabel = translateClass(form.class);
-
   const selectedConstructionLabel = translateConstruction(form.construction);
 
   return (
@@ -384,13 +968,10 @@ export default function EditResidentialComplexModal({
         aria-modal="true"
         aria-labelledby="edit-residential-complex-title"
       >
-        {/* HEADER */}
-
         <header className={styles.modalHeader}>
           <div className={styles.headerContent}>
             <span className={styles.eyebrow}>
               <Building2 />
-
               {t("editResidentialComplexModal.header.eyebrow")}
             </span>
 
@@ -412,11 +993,9 @@ export default function EditResidentialComplexModal({
           </button>
         </header>
 
-        {/* BODY */}
-
         <div className={styles.modalBody}>
           <form onSubmit={handleSubmit} className={styles.form}>
-            {/* 01 — BASIC INFO */}
+            {/* 01 — ОСНОВНАЯ ИНФОРМАЦИЯ */}
 
             <section className={styles.card}>
               <div className={styles.sectionHeader}>
@@ -426,7 +1005,6 @@ export default function EditResidentialComplexModal({
 
                 <div>
                   <span>01</span>
-
                   <h3>{t("editResidentialComplexModal.sections.basic")}</h3>
                 </div>
               </div>
@@ -450,26 +1028,114 @@ export default function EditResidentialComplexModal({
                     required
                   />
                 </div>
+              </div>
+            </section>
 
-                <div className={styles.field}>
-                  <label htmlFor="complex-city">
-                    {t("editResidentialComplexModal.fields.city")}
-                  </label>
+            {/* 02 — МЕСТОПОЛОЖЕНИЕ */}
 
-                  <input
-                    id="complex-city"
-                    name="city"
-                    type="text"
-                    value={form.city}
-                    onChange={handleChange}
-                    placeholder={t(
-                      "editResidentialComplexModal.placeholders.city",
-                    )}
-                    autoComplete="address-level2"
+            <section className={styles.card}>
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionIcon}>
+                  <MapPin />
+                </div>
+
+                <div>
+                  <span>02</span>
+                  <h3>Местоположение ЖК</h3>
+                </div>
+              </div>
+
+              <div className={styles.grid}>
+                <div className={`${styles.field} ${styles.full}`}>
+                  <label>Страна</label>
+
+                  <CustomSelect
+                    icon={Globe2}
+                    title="Выберите страну"
+                    value={form.country === "turkey" ? "Турция" : "Кыргызстан"}
+                    options={[
+                      { value: "kyrgyzstan", label: "Кыргызстан" },
+                      { value: "turkey", label: "Турция" },
+                    ]}
+                    setValue={selectCountry}
                   />
                 </div>
 
-                <div className={styles.field}>
+                {isKyrgyzstan && (
+                  <>
+                    <div className={`${styles.field} ${styles.full}`}>
+                      <label>Область / город</label>
+
+                      <CustomSelect
+                        icon={MapPin}
+                        title="Выберите область или город"
+                        value={form.region}
+                        options={regionOptions}
+                        setValue={selectRegion}
+                      />
+                    </div>
+
+                    {isBishkek && (
+                      <div className={`${styles.field} ${styles.full}`}>
+                        <label>Район Бишкека</label>
+
+                        <CustomSelect
+                          icon={MapPin}
+                          title="Выберите район"
+                          value={form.district}
+                          options={districtOptions}
+                          setValue={selectDistrict}
+                        />
+                      </div>
+                    )}
+
+                    {selectedRegion && !isBishkek && (
+                      <div className={`${styles.field} ${styles.full}`}>
+                        <label>Населённый пункт</label>
+
+                        <CustomSelect
+                          icon={MapPin}
+                          title="Выберите населённый пункт"
+                          value={form.settlement}
+                          options={settlementOptions}
+                          setValue={selectSettlement}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {isTurkey && (
+                  <>
+                    <div className={`${styles.field} ${styles.full}`}>
+                      <label>Город</label>
+
+                      <CustomSelect
+                        icon={MapPin}
+                        title="Выберите город"
+                        value={turkeyCityKey}
+                        options={turkeyCityOptions}
+                        setValue={selectTurkeyCity}
+                      />
+                    </div>
+
+                    {selectedTurkeyCity && (
+                      <div className={`${styles.field} ${styles.full}`}>
+                        <label>Район</label>
+
+                        <CustomSelect
+                          icon={MapPin}
+                          title="Выберите район"
+                          value={form.district}
+                          options={districtOptions}
+                          setValue={selectDistrict}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div className={`${styles.field} ${styles.full}`}>
                   <label htmlFor="complex-address">
                     {t("editResidentialComplexModal.fields.address")} <b>*</b>
                   </label>
@@ -510,14 +1176,13 @@ export default function EditResidentialComplexModal({
                   />
 
                   <span className={styles.counter}>
-                    {form.description.length}
-                    /1000
+                    {form.description.length}/1000
                   </span>
                 </div>
               </div>
             </section>
 
-            {/* 02 — CHARACTERISTICS */}
+            {/* 03 — ХАРАКТЕРИСТИКИ */}
 
             <section className={styles.card}>
               <div className={styles.sectionHeader}>
@@ -526,8 +1191,7 @@ export default function EditResidentialComplexModal({
                 </div>
 
                 <div>
-                  <span>02</span>
-
+                  <span>03</span>
                   <h3>
                     {t("editResidentialComplexModal.sections.characteristics")}
                   </h3>
@@ -693,6 +1357,25 @@ export default function EditResidentialComplexModal({
                 </div>
 
                 <div className={styles.field}>
+                  <label htmlFor="complex-area">Площадь территории</label>
+
+                  <div className={styles.inputWithIcon}>
+                    <Ruler />
+
+                    <input
+                      id="complex-area"
+                      type="number"
+                      name="area"
+                      value={form.area}
+                      onChange={handleChange}
+                      min="0"
+                      step="0.01"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.field}>
                   <label htmlFor="complex-land-area">
                     {t("editResidentialComplexModal.fields.landArea")}
                   </label>
@@ -736,7 +1419,7 @@ export default function EditResidentialComplexModal({
               </div>
             </section>
 
-            {/* 03 — AMENITIES */}
+            {/* 04 — ИНФРАСТРУКТУРА */}
 
             <section className={styles.card}>
               <div className={styles.sectionHeader}>
@@ -745,8 +1428,7 @@ export default function EditResidentialComplexModal({
                 </div>
 
                 <div>
-                  <span>03</span>
-
+                  <span>04</span>
                   <h3>
                     {t("editResidentialComplexModal.sections.infrastructure")}
                   </h3>
@@ -782,16 +1464,20 @@ export default function EditResidentialComplexModal({
           </form>
         </div>
 
-        {/* ACTIONS */}
-
         <div className={styles.actions}>
-          <button type="button" className={styles.cancel} onClick={onClose}>
+          <button
+            type="button"
+            className={styles.cancel}
+            onClick={onClose}
+            disabled={uploading}
+          >
             {t("editResidentialComplexModal.actions.cancel")}
           </button>
 
           <button
             type="button"
             className={styles.save}
+            disabled={uploading}
             onClick={(event) => {
               const formElement = event.currentTarget
                 .closest(`.${styles.modal}`)
@@ -801,8 +1487,9 @@ export default function EditResidentialComplexModal({
             }}
           >
             <Check />
-
-            {t("editResidentialComplexModal.actions.save")}
+            {uploading
+              ? "Сохранение..."
+              : t("editResidentialComplexModal.actions.save")}
           </button>
         </div>
       </div>
