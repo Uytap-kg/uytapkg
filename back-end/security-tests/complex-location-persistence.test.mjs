@@ -268,3 +268,72 @@ test("6. High-load Database Migration File: Check valid SQL and index definition
   assert.ok(sql.includes("idx_residential_complexes_created_at"));
   assert.ok(sql.includes("idx_residential_complexes_dev_created"));
 });
+
+test("7. Server-side getComplexes filter construction: sanitizes commas/parentheses and builds dual-layer or clauses", () => {
+  // Simulate the query builder inside getComplexes
+  function buildFilterClauses({ country, city, district }) {
+    const clauses = [];
+
+    if (country && typeof country === "string") {
+      const cleanCountry = country.replace(/[,()]/g, " ").trim().slice(0, 50);
+      if (cleanCountry) {
+        const isKg = /^(kyrgyzstan|кыргызстан|kg)$/i.test(cleanCountry);
+        const isTr = /^(turkey|турция|tr|türkiye)$/i.test(cleanCountry);
+        if (isKg) {
+          clauses.push({
+            type: "country",
+            clause: "country.ilike.%kyrgyzstan%,country.ilike.%кыргызстан%,features->>country.ilike.%kyrgyzstan%,features->>country.ilike.%кыргызстан%",
+          });
+        } else if (isTr) {
+          clauses.push({
+            type: "country",
+            clause: "country.ilike.%turkey%,country.ilike.%турция%,features->>country.ilike.%turkey%,features->>country.ilike.%турция%",
+          });
+        } else {
+          clauses.push({
+            type: "country",
+            clause: `country.ilike.%${cleanCountry}%,features->>country.ilike.%${cleanCountry}%`,
+          });
+        }
+      }
+    }
+
+    if (city && typeof city === "string") {
+      const cleanCity = city.replace(/[,()]/g, " ").trim().slice(0, 100);
+      if (cleanCity) {
+        clauses.push({
+          type: "city",
+          clause: `city.ilike.%${cleanCity}%,features->>city.ilike.%${cleanCity}%,address.ilike.%${cleanCity}%`,
+        });
+      }
+    }
+
+    if (district && typeof district === "string") {
+      const cleanDistrict = district.replace(/[,()]/g, " ").trim().slice(0, 100);
+      if (cleanDistrict) {
+        clauses.push({
+          type: "district",
+          clause: `district.ilike.%${cleanDistrict}%,features->>district.ilike.%${cleanDistrict}%,address.ilike.%${cleanDistrict}%`,
+        });
+      }
+    }
+
+    return clauses;
+  }
+
+  // 7.1 Bishkek & Верхний Джал filter
+  const c1 = buildFilterClauses({ country: "kg", city: "Бишкек", district: "Верхний Джал" });
+  assert.equal(c1.length, 3);
+  assert.ok(c1[0].clause.includes("country.ilike.%kyrgyzstan%"));
+  assert.ok(c1[1].clause.includes("Бишкек"));
+  assert.ok(c1[2].clause.includes("Верхний Джал"));
+
+  // 7.2 PostgREST separator injection safety (commas and parentheses in district)
+  const c2 = buildFilterClauses({ district: "Джал (Верхний), сектор 3" });
+  assert.equal(c2.length, 1);
+  // Must NOT contain commas or parens which would corrupt PostgREST or=(...)
+  assert.ok(!c2[0].clause.includes(",сектор"));
+  assert.ok(!c2[0].clause.includes("("));
+  assert.ok(!c2[0].clause.includes(")"));
+  assert.ok(c2[0].clause.includes("Джал  Верхний   сектор 3"));
+});

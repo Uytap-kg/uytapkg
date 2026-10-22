@@ -48,13 +48,13 @@ export function normalizeComplexRow(c) {
 // =======================================================
 export const getComplexes = async (req, res) => {
   try {
-    const { page = 1, limit = 100 } = req.query;
+    const { page = 1, limit = 100, country, city, district } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
     const from = (pageNum - 1) * limitNum;
     const to = from + limitNum - 1;
 
-    const { data: complexes, error, count } = await supabase
+    let query = supabase
       .from("residential_complexes")
       .select(
         `
@@ -63,7 +63,38 @@ export const getComplexes = async (req, res) => {
         complex_layouts (*)
       `,
         { count: "exact" }
-      )
+      );
+
+    if (country && typeof country === "string") {
+      const cleanCountry = country.replace(/[,()]/g, " ").trim().slice(0, 50);
+      if (cleanCountry) {
+        const isKg = /^(kyrgyzstan|кыргызстан|kg)$/i.test(cleanCountry);
+        const isTr = /^(turkey|турция|tr|türkiye)$/i.test(cleanCountry);
+        if (isKg) {
+          query = query.or("country.ilike.%kyrgyzstan%,country.ilike.%кыргызстан%,features->>country.ilike.%kyrgyzstan%,features->>country.ilike.%кыргызстан%");
+        } else if (isTr) {
+          query = query.or("country.ilike.%turkey%,country.ilike.%турция%,features->>country.ilike.%turkey%,features->>country.ilike.%турция%");
+        } else {
+          query = query.or(`country.ilike.%${cleanCountry}%,features->>country.ilike.%${cleanCountry}%`);
+        }
+      }
+    }
+
+    if (city && typeof city === "string") {
+      const cleanCity = city.replace(/[,()]/g, " ").trim().slice(0, 100);
+      if (cleanCity) {
+        query = query.or(`city.ilike.%${cleanCity}%,features->>city.ilike.%${cleanCity}%,address.ilike.%${cleanCity}%`);
+      }
+    }
+
+    if (district && typeof district === "string") {
+      const cleanDistrict = district.replace(/[,()]/g, " ").trim().slice(0, 100);
+      if (cleanDistrict) {
+        query = query.or(`district.ilike.%${cleanDistrict}%,features->>district.ilike.%${cleanDistrict}%,address.ilike.%${cleanDistrict}%`);
+      }
+    }
+
+    const { data: complexes, error, count } = await query
       .order("created_at", { ascending: false })
       .range(from, to);
 

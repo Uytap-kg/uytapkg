@@ -409,10 +409,13 @@ export async function createListing(token, payload) {
 }
 
 // 5. Жилые комплексы
-export async function getComplexes({ page, limit } = {}) {
+export async function getComplexes({ page, limit, country, city, district } = {}) {
   const params = new URLSearchParams();
   if (page) params.set("page", page);
   if (limit) params.set("limit", limit);
+  if (country) params.set("country", country);
+  if (city) params.set("city", city);
+  if (district) params.set("district", district);
   const qs = params.toString();
   const url = `${API_URL}/complexes${qs ? `?${qs}` : ""}`;
   const response = await fetch(url);

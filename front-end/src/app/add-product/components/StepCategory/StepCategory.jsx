@@ -536,6 +536,7 @@ const residentialComplexSeries = [
   "107 улучшенная",
   "Элитка",
   "Индивидуалка",
+  "Пентхаус",
 ];
 
 /* =========================================================
@@ -702,7 +703,9 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
 
   const showResidentialComplex =
     form.category === "apartment" &&
-    residentialComplexSeries.includes(form.series);
+    (!form.series ||
+      form.series === "Любая" ||
+      residentialComplexSeries.includes(form.series));
 
   /* =========================================================
      RESET COTTAGE
@@ -1085,6 +1088,16 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
               <div className={styles.residentialComplexWrapper}>
                 <ResidentialComplexSelect
                   value={form.residentialComplex || ""}
+                  country={form.country || "kyrgyzstan"}
+                  city={
+                    form.country === "turkey"
+                      ? form.city
+                      : form.region === "BISHKEK" || form.region === "bishkek"
+                        ? "Бишкек"
+                        : form.settlement || form.city || ""
+                  }
+                  district={form.district || form.settlement || ""}
+                  region={form.region || ""}
                   onSelect={(complex) =>
                     updateForm({
                       residentialComplex: complex.name,

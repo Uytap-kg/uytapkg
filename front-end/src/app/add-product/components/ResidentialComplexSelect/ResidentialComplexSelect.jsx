@@ -81,37 +81,43 @@ function matchesLocation(complex, { country, city, district, region }) {
     .join(" ");
 
   // Если у ЖК сохранена страна, исключаем ЖК из другой страны.
-  if (complexCountry && country) {
+  if (country) {
     const countryAliases = {
       kyrgyzstan: ["кыргызстан", "киргизия", "kyrgyzstan", "kg"],
       turkey: ["турция", "turkey", "türkiye", "tr"],
     };
+    const key = String(country).trim().toLowerCase();
+    const aliases = countryAliases[key] || [normalize(country)];
 
-    const aliases = countryAliases[country] || [normalize(country)];
-
-    if (!aliases.some((alias) => complexCountry.includes(normalize(alias)))) {
-      return false;
+    if (complexCountry) {
+      if (!aliases.some((alias) => complexCountry.includes(normalize(alias)))) {
+        return false;
+      }
     }
   }
 
   // Проверяем выбранный город или населённый пункт.
   if (selectedCity) {
     const cityMatches =
-      complexCity === selectedCity ||
-      complexCity.includes(selectedCity) ||
-      selectedCity.includes(complexCity) ||
+      (complexCity && (
+        complexCity === selectedCity ||
+        complexCity.includes(selectedCity) ||
+        selectedCity.includes(complexCity)
+      )) ||
       (!complexCity && addressAndLocation.includes(selectedCity));
 
     if (!cityMatches) return false;
   }
 
-  // Если выбран район, ЖК должен иметь совпадающий район
-  // либо выбранный район должен встречаться в его адресе.
+  // Если выбран район, ЖК должен строго иметь совпадающий район
+  // либо выбранный район должен явно встречаться в его адресе.
   if (selectedDistrict) {
     const districtMatches =
-      complexDistrict === selectedDistrict ||
-      complexDistrict.includes(selectedDistrict) ||
-      selectedDistrict.includes(complexDistrict) ||
+      (complexDistrict && (
+        complexDistrict === selectedDistrict ||
+        complexDistrict.includes(selectedDistrict) ||
+        selectedDistrict.includes(complexDistrict)
+      )) ||
       complexAddress.includes(selectedDistrict);
 
     if (!districtMatches) return false;
@@ -152,7 +158,11 @@ export default function ResidentialComplexSelect({
         setLoading(true);
         setError(false);
 
-        const res = await getComplexes();
+        const res = await getComplexes({
+          country: country || undefined,
+          city: city || undefined,
+          district: district || undefined,
+        });
 
         if (!mounted) return;
 
@@ -219,7 +229,7 @@ export default function ResidentialComplexSelect({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [country, city, district]);
 
   const filteredComplexes = useMemo(() => {
     return complexes.filter((complex) =>
@@ -284,6 +294,13 @@ export default function ResidentialComplexSelect({
           loading ? [] : filteredComplexes.map((complex) => complex.label)
         }
       />
+
+      {district && filteredComplexes.length === 0 && !loading && (
+        <span className={styles.emptyDistrictHint}>
+          {t("residentialComplex.noComplexInDistrict") ||
+            `В районе «${district}» пока нет добавленных ЖК`}
+        </span>
+      )}
 
       {loading && (
         <span className={styles.loading}>
