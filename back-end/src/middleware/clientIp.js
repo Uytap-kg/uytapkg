@@ -1,10 +1,33 @@
 import net from "node:net";
+import crypto from "node:crypto";
 import logger from "../utils/logger.js";
 
 export function isValidIp(val) {
   if (!val || typeof val !== "string") return false;
   const trimmed = val.trim();
   return net.isIP(trimmed) !== 0;
+}
+
+/**
+ * Постоянное по времени сравнение секрета прокси (защита от timing side-channel).
+ */
+export function isValidProxySecret(incomingSecret, configuredSecret) {
+  if (
+    typeof configuredSecret !== "string" ||
+    configuredSecret.length === 0 ||
+    typeof incomingSecret !== "string" ||
+    incomingSecret.length === 0
+  ) {
+    return false;
+  }
+
+  const bufConfigured = Buffer.from(configuredSecret, "utf8");
+  const bufIncoming = Buffer.from(incomingSecret, "utf8");
+
+  return (
+    bufConfigured.length === bufIncoming.length &&
+    crypto.timingSafeEqual(bufConfigured, bufIncoming)
+  );
 }
 
 /**
@@ -31,12 +54,7 @@ export function resolveClientIp(req, res, next) {
 
   let clientIp = normalizedSocketIp;
 
-  const isProxyTrusted = Boolean(
-    configuredSecret &&
-    typeof incomingSecret === "string" &&
-    incomingSecret.length > 0 &&
-    incomingSecret === configuredSecret
-  );
+  const isProxyTrusted = isValidProxySecret(incomingSecret, configuredSecret);
 
   if (isProxyTrusted) {
     const rawXff = req.headers["x-vercel-forwarded-for"] || req.headers["x-forwarded-for"];

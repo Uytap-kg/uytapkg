@@ -89,9 +89,12 @@ export const UNVERIFIED_PHONE_RESERVATION_TTL_MS = 10 * 60 * 1000; // срок �
  * Защищает от утечки кодов при чтении БД (коды не хранятся в открытом виде).
  */
 export function hashOtpCode(code) {
-  const secret = process.env.OTP_SECRET || process.env.JWT_SECRET;
+  const isProd = process.env.NODE_ENV === "production";
+  const secret = isProd
+    ? process.env.OTP_SECRET
+    : process.env.OTP_SECRET || process.env.JWT_SECRET;
   if (!secret) {
-    throw new Error("OTP_SECRET или JWT_SECRET должен быть задан");
+    throw new Error("OTP_SECRET должен быть задан (в dev допускается fallback на JWT_SECRET)");
   }
   return crypto.createHmac("sha256", secret).update(String(code)).digest("hex");
 }

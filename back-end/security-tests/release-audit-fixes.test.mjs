@@ -280,3 +280,103 @@ test("P1-5: Модалки профиля не вызывают fileFromUrl и �
     );
   }
 });
+
+
+// =======================================================
+// Stage 2: P0-03 (X-Real-IP spoofing, timingSafeEqual proxy secret) & P2-02 (Fail-Fast production secrets)
+// =======================================================
+test("P0-03: getTrustedClientIp игнорирует клиентский X-Real-IP по умолчанию и доверяет ему только при TRUST_NGINX_REAL_IP='true'", async () => {
+  const { getTrustedClientIp, applyTrustedForwardedFor } = await import(
+    "../../front-end/src/app/api/_lib/forwardedFor.js"
+  );
+
+  const origTrustNginx = process.env.TRUST_NGINX_REAL_IP;
+  const origProxySecret = process.env.INTERNAL_PROXY_SECRET;
+
+  try {
+    delete process.env.TRUST_NGINX_REAL_IP;
+    process.env.INTERNAL_PROXY_SECRET = "test-internal-proxy-secret-123456";
+
+    // Злоумышленник шлёт поддельный X-Real-IP: 198.51.100.77, реальный прокси добавил свой IP в конец X-Forwarded-For
+    const spoofedReq = {
+      headers: new Map([
+        ["x-real-ip", "198.51.100.77"],
+        ["x-forwarded-for", "203.0.113.50"],
+      ]),
+    };
+
+    const resolvedDefault = getTrustedClientIp(spoofedReq);
+    assert.equal(
+      resolvedDefault,
+      "203.0.113.50",
+      "Без TRUST_NGINX_REAL_IP='true' заголовок X-Real-IP не должен переопределять реальный IP"
+    );
+
+    const outHeaders = applyTrustedForwardedFor(new Headers(), spoofedReq);
+    assert.equal(outHeaders.get("x-forwarded-for"), "203.0.113.50");
+    assert.equal(outHeaders.get("x-real-ip"), null);
+
+    // При явном TRUST_NGINX_REAL_IP="true" заголовок X-Real-IP от Nginx принимается
+    process.env.TRUST_NGINX_REAL_IP = "true";
+    assert.equal(getTrustedClientIp(spoofedReq), "198.51.100.77");
+  } finally {
+    if (origTrustNginx === undefined) delete process.env.TRUST_NGINX_REAL_IP;
+    else process.env.TRUST_NGINX_REAL_IP = origTrustNginx;
+    if (origProxySecret === undefined) delete process.env.INTERNAL_PROXY_SECRET;
+    else process.env.INTERNAL_PROXY_SECRET = origProxySecret;
+  }
+});
+
+test("P0-03 & P2-02: isValidProxySecret использует timingSafeEqual, а checkProductionSecrets требует JWT_SECRET>=32, отдельный OTP_SECRET>=32 и INTERNAL_PROXY_SECRET>=16", async () => {
+  const { isValidProxySecret, resolveClientIp } = await import("../src/middleware/clientIp.js");
+  const { checkProductionSecrets } = await import("../src/config/runtimeCheck.js");
+
+  assert.equal(isValidProxySecret("secret-1234567890", "secret-1234567890"), true);
+  assert.equal(isValidProxySecret("secret-1234567890", "secret-1234567899"), false);
+  assert.equal(isValidProxySecret("short", "secret-1234567890"), false);
+  assert.equal(isValidProxySecret("", "secret-1234567890"), false);
+
+  // Проверка resolveClientIp при неверном секрете: сбрасывает X-Forwarded-For на socket IP
+  const origProxySecret = process.env.INTERNAL_PROXY_SECRET;
+  process.env.INTERNAL_PROXY_SECRET = "valid-proxy-secret-123456";
+  try {
+    const reqSpoof = {
+      headers: {
+        "x-internal-proxy-secret": "wrong-secret",
+        "x-forwarded-for": "1.2.3.4",
+      },
+      socket: { remoteAddress: "::ffff:10.0.0.99" },
+    };
+    resolveClientIp(reqSpoof, {}, () => {});
+    assert.equal(reqSpoof.ip, "10.0.0.99");
+  } finally {
+    process.env.INTERNAL_PROXY_SECRET = origProxySecret;
+  }
+
+  // Проверка checkProductionSecrets
+  const badEnvSameSecrets = {
+    JWT_SECRET: "a".repeat(32),
+    OTP_SECRET: "a".repeat(32),
+    INTERNAL_PROXY_SECRET: "p".repeat(16),
+  };
+  const sameErrors = checkProductionSecrets(badEnvSameSecrets);
+  assert.ok(
+    sameErrors.some((e) => e.includes("не должен совпадать с JWT_SECRET")),
+    "Совпадающие OTP_SECRET и JWT_SECRET должны вызывать ошибку конфигурации в production"
+  );
+
+  const badEnvShort = {
+    JWT_SECRET: "short-jwt",
+    OTP_SECRET: "",
+    INTERNAL_PROXY_SECRET: "short",
+  };
+  const shortErrors = checkProductionSecrets(badEnvShort);
+  assert.equal(shortErrors.length, 3, "Короткие/пустые секреты должны возвращать 3 ошибки");
+
+  const validEnv = {
+    JWT_SECRET: "j".repeat(32),
+    OTP_SECRET: "o".repeat(32),
+    INTERNAL_PROXY_SECRET: "p".repeat(16),
+  };
+  assert.deepEqual(checkProductionSecrets(validEnv), []);
+});
