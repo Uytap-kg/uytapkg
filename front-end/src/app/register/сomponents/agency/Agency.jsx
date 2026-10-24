@@ -19,35 +19,25 @@ import Link from "next/link";
 
 import styles from "./Agency.module.css";
 import { registerUser } from "@/utils/api";
+import { saveAuth } from "@/utils/auth";
+import VerificationMethod from "../verificationMethod/VerificationMethod";
 
 function formatPhone(value) {
   let digits = value.replace(/\D/g, "");
-
-  if (digits.startsWith("996")) {
-    digits = digits.slice(3);
-  }
-
+  if (digits.startsWith("996")) digits = digits.slice(3);
   digits = digits.slice(0, 9);
 
   let formatted = "+996";
-
-  if (digits.length > 0) {
-    formatted += ` ${digits.slice(0, 3)}`;
-  }
-
-  if (digits.length > 3) {
-    formatted += ` ${digits.slice(3, 6)}`;
-  }
-
-  if (digits.length > 6) {
-    formatted += ` ${digits.slice(6, 9)}`;
-  }
+  if (digits.length > 0) formatted += ` ${digits.slice(0, 3)}`;
+  if (digits.length > 3) formatted += ` ${digits.slice(3, 6)}`;
+  if (digits.length > 6) formatted += ` ${digits.slice(6, 9)}`;
 
   return formatted;
 }
 
 function normalizePhone(phone) {
-  const digits = phone.replace(/\D/g, "");
+  let digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("996")) digits = digits.slice(3);
   return `+996${digits.slice(-9)}`;
 }
 
@@ -62,11 +52,11 @@ export default function Agency() {
   const [inn, setInn] = useState("");
   const [about, setAbout] = useState("");
   const [password, setPassword] = useState("");
-
   const [showPassword, setShowPassword] = useState(false);
+  const [verificationMethod, setVerificationMethod] = useState("email");
+
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -75,11 +65,13 @@ export default function Agency() {
     e.preventDefault();
     setError("");
 
-    // Проверка обязательных полей
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPhone = normalizePhone(phone);
+
     if (
       !companyName.trim() ||
       !directorName.trim() ||
-      !email.trim() ||
+      !normalizedEmail ||
       !officeAddress.trim() ||
       !inn.trim() ||
       !password
@@ -88,7 +80,11 @@ export default function Agency() {
       return;
     }
 
-    // Проверка принятия документов
+    if (normalizedPhone.replace(/\D/g, "").length !== 12) {
+      setError("Введите полный номер телефона в формате +996 XXX XXX XXX.");
+      return;
+    }
+
     if (!privacyAccepted || !termsAccepted) {
       setError(
         "Необходимо принять Политику конфиденциальности и Пользовательское соглашение.",
@@ -96,16 +92,6 @@ export default function Agency() {
       return;
     }
 
-    // Проверка телефона
-    const normalizedPhone = normalizePhone(phone);
-    const phoneDigits = normalizedPhone.replace(/\D/g, "");
-
-    if (phoneDigits.length !== 12) {
-      setError("Введите полный номер телефона в формате +996 XXX XXX XXX.");
-      return;
-    }
-
-    // Проверка длины пароля
     if (password.length < 8) {
       setError("Пароль должен содержать не менее 8 символов.");
       return;
@@ -119,29 +105,36 @@ export default function Agency() {
         companyName: companyName.trim(),
         directorName: directorName.trim(),
         phone: normalizedPhone,
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         officeAddress: officeAddress.trim(),
         inn: inn.trim(),
         about: about.trim(),
         password,
+        verificationMethod,
       });
 
-      // Если требуется подтверждение email
       if (res?.needVerification) {
-        const verifyEmail = email.trim().toLowerCase();
-
-        localStorage.setItem("register_email", verifyEmail);
-
-        router.push(`/auth-code?email=${encodeURIComponent(verifyEmail)}`);
+        if (verificationMethod === "email") {
+          localStorage.setItem("register_email", normalizedEmail);
+          router.push(
+            `/auth-code?method=email&email=${encodeURIComponent(normalizedEmail)}`,
+          );
+        } else {
+          localStorage.setItem("register_phone", normalizedPhone);
+          router.push(
+            `/auth-code?method=phone&phone=${encodeURIComponent(normalizedPhone)}`,
+          );
+        }
 
         return;
       }
 
-      setSuccess(true);
+      if (res?.token) {
+        saveAuth({ token: res.token, user: res.user });
+      }
 
-      setTimeout(() => {
-        router.push("/auth-code");
-      }, 1200);
+      setSuccess(true);
+      setTimeout(() => router.push("/profile"), 1200);
     } catch (err) {
       setError(err.message || "Ошибка при регистрации агентства.");
     } finally {
@@ -151,27 +144,19 @@ export default function Agency() {
 
   return (
     <div className={styles.wrapper}>
-      {/* HEADER */}
-
       <div className={styles.header}>
         <div className={styles.logo}>
           <Building2 />
         </div>
-
         <div>
           <h2>Агентство недвижимости</h2>
           <p>Создайте профиль компании</p>
         </div>
       </div>
 
-      {/* FORM */}
-
-      <form className={styles.form} onSubmit={handleSubmit} noValidate={false}>
-        {/* COMPANY NAME */}
-
+      <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.inputBox}>
           <Building2 />
-
           <input
             type="text"
             name="companyName"
@@ -183,11 +168,8 @@ export default function Agency() {
           />
         </div>
 
-        {/* DIRECTOR */}
-
         <div className={styles.inputBox}>
           <User />
-
           <input
             type="text"
             name="directorName"
@@ -199,11 +181,8 @@ export default function Agency() {
           />
         </div>
 
-        {/* PHONE */}
-
         <div className={styles.inputBox}>
           <Phone />
-
           <input
             type="tel"
             name="phone"
@@ -216,11 +195,8 @@ export default function Agency() {
           />
         </div>
 
-        {/* EMAIL */}
-
         <div className={styles.inputBox}>
           <Mail />
-
           <input
             type="email"
             name="email"
@@ -232,11 +208,8 @@ export default function Agency() {
           />
         </div>
 
-        {/* OFFICE ADDRESS */}
-
         <div className={styles.inputBox}>
           <MapPin />
-
           <input
             type="text"
             name="officeAddress"
@@ -248,11 +221,8 @@ export default function Agency() {
           />
         </div>
 
-        {/* INN */}
-
         <div className={styles.inputBox}>
           <FileText />
-
           <input
             type="text"
             name="inn"
@@ -263,11 +233,8 @@ export default function Agency() {
           />
         </div>
 
-        {/* PASSWORD */}
-
         <div className={styles.inputBox}>
           <Lock />
-
           <input
             type={showPassword ? "text" : "password"}
             name="password"
@@ -278,7 +245,6 @@ export default function Agency() {
             minLength={8}
             required
           />
-
           <button
             type="button"
             className={styles.eye}
@@ -289,8 +255,6 @@ export default function Agency() {
           </button>
         </div>
 
-        {/* ABOUT */}
-
         <textarea
           className={styles.textarea}
           name="about"
@@ -299,19 +263,19 @@ export default function Agency() {
           onChange={(e) => setAbout(e.target.value)}
         />
 
-        {/* POLICIES */}
+        <VerificationMethod
+          value={verificationMethod}
+          onChange={setVerificationMethod}
+        />
 
         <div className={styles.policyBlock}>
           <div className={styles.policyHeader}>
             <ShieldCheck />
-
             <span>
               Перед созданием профиля ознакомьтесь с условиями использования
               UyTap.
             </span>
           </div>
-
-          {/* PRIVACY */}
 
           <div className={styles.checkboxRow}>
             <input
@@ -321,11 +285,9 @@ export default function Agency() {
               onChange={(e) => setPrivacyAccepted(e.target.checked)}
               required
             />
-
             <label htmlFor="agency-privacy" className={styles.checkbox}>
               {privacyAccepted && <CheckCircle2 />}
             </label>
-
             <span className={styles.checkboxText}>
               Я принимаю{" "}
               <Link
@@ -338,8 +300,6 @@ export default function Agency() {
             </span>
           </div>
 
-          {/* TERMS */}
-
           <div className={styles.checkboxRow}>
             <input
               id="agency-terms"
@@ -348,11 +308,9 @@ export default function Agency() {
               onChange={(e) => setTermsAccepted(e.target.checked)}
               required
             />
-
             <label htmlFor="agency-terms" className={styles.checkbox}>
               {termsAccepted && <CheckCircle2 />}
             </label>
-
             <span className={styles.checkboxText}>
               Я принимаю{" "}
               <Link href="/terms" target="_blank" rel="noopener noreferrer">
@@ -362,21 +320,11 @@ export default function Agency() {
           </div>
         </div>
 
-        {/* ERROR */}
-
         {error && (
-          <div
-            role="alert"
-            style={{
-              color: "#ef4444",
-              fontSize: "14px",
-            }}
-          >
+          <div role="alert" style={{ color: "#ef4444", fontSize: "14px" }}>
             ⚠️ {error}
           </div>
         )}
-
-        {/* SUCCESS */}
 
         {success && (
           <div

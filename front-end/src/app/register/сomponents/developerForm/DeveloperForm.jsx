@@ -19,35 +19,24 @@ import Link from "next/link";
 import styles from "./DeveloperForm.module.css";
 import { registerUser } from "@/utils/api";
 import { saveAuth } from "@/utils/auth";
+import VerificationMethod from "../verificationMethod/VerificationMethod";
 
 function formatPhone(value) {
   let digits = value.replace(/\D/g, "");
-
-  if (digits.startsWith("996")) {
-    digits = digits.slice(3);
-  }
-
+  if (digits.startsWith("996")) digits = digits.slice(3);
   digits = digits.slice(0, 9);
 
   let formatted = "+996";
-
-  if (digits.length > 0) {
-    formatted += ` ${digits.slice(0, 3)}`;
-  }
-
-  if (digits.length > 3) {
-    formatted += ` ${digits.slice(3, 6)}`;
-  }
-
-  if (digits.length > 6) {
-    formatted += ` ${digits.slice(6, 9)}`;
-  }
+  if (digits.length > 0) formatted += ` ${digits.slice(0, 3)}`;
+  if (digits.length > 3) formatted += ` ${digits.slice(3, 6)}`;
+  if (digits.length > 6) formatted += ` ${digits.slice(6, 9)}`;
 
   return formatted;
 }
 
 function normalizePhone(phone) {
-  const digits = phone.replace(/\D/g, "");
+  let digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("996")) digits = digits.slice(3);
   return `+996${digits.slice(-9)}`;
 }
 
@@ -61,12 +50,11 @@ export default function DeveloperForm() {
   const [officeAddress, setOfficeAddress] = useState("");
   const [about, setAbout] = useState("");
   const [password, setPassword] = useState("");
-
   const [showPassword, setShowPassword] = useState(false);
+  const [verificationMethod, setVerificationMethod] = useState("email");
 
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -75,11 +63,13 @@ export default function DeveloperForm() {
     e.preventDefault();
     setError("");
 
-    // Проверка обязательных полей
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPhone = normalizePhone(phone);
+
     if (
       !companyName.trim() ||
       !inn.trim() ||
-      !email.trim() ||
+      !normalizedEmail ||
       !officeAddress.trim() ||
       !password
     ) {
@@ -87,7 +77,11 @@ export default function DeveloperForm() {
       return;
     }
 
-    // Проверка принятия документов
+    if (normalizedPhone.replace(/\D/g, "").length !== 12) {
+      setError("Введите полный номер телефона в формате +996 XXX XXX XXX.");
+      return;
+    }
+
     if (!privacyAccepted || !termsAccepted) {
       setError(
         "Необходимо принять Политику конфиденциальности и Пользовательское соглашение.",
@@ -95,16 +89,6 @@ export default function DeveloperForm() {
       return;
     }
 
-    // Проверка телефона
-    const normalizedPhone = normalizePhone(phone);
-    const phoneDigits = normalizedPhone.replace(/\D/g, "");
-
-    if (phoneDigits.length !== 12) {
-      setError("Введите полный номер телефона в формате +996 XXX XXX XXX.");
-      return;
-    }
-
-    // Проверка пароля
     if (password.length < 8) {
       setError("Пароль должен содержать не менее 8 символов.");
       return;
@@ -113,8 +97,6 @@ export default function DeveloperForm() {
     setLoading(true);
 
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-
       const res = await registerUser({
         accountType: "developer",
         companyName: companyName.trim(),
@@ -124,25 +106,31 @@ export default function DeveloperForm() {
         officeAddress: officeAddress.trim(),
         about: about.trim(),
         password,
+        verificationMethod,
       });
+
+      if (res?.needVerification) {
+        if (verificationMethod === "email") {
+          localStorage.setItem("register_email", normalizedEmail);
+          router.push(
+            `/auth-code?method=email&email=${encodeURIComponent(normalizedEmail)}`,
+          );
+        } else {
+          localStorage.setItem("register_phone", normalizedPhone);
+          router.push(
+            `/auth-code?method=phone&phone=${encodeURIComponent(normalizedPhone)}`,
+          );
+        }
+
+        return;
+      }
 
       if (res?.token) {
         saveAuth({ token: res.token, user: res.user });
       }
 
-      if (res?.needVerification) {
-        localStorage.setItem("register_email", normalizedEmail);
-
-        router.push(`/auth-code?email=${encodeURIComponent(normalizedEmail)}`);
-
-        return;
-      }
-
       setSuccess(true);
-
-      setTimeout(() => {
-        router.push("/profile");
-      }, 1200);
+      setTimeout(() => router.push("/profile"), 1200);
     } catch (err) {
       setError(err.message || "Ошибка при регистрации застройщика.");
     } finally {
@@ -152,25 +140,17 @@ export default function DeveloperForm() {
 
   return (
     <form className={styles.wrapper} onSubmit={handleSubmit}>
-      {/* HEADER */}
-
       <div className={styles.header}>
         <Building />
-
         <div>
           <h2>Профиль застройщика</h2>
           <p>Создайте страницу вашей компании</p>
         </div>
       </div>
 
-      {/* FIELDS */}
-
       <div className={styles.grid}>
-        {/* COMPANY */}
-
         <div className={styles.inputBox}>
           <Building />
-
           <input
             type="text"
             name="companyName"
@@ -182,11 +162,8 @@ export default function DeveloperForm() {
           />
         </div>
 
-        {/* INN */}
-
         <div className={styles.inputBox}>
           <FileCheck />
-
           <input
             type="text"
             name="inn"
@@ -197,11 +174,8 @@ export default function DeveloperForm() {
           />
         </div>
 
-        {/* PHONE */}
-
         <div className={styles.inputBox}>
           <Phone />
-
           <input
             type="tel"
             name="phone"
@@ -214,11 +188,8 @@ export default function DeveloperForm() {
           />
         </div>
 
-        {/* EMAIL */}
-
         <div className={styles.inputBox}>
           <Mail />
-
           <input
             type="email"
             name="email"
@@ -230,11 +201,8 @@ export default function DeveloperForm() {
           />
         </div>
 
-        {/* ADDRESS */}
-
         <div className={styles.inputBox}>
           <MapPin />
-
           <input
             type="text"
             name="officeAddress"
@@ -246,11 +214,8 @@ export default function DeveloperForm() {
           />
         </div>
 
-        {/* PASSWORD */}
-
         <div className={styles.inputBox}>
           <Lock />
-
           <input
             type={showPassword ? "text" : "password"}
             name="password"
@@ -261,7 +226,6 @@ export default function DeveloperForm() {
             minLength={8}
             required
           />
-
           <button
             type="button"
             className={styles.eye}
@@ -273,8 +237,6 @@ export default function DeveloperForm() {
         </div>
       </div>
 
-      {/* ABOUT — OPTIONAL */}
-
       <textarea
         className={styles.textarea}
         name="about"
@@ -283,19 +245,19 @@ export default function DeveloperForm() {
         onChange={(e) => setAbout(e.target.value)}
       />
 
-      {/* POLICIES */}
+      <VerificationMethod
+        value={verificationMethod}
+        onChange={setVerificationMethod}
+      />
 
       <div className={styles.policyBlock}>
         <div className={styles.policyHeader}>
           <ShieldCheck />
-
           <span>
             Перед созданием профиля ознакомьтесь с условиями использования
             UyTap.
           </span>
         </div>
-
-        {/* PRIVACY */}
 
         <div className={styles.checkboxRow}>
           <input
@@ -305,11 +267,9 @@ export default function DeveloperForm() {
             onChange={(e) => setPrivacyAccepted(e.target.checked)}
             required
           />
-
           <label htmlFor="developer-privacy" className={styles.checkbox}>
             {privacyAccepted && <CheckCircle2 />}
           </label>
-
           <span className={styles.checkboxText}>
             Я принимаю{" "}
             <Link
@@ -322,8 +282,6 @@ export default function DeveloperForm() {
           </span>
         </div>
 
-        {/* TERMS */}
-
         <div className={styles.checkboxRow}>
           <input
             id="developer-terms"
@@ -332,11 +290,9 @@ export default function DeveloperForm() {
             onChange={(e) => setTermsAccepted(e.target.checked)}
             required
           />
-
           <label htmlFor="developer-terms" className={styles.checkbox}>
             {termsAccepted && <CheckCircle2 />}
           </label>
-
           <span className={styles.checkboxText}>
             Я принимаю{" "}
             <Link href="/terms" target="_blank" rel="noopener noreferrer">
@@ -346,21 +302,11 @@ export default function DeveloperForm() {
         </div>
       </div>
 
-      {/* ERROR */}
-
       {error && (
-        <div
-          role="alert"
-          style={{
-            color: "#ef4444",
-            fontSize: "14px",
-          }}
-        >
+        <div role="alert" style={{ color: "#ef4444", fontSize: "14px" }}>
           ⚠️ {error}
         </div>
       )}
-
-      {/* SUCCESS */}
 
       {success && (
         <div
@@ -377,8 +323,6 @@ export default function DeveloperForm() {
           Профиль застройщика создан! Перенаправление...
         </div>
       )}
-
-      {/* SUBMIT */}
 
       <button
         className={styles.submit}

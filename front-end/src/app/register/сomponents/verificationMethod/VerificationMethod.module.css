@@ -1,0 +1,90 @@
+.wrapper {
+  min-width: 0;
+  width: 100%;
+  margin: 18px 0;
+  padding: 0;
+  border: 0;
+}
+
+.title {
+  margin-bottom: 12px;
+  color: #252333;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e5e5ee;
+  border-radius: 13px;
+  background: #fff;
+  color: #656477;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.option svg {
+  flex-shrink: 0;
+}
+
+.option span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.option strong {
+  color: #272538;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.option small {
+  color: #858397;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.option:has(input:focus-visible) {
+  outline: 2px solid #5145e5;
+  outline-offset: 3px;
+}
+
+.option.active {
+  border-color: #5145e5;
+  background: #f6f5ff;
+  box-shadow: 0 0 0 2px rgb(81 69 229 / 7%);
+  color: #5145e5;
+}
+
+@media (max-width: 420px) {
+  .options {
+    grid-template-columns: 1fr;
+  }
+
+  .option {
+    padding: 12px;
+  }
+}

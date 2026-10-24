@@ -14,6 +14,7 @@ import Link from "next/link";
 
 import styles from "./PersonalForm.module.css";
 import InputField from "../inputField/InputField";
+import VerificationMethod from "../verificationMethod/VerificationMethod";
 import { registerUser } from "@/utils/api";
 import { saveAuth } from "@/utils/auth";
 
@@ -28,24 +29,19 @@ function formatPhone(value) {
 
   let formatted = "+996";
 
-  if (digits.length > 0) {
-    formatted += ` ${digits.slice(0, 3)}`;
-  }
-
-  if (digits.length > 3) {
-    formatted += ` ${digits.slice(3, 6)}`;
-  }
-
-  if (digits.length > 6) {
-    formatted += ` ${digits.slice(6, 9)}`;
-  }
+  if (digits.length > 0) formatted += ` ${digits.slice(0, 3)}`;
+  if (digits.length > 3) formatted += ` ${digits.slice(3, 6)}`;
+  if (digits.length > 6) formatted += ` ${digits.slice(6, 9)}`;
 
   return formatted;
 }
 
 function normalizePhone(phone) {
   const digits = phone.replace(/\D/g, "");
-  return `+996${digits.slice(-9)}`;
+  return `+996${digits.startsWith("996") ? digits.slice(3) : digits}`.slice(
+    0,
+    13,
+  );
 }
 
 export default function PersonalForm() {
@@ -56,10 +52,10 @@ export default function PersonalForm() {
   const [phone, setPhone] = useState("+996 ");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [verificationMethod, setVerificationMethod] = useState("email");
 
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -68,13 +64,25 @@ export default function PersonalForm() {
     e.preventDefault();
     setError("");
 
-    // Проверка обязательных полей
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !password) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPhone = normalizePhone(phone);
+    const phoneDigits = normalizedPhone.replace(/\D/g, "");
+
+    if (
+      !firstName.trim() ||
+      !lastName.trim() ||
+      !password ||
+      (verificationMethod === "email" && !normalizedEmail)
+    ) {
       setError("Заполните все обязательные поля.");
       return;
     }
 
-    // Проверка принятия документов
+    if (phoneDigits.length !== 12) {
+      setError("Введите полный номер телефона в формате +996 XXX XXX XXX.");
+      return;
+    }
+
     if (!privacyAccepted || !termsAccepted) {
       setError(
         "Необходимо принять Политику конфиденциальности и Пользовательское соглашение.",
@@ -82,16 +90,6 @@ export default function PersonalForm() {
       return;
     }
 
-    // Проверка телефона
-    const normalizedPhone = normalizePhone(phone);
-    const phoneDigits = normalizedPhone.replace(/\D/g, "");
-
-    if (phoneDigits.length !== 12) {
-      setError("Введите полный номер телефона в формате +996 XXX XXX XXX.");
-      return;
-    }
-
-    // Проверка пароля
     if (password.length < 8) {
       setError("Пароль должен содержать не менее 8 символов.");
       return;
@@ -100,38 +98,38 @@ export default function PersonalForm() {
     setLoading(true);
 
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-
       const res = await registerUser({
         accountType: "personal",
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: normalizedPhone,
-        email: normalizedEmail,
+        email: normalizedEmail || undefined,
         password,
+        verificationMethod,
       });
 
-      if (res?.token) {
-        saveAuth({
-          token: res.token,
-          user: res.user,
-        });
-      }
-
-      // Подтверждение email
       if (res?.needVerification) {
-        localStorage.setItem("register_email", normalizedEmail);
-
-        router.push(`/auth-code?email=${encodeURIComponent(normalizedEmail)}`);
+        if (verificationMethod === "email") {
+          localStorage.setItem("register_email", normalizedEmail);
+          router.push(
+            `/auth-code?method=email&email=${encodeURIComponent(normalizedEmail)}`,
+          );
+        } else {
+          localStorage.setItem("register_phone", normalizedPhone);
+          router.push(
+            `/auth-code?method=phone&phone=${encodeURIComponent(normalizedPhone)}`,
+          );
+        }
 
         return;
       }
 
-      setSuccess(true);
+      if (res?.token) {
+        saveAuth({ token: res.token, user: res.user });
+      }
 
-      setTimeout(() => {
-        router.push("/profile");
-      }, 1200);
+      setSuccess(true);
+      setTimeout(() => router.push("/profile"), 1200);
     } catch (err) {
       setError(err.message || "Ошибка при регистрации.");
     } finally {
@@ -141,8 +139,6 @@ export default function PersonalForm() {
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
-      {/* FIRST NAME */}
-
       <InputField
         icon={User}
         placeholder="Имя"
@@ -151,8 +147,6 @@ export default function PersonalForm() {
         required
       />
 
-      {/* LAST NAME */}
-
       <InputField
         icon={User}
         placeholder="Фамилия"
@@ -160,8 +154,6 @@ export default function PersonalForm() {
         setValue={setLastName}
         required
       />
-
-      {/* PHONE */}
 
       <InputField
         icon={Phone}
@@ -172,18 +164,16 @@ export default function PersonalForm() {
         required
       />
 
-      {/* EMAIL */}
-
       <InputField
         icon={Mail}
-        placeholder="Email"
+        placeholder={
+          verificationMethod === "email" ? "Email" : "Email (необязательно)"
+        }
         type="email"
         value={email}
         setValue={setEmail}
-        required
+        required={verificationMethod === "email"}
       />
-
-      {/* PASSWORD */}
 
       <InputField
         icon={Lock}
@@ -194,19 +184,19 @@ export default function PersonalForm() {
         required
       />
 
-      {/* POLICIES */}
+      <VerificationMethod
+        value={verificationMethod}
+        onChange={setVerificationMethod}
+      />
 
       <div className={styles.policyBlock}>
         <div className={styles.policyHeader}>
           <ShieldCheck />
-
           <span>
             Перед созданием аккаунта ознакомьтесь с условиями использования
             UyTap.
           </span>
         </div>
-
-        {/* PRIVACY POLICY */}
 
         <div className={styles.checkboxRow}>
           <input
@@ -216,11 +206,9 @@ export default function PersonalForm() {
             onChange={(e) => setPrivacyAccepted(e.target.checked)}
             required
           />
-
           <label htmlFor="personal-privacy" className={styles.checkbox}>
             {privacyAccepted && <CheckCircle2 />}
           </label>
-
           <span className={styles.checkboxText}>
             Я принимаю{" "}
             <Link
@@ -233,8 +221,6 @@ export default function PersonalForm() {
           </span>
         </div>
 
-        {/* TERMS */}
-
         <div className={styles.checkboxRow}>
           <input
             id="personal-terms"
@@ -243,11 +229,9 @@ export default function PersonalForm() {
             onChange={(e) => setTermsAccepted(e.target.checked)}
             required
           />
-
           <label htmlFor="personal-terms" className={styles.checkbox}>
             {termsAccepted && <CheckCircle2 />}
           </label>
-
           <span className={styles.checkboxText}>
             Я принимаю{" "}
             <Link href="/terms" target="_blank" rel="noopener noreferrer">
@@ -257,40 +241,18 @@ export default function PersonalForm() {
         </div>
       </div>
 
-      {/* ERROR */}
-
       {error && (
-        <div
-          role="alert"
-          style={{
-            color: "#ef4444",
-            fontSize: "14px",
-            marginTop: "4px",
-          }}
-        >
+        <div role="alert" className={styles.error}>
           ⚠️ {error}
         </div>
       )}
 
-      {/* SUCCESS */}
-
       {success && (
-        <div
-          role="status"
-          style={{
-            color: "#10b981",
-            fontSize: "14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-          }}
-        >
+        <div role="status" className={styles.success}>
           <CheckCircle2 size={18} />
           Аккаунт успешно создан! Перенаправление...
         </div>
       )}
-
-      {/* SUBMIT */}
 
       <button
         className={styles.submit}
