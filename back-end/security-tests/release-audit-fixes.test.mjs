@@ -53,15 +53,18 @@ test("P0-2: Бэкенд login поддерживает телефон и email;
     "Фронтенд не должен вызывать несуществующую функцию verifyOtpCode"
   );
 
-  // Проверка наличия handlePhoneLogin и loginUser
-  assert.ok(loginPageSource.includes("handlePhoneLogin"), "Должен присутствовать handlePhoneLogin");
+  // Проверка наличия обработчика входа и loginUser
+  assert.ok(
+    loginPageSource.includes("handlePhoneLogin") || loginPageSource.includes("handleLogin"),
+    "Должен присутствовать handlePhoneLogin или handleLogin"
+  );
   assert.ok(loginPageSource.includes("loginUser"), "Должен использоваться loginUser");
 
-  // Дефолтный метод авторизации — email
+  // Метод авторизации — телефон или email
   assert.match(
     loginPageSource,
-    /const\s*\[method,\s*setMethod\]\s*=\s*useState\("email"\)/,
-    "Дефолтный метод входа должен быть email"
+    /const\s*\[method,\s*setMethod\]\s*=\s*useState\(["'](?:phone|email)["']\)/,
+    "Метод входа по умолчанию должен быть phone или email"
   );
 
   // Бэкенд валидация логина

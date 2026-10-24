@@ -69,11 +69,13 @@ export async function loginUser(credentials) {
     data = {};
   }
 
-  // Бэкенд отказал во входе: email не подтверждён (403 + needVerification)
+  // Бэкенд отказал во входе: контакт не подтверждён (403 + needVerification)
   if (data.needVerification === true) {
-    const err = new Error(data.message || "Подтвердите email перед входом в аккаунт");
+    const err = new Error(data.message || "Подтвердите данные перед входом в аккаунт");
     err.needVerification = true;
     err.email = data.email;
+    err.phone = data.phone;
+    err.verificationMethod = data.verificationMethod;
     throw err;
   }
 
@@ -116,6 +118,57 @@ export async function verifyOtpCode(phone, code) {
     body: JSON.stringify({ phone, code }),
   });
   return response.json();
+}
+
+// 3b. Подтверждение телефона через SMS OTP
+export async function verifyPhoneOtp(phone, code) {
+  const response = await fetch(`${API_URL}/auth/verify-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, code }),
+  });
+
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
+
+  if (!response.ok || !data.success) {
+    const err = new Error(data.message || "Неверный код");
+    err.attemptsLeft = data.attemptsLeft;
+    throw err;
+  }
+
+  if (data.token) {
+    saveAuth({ token: data.token, user: data.user });
+  }
+
+  return data;
+}
+
+export async function resendPhoneOtp(phone) {
+  const response = await fetch(`${API_URL}/auth/send-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone }),
+  });
+
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
+
+  if (!response.ok || !data.success) {
+    const err = new Error(data.message || "Не удалось отправить код");
+    err.status = response.status;
+    throw err;
+  }
+
+  return data;
 }
 
 // 4. Подтверждение email через OTP
@@ -169,12 +222,14 @@ export async function resendEmailOtp(email) {
   return data;
 }
 
-// 5. Восстановление пароля через Email OTP
-export async function requestPasswordReset(email) {
+// 5. Восстановление пароля через Email / SMS OTP
+export async function requestPasswordReset(identifier) {
+  const isEmail = typeof identifier === "string" && identifier.includes("@");
+  const payload = isEmail ? { email: identifier } : { phone: identifier };
   const response = await fetch(`${API_URL}/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify(payload),
   });
 
   let data = {};
@@ -193,11 +248,13 @@ export async function requestPasswordReset(email) {
   return data;
 }
 
-export async function verifyPasswordResetCode(email, code) {
+export async function verifyPasswordResetCode(identifier, code) {
+  const isEmail = typeof identifier === "string" && identifier.includes("@");
+  const payload = isEmail ? { email: identifier, code } : { phone: identifier, code };
   const response = await fetch(`${API_URL}/auth/verify-reset-code`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, code }),
+    body: JSON.stringify(payload),
   });
 
   let data = {};

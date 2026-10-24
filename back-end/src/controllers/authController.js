@@ -303,10 +303,24 @@ export const register = async (req, res) => {
       agencyName,
       about,
       avatarUrl, // фото профиля (для personal/realtor) или логотип (для agency/developer)
+      verificationMethod = "email",
     } = validationResult.data;
 
-    const normalizedEmail = email.toLowerCase().trim();
     const formattedPhone = normalizePhone(phone);
+    let normalizedEmail = email ? email.toLowerCase().trim() : "";
+
+    if (verificationMethod === "email") {
+      if (!normalizedEmail || !EMAIL_REGEX.test(normalizedEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: "Укажите корректный Email адрес",
+        });
+      }
+    } else {
+      if (!normalizedEmail) {
+        normalizedEmail = `${formattedPhone.replace(/\D/g, "")}@phone.uytap.kg`;
+      }
+    }
 
     // 1. Проверка существования Email или Телефона в базе
     //
@@ -424,9 +438,11 @@ export const register = async (req, res) => {
     // зарегистрировал аккаунт ранее, управлять им сможет только тот,
     // кто получит код на почту) и отправляем новый код.
     if (existingByEmail) {
-      const limit = await guardedIssueOtp(normalizedEmail, { dryRun: true });
-      if (limit) {
-        return res.status(429).json({ success: false, message: limit.message });
+      if (verificationMethod !== "phone") {
+        const limit = await guardedIssueOtp(normalizedEmail, { dryRun: true });
+        if (limit) {
+          return res.status(429).json({ success: false, message: limit.message });
+        }
       }
 
       const profileUpdate = buildProfileData(existingByEmail.id, validationResult.data);
@@ -450,6 +466,26 @@ export const register = async (req, res) => {
         });
       }
 
+      if (verificationMethod === "phone") {
+        const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "127.0.0.1";
+        const otpResult = await nikitaService.sendOtp({ phone: formattedPhone, ip: clientIp });
+        if (!otpResult.success) {
+          const httpStatus = otpResult.rateLimited ? 429 : 400;
+          return res.status(httpStatus).json({
+            success: false,
+            message: otpResult.message,
+            ...(otpResult.retryAfter ? { retryAfter: otpResult.retryAfter } : {}),
+          });
+        }
+        return res.status(200).json({
+          success: true,
+          needVerification: true,
+          verificationMethod: "phone",
+          phone: formattedPhone,
+          token: otpResult.token,
+        });
+      }
+
       const limited = await guardedIssueOtp(normalizedEmail);
       if (limited) {
         return res.status(429).json({ success: false, message: limited.message });
@@ -458,6 +494,7 @@ export const register = async (req, res) => {
       return res.status(200).json({
         success: true,
         needVerification: true,
+        verificationMethod: "email",
         email: normalizedEmail,
       });
     }
@@ -481,7 +518,27 @@ export const register = async (req, res) => {
       });
     }
 
-    // 4. Генерация и отправка OTP. JWT НЕ выдаётся до подтверждения email.
+    // 4. Генерация и отправка OTP. JWT НЕ выдаётся до подтверждения.
+    if (verificationMethod === "phone") {
+      const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "127.0.0.1";
+      const otpResult = await nikitaService.sendOtp({ phone: formattedPhone, ip: clientIp });
+      if (!otpResult.success) {
+        const httpStatus = otpResult.rateLimited ? 429 : 400;
+        return res.status(httpStatus).json({
+          success: false,
+          message: otpResult.message,
+          ...(otpResult.retryAfter ? { retryAfter: otpResult.retryAfter } : {}),
+        });
+      }
+      return res.status(201).json({
+        success: true,
+        needVerification: true,
+        verificationMethod: "phone",
+        phone: formattedPhone,
+        token: otpResult.token,
+      });
+    }
+
     const limited = await guardedIssueOtp(normalizedEmail);
     if (limited) {
       return res.status(429).json({ success: false, message: limited.message });
@@ -490,6 +547,7 @@ export const register = async (req, res) => {
     return res.status(201).json({
       success: true,
       needVerification: true,
+      verificationMethod: "email",
       email: normalizedEmail,
     });
   } catch (error) {
@@ -572,14 +630,19 @@ export const login = async (req, res) => {
       });
     }
 
-    // Блокировка входа без подтверждённого email. Проверяем ПОСЛЕ пароля,
+    // Блокировка входа без подтверждения. Проверяем ПОСЛЕ пароля,
     // чтобы не раскрывать статус аккаунта тому, кто пароля не знает.
-    if (user.is_email_verified === false) {
+    if (user.is_email_verified === false && user.is_verified !== true) {
+      const isPhoneLogin = !EMAIL_REGEX.test(identifier);
       return res.status(403).json({
         success: false,
         needVerification: true,
+        verificationMethod: isPhoneLogin ? "phone" : "email",
         email: user.email,
-        message: "Подтвердите email перед входом в аккаунт",
+        phone: user.phone,
+        message: isPhoneLogin
+          ? "Подтвердите номер телефона перед входом в аккаунт"
+          : "Подтвердите email перед входом в аккаунт",
       });
     }
 
@@ -1286,6 +1349,8 @@ export const verifyOtp = async (req, res) => {
         });
       }
 
+      let updatedUser = null;
+
       // Если пользователь авторизован, подтверждаем телефон в профиле
       if (req.user?.id) {
         const targetPhone = rawPhone ? normalizePhone(rawPhone) : null;
@@ -1318,17 +1383,54 @@ export const verifyOtp = async (req, res) => {
             .update({ is_verified: true, updated_at: new Date().toISOString() })
             .eq("id", req.user.id);
         }
-      } else if (rawPhone) {
-        const formattedPhone = normalizePhone(rawPhone);
-        await supabase
-          .from("users")
-          .update({ is_verified: true, updated_at: new Date().toISOString() })
-          .eq("phone", formattedPhone);
+      } else {
+        const phoneToFind = rawPhone || result.phone;
+        if (phoneToFind) {
+          const formattedPhone = normalizePhone(phoneToFind);
+          const { data } = await supabase
+            .from("users")
+            .update({ is_verified: true, updated_at: new Date().toISOString() })
+            .eq("phone", formattedPhone)
+            .select("id, account_type, email, phone, is_verified, is_email_verified, token_version")
+            .maybeSingle();
+          updatedUser = data;
+        }
+      }
+
+      let token = null;
+      let profile = null;
+
+      if (updatedUser) {
+        token = generateToken({
+          id: updatedUser.id,
+          accountType: updatedUser.account_type,
+          email: updatedUser.email,
+          tokenVersion: updatedUser.token_version || 0,
+        });
+
+        const { data: userProfile } = await supabase
+          .from("user_profiles")
+          .select("*")
+          .eq("user_id", updatedUser.id)
+          .maybeSingle();
+        profile = userProfile;
       }
 
       return res.json({
         success: true,
         message: "Номер телефона успешно подтвержден",
+        ...(token ? { token } : {}),
+        ...(updatedUser ? {
+          user: {
+            id: updatedUser.id,
+            accountType: updatedUser.account_type,
+            email: updatedUser.email,
+            phone: updatedUser.phone,
+            isVerified: updatedUser.is_verified,
+            isEmailVerified: updatedUser.is_email_verified,
+            profile: profile || {},
+          },
+        } : {}),
       });
     }
 
@@ -1490,7 +1592,52 @@ export const verifyOtp = async (req, res) => {
  */
 export const forgotPassword = async (req, res) => {
   try {
-    const email = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
+    const rawEmail = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
+    const rawPhone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
+
+    if (!rawEmail && !rawPhone) {
+      return res.status(400).json({ success: false, message: "Укажите email или номер телефона" });
+    }
+
+    if (rawPhone) {
+      const formattedPhone = normalizePhone(rawPhone);
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("id, is_verified, is_email_verified")
+        .eq("phone", formattedPhone)
+        .maybeSingle();
+
+      if (userError) {
+        console.error("Forgot password phone lookup error:", userError);
+      }
+
+      if (!user) {
+        return res.json({
+          success: true,
+          message: "Если аккаунт существует, код отправлен по SMS",
+        });
+      }
+
+      const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "127.0.0.1";
+      const result = await nikitaService.sendOtp({ phone: formattedPhone, ip: clientIp });
+
+      if (!result.success) {
+        const httpStatus = result.rateLimited ? 429 : 400;
+        return res.status(httpStatus).json({
+          success: false,
+          message: result.message,
+          ...(result.retryAfter ? { retryAfter: result.retryAfter } : {}),
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Если аккаунт существует, код отправлен по SMS",
+        token: result.token,
+      });
+    }
+
+    const email = rawEmail;
     if (!email || !EMAIL_REGEX.test(email) || email.length > 255) {
       return res.status(400).json({ success: false, message: "Укажите корректный email" });
     }
@@ -1544,11 +1691,67 @@ export const forgotPassword = async (req, res) => {
  */
 export const verifyResetCode = async (req, res) => {
   try {
-    const email = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
+    const rawEmail = typeof req.body?.email === "string" ? req.body.email.toLowerCase().trim() : "";
+    const rawPhone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
+    const rawToken = typeof req.body?.token === "string" ? req.body.token.trim() : "";
     const code = typeof req.body?.code === "string" || typeof req.body?.code === "number"
       ? String(req.body.code).trim()
       : "";
 
+    if ((!rawEmail && !rawPhone && !rawToken) || !code) {
+      return res.status(400).json({ success: false, message: "Укажите email или телефон и код" });
+    }
+
+    if (rawPhone || rawToken) {
+      const result = await nikitaService.verifyOtp({
+        token: rawToken,
+        phone: rawPhone,
+        code,
+      });
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.message,
+          ...(result.attemptsLeft !== undefined ? { attemptsLeft: result.attemptsLeft } : {}),
+        });
+      }
+
+      const phoneToFind = rawPhone || result.phone;
+      const formattedPhone = phoneToFind ? normalizePhone(phoneToFind) : null;
+      let userQuery = supabase.from("users").select("id, email, phone, token_version");
+      if (formattedPhone) {
+        userQuery = userQuery.eq("phone", formattedPhone);
+      }
+      const { data: user, error: userError } = await userQuery.maybeSingle();
+
+      if (userError || !user) {
+        return res.status(400).json({
+          success: false,
+          message: "Пользователь с таким номером телефона не найден",
+        });
+      }
+
+      const resetToken = jwt.sign(
+        {
+          userId: user.id,
+          phone: user.phone,
+          email: user.email,
+          tokenVersion: user.token_version || 0,
+          purpose: "password_reset",
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: "10m", algorithm: "HS256" }
+      );
+
+      return res.json({
+        success: true,
+        message: "Код подтвержден",
+        resetToken,
+      });
+    }
+
+    const email = rawEmail;
     if (!email || !code) {
       return res.status(400).json({ success: false, message: "Укажите email и код" });
     }
@@ -1700,8 +1903,7 @@ export const resetPassword = async (req, res) => {
     if (
       !decoded ||
       decoded.purpose !== "password_reset" ||
-      !decoded.email ||
-      !decoded.codeId
+      (!decoded.email && !decoded.userId && !decoded.phone)
     ) {
       return res.status(400).json({
         success: false,
@@ -1717,52 +1919,51 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    // 3. Защита от Replay Attack: проверяем код в email_verifications по codeId
-    const { data: codeRecord, error: codeErr } = await supabase
-      .from("email_verifications")
-      .select("*")
-      .eq("id", decoded.codeId)
-      .eq("email", decoded.email)
-      .eq("type", "password_reset")
-      .maybeSingle();
+    // 3. Защита от Replay Attack: проверяем код в email_verifications по codeId (если email-сброс)
+    if (decoded.codeId) {
+      const { data: codeRecord, error: codeErr } = await supabase
+        .from("email_verifications")
+        .select("*")
+        .eq("id", decoded.codeId)
+        .eq("email", decoded.email)
+        .eq("type", "password_reset")
+        .maybeSingle();
 
-    if (codeErr || !codeRecord) {
-      return res.status(400).json({
-        success: false,
-        message: "Запись сброса пароля не найдена",
-      });
-    }
+      if (codeErr || !codeRecord) {
+        return res.status(400).json({
+          success: false,
+          message: "Запись сброса пароля не найдена",
+        });
+      }
 
-    // Токен действителен, только если код был верифицирован (is_used = true)
-    // и ещё не использовался для финальной установки пароля (reset_completed != true)
-    if (!codeRecord.is_used || codeRecord.reset_completed) {
-      return res.status(400).json({
-        success: false,
-        message: "Этот токен сброса пароля уже был использован",
-      });
-    }
+      if (!codeRecord.is_used || codeRecord.reset_completed) {
+        return res.status(400).json({
+          success: false,
+          message: "Этот токен сброса пароля уже был использован",
+        });
+      }
 
-    if (new Date(codeRecord.expires_at).getTime() < Date.now()) {
-      return res.status(400).json({
-        success: false,
-        message: "Срок действия кода сброса пароля истек",
-      });
-    }
+      if (new Date(codeRecord.expires_at).getTime() < Date.now()) {
+        return res.status(400).json({
+          success: false,
+          message: "Срок действия кода сброса пароля истек",
+        });
+      }
 
-    // Атомарно помечаем reset_completed = true (защита от гонки и Replay Attack)
-    const { data: consumedCode, error: consumeError } = await supabase
-      .from("email_verifications")
-      .update({ reset_completed: true })
-      .eq("id", decoded.codeId)
-      .eq("reset_completed", false)
-      .select("id")
-      .maybeSingle();
+      const { data: consumedCode, error: consumeError } = await supabase
+        .from("email_verifications")
+        .update({ reset_completed: true })
+        .eq("id", decoded.codeId)
+        .eq("reset_completed", false)
+        .select("id")
+        .maybeSingle();
 
-    if (consumeError || !consumedCode) {
-      return res.status(400).json({
-        success: false,
-        message: "Этот токен сброса пароля уже был использован",
-      });
+      if (consumeError || !consumedCode) {
+        return res.status(400).json({
+          success: false,
+          message: "Этот токен сброса пароля уже был использован",
+        });
+      }
     }
 
     // 4. Хэширование нового пароля (bcryptjs, 10 раундов)
@@ -1770,26 +1971,51 @@ export const resetPassword = async (req, res) => {
     const passwordHash = await bcrypt.hash(newPassword, saltRounds);
 
     // Считываем актуальную версию токена пользователя
-    const { data: userToReset } = await supabase
-      .from("users")
-      .select("id, token_version")
-      .eq("email", decoded.email)
-      .maybeSingle();
+    let userQuery = supabase.from("users").select("id, email, phone, token_version");
+    if (decoded.userId) {
+      userQuery = userQuery.eq("id", decoded.userId);
+    } else if (decoded.phone) {
+      userQuery = userQuery.eq("phone", decoded.phone);
+    } else {
+      userQuery = userQuery.eq("email", decoded.email);
+    }
 
-    const nextTokenVersion = (userToReset?.token_version || 0) + 1;
+    const { data: userToReset, error: userFindErr } = await userQuery.maybeSingle();
+    if (userFindErr || !userToReset) {
+      return res.status(400).json({
+        success: false,
+        message: "Пользователь не найден",
+      });
+    }
 
-    // 5. Обновляем password_hash, инкрементируем token_version (отзыв всех выданных токенов)
-    // и помечаем email как подтверждённый
+    // Для телефонного сброса Replay Attack предотвращается через tokenVersion:
+    if (!decoded.codeId) {
+      if (decoded.tokenVersion !== (userToReset.token_version || 0)) {
+        return res.status(400).json({
+          success: false,
+          message: "Этот токен сброса пароля уже был использован",
+        });
+      }
+    }
+
+    const nextTokenVersion = (userToReset.token_version || 0) + 1;
+
+    const updates = {
+      password_hash: passwordHash,
+      token_version: nextTokenVersion,
+      updated_at: new Date().toISOString(),
+    };
+    if (decoded.codeId) {
+      updates.is_email_verified = true;
+    } else {
+      updates.is_verified = true;
+    }
+
     const { data: updatedUser, error: updateError } = await supabase
       .from("users")
-      .update({
-        password_hash: passwordHash,
-        token_version: nextTokenVersion,
-        is_email_verified: true,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("email", decoded.email)
-      .select("id, email, token_version")
+      .update(updates)
+      .eq("id", userToReset.id)
+      .select("id, email, phone, token_version")
       .maybeSingle();
 
     if (updateError || !updatedUser) {

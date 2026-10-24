@@ -135,7 +135,7 @@ export default function Forgot() {
     }
   };
 
-  // Телефон: интерфейс готов, отправка SMS требует backend API
+  // Телефон: отправка SMS с кодом восстановления
   const handleSendPhone = async (event) => {
     event.preventDefault();
     clearMessages();
@@ -145,12 +145,32 @@ export default function Forgot() {
       return;
     }
 
-    setErrorMessage(
-      "Восстановление по SMS пока не подключено. Используйте электронную почту.",
-    );
+    setIsLoading(true);
+
+    try {
+      const data = await requestPasswordReset(normalizedPhone);
+
+      setCountdown(60);
+      setInfoMessage(
+        data?.message || "Если аккаунт существует, код отправлен по SMS.",
+      );
+      setStep(2);
+    } catch (error) {
+      const match = /(\d+)\s*секунд/i.exec(error?.message || "");
+
+      if (match) {
+        setCountdown(Number(match[1]));
+      }
+
+      setErrorMessage(
+        getError(error, "Не удалось отправить код восстановления."),
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Повторная отправка кода на email
+  // Повторная отправка кода
   const handleResendCode = async () => {
     if (countdown > 0 || isLoading) return;
 
@@ -158,12 +178,15 @@ export default function Forgot() {
     setIsLoading(true);
 
     try {
-      const data = await requestPasswordReset(normalizedEmail);
+      const target = method === "email" ? normalizedEmail : normalizedPhone;
+      const data = await requestPasswordReset(target);
 
       setCountdown(60);
       setInfoMessage(
         data?.message ||
-          "Если аккаунт существует, новый код отправлен на почту.",
+          (method === "email"
+            ? "Если аккаунт существует, новый код отправлен на почту."
+            : "Если аккаунт существует, новый код отправлен по SMS."),
       );
     } catch (error) {
       const match = /(\d+)\s*секунд/i.exec(error?.message || "");
@@ -186,19 +209,19 @@ export default function Forgot() {
     const cleanCode = code.replace(/\D/g, "");
 
     if (!/^\d{6}$/.test(cleanCode)) {
-      setErrorMessage("Введите шестизначный код из письма.");
-      return;
-    }
-
-    if (method !== "email") {
-      setErrorMessage("Проверка SMS-кода пока не подключена к серверу.");
+      setErrorMessage(
+        method === "email"
+          ? "Введите шестизначный код из письма."
+          : "Введите шестизначный SMS-код.",
+      );
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const data = await verifyPasswordResetCode(normalizedEmail, cleanCode);
+      const target = method === "email" ? normalizedEmail : normalizedPhone;
+      const data = await verifyPasswordResetCode(target, cleanCode);
 
       if (!data?.resetToken) {
         setErrorMessage("Сервер не вернул токен для сброса пароля.");

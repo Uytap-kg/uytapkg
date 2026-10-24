@@ -950,3 +950,7 @@ uytapkg, во время адверсариального ревью. Все с�
 - 2026-10-21T16:45:41.546Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/e43ac0aa-9af0-4d9a-bfe3-2883c1a43ff2.webp (cleanup, test upload item-10)
 - 2026-10-22T12:56:44.031Z CREATE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/202b11a1-4c2a-4c76-b2d9-56fabb17c833.webp (test upload item-10)
 - 2026-10-22T12:56:44.032Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/202b11a1-4c2a-4c76-b2d9-56fabb17c833.webp (cleanup, test upload item-10)
+- 2026-10-24T13:58:59.874Z CREATE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/583fe4d0-fae8-4660-a280-7557d9eaff26.webp (test upload item-10)
+- 2026-10-24T13:58:59.875Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/583fe4d0-fae8-4660-a280-7557d9eaff26.webp (cleanup, test upload item-10)
+- 2026-10-24T14:42:12.268Z CREATE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/33234e38-4c31-441e-8fd2-3db472fbb44c.webp (test upload item-10)
+- 2026-10-24T14:42:12.270Z DELETE storage http://127.0.0.1:54321/storage/v1/object/public/avatars/pending/33234e38-4c31-441e-8fd2-3db472fbb44c.webp (cleanup, test upload item-10)

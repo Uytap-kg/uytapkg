@@ -87,6 +87,8 @@ export const normalizePhone = (phone) => {
   let cleaned = phone.replace(/\D/g, "");
   if (cleaned.startsWith("996")) {
     cleaned = cleaned.slice(3);
+  } else if (cleaned.startsWith("0") && cleaned.length === 10) {
+    cleaned = cleaned.slice(1);
   }
   if (cleaned.length === 9) {
     return `+996${cleaned}`;
@@ -99,7 +101,8 @@ export const registerSchema = z.object({
   accountType: z.enum(["personal", "realtor", "agency", "developer"], {
     errorMap: () => ({ message: "Неверный тип аккаунта" }),
   }),
-  email: z.string().email("Укажите корректный Email адрес"),
+  email: z.string().email("Укажите корректный Email адрес").optional().or(z.literal("")).nullable(),
+  verificationMethod: z.enum(["email", "phone"]).optional().default("email"),
   phone: z.string().min(9, "Номер телефона должен содержать минимум 9 цифр"),
   password: z
     .string()

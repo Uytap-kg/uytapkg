@@ -2,10 +2,10 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, CheckCircle2, Mail, RefreshCw } from "lucide-react";
+import { ArrowRight, CheckCircle2, Mail, Phone, RefreshCw } from "lucide-react";
 
 import styles from "./AuthCode.module.css";
-import { verifyEmailOtp, resendEmailOtp } from "@/utils/api";
+import { verifyEmailOtp, resendEmailOtp, verifyPhoneOtp, resendPhoneOtp } from "@/utils/api";
 
 function AuthCodeContent() {
   const router = useRouter();
@@ -19,35 +19,45 @@ function AuthCodeContent() {
 
   const inputRef = useRef(null);
 
-  /*
-   * Email сохраняем после регистрации.
-   *
-   * Например:
-   * localStorage.setItem("register_email", email)
-   */
+  const method = searchParams.get("method");
+  const queryPhone = searchParams.get("phone");
+  const queryEmail = searchParams.get("email");
+  const reason = searchParams.get("reason");
+
+  const [phone, setPhone] = useState(null);
   const [email, setEmail] = useState(null);
   const initRef = useRef(false);
-  const reason = searchParams.get("reason");
-  const queryEmail = searchParams.get("email");
 
   useEffect(() => {
-    const value = (queryEmail || localStorage.getItem("register_email") || "")
-      .trim()
-      .toLowerCase();
-    setEmail(value || null);
-  }, [queryEmail]);
+    const rawPhone = (queryPhone || localStorage.getItem("register_phone") || "").trim();
+    setPhone(rawPhone || null);
+    const rawEmail = (queryEmail || localStorage.getItem("register_email") || "").trim().toLowerCase();
+    setEmail(rawEmail || null);
+  }, [queryPhone, queryEmail]);
 
-  // Вход с неподтверждённой почтой: код при логине не отправляется,
+  const isPhone = method === "phone" || (!email && Boolean(phone));
+
+  // Вход с неподтверждёнными данными: код при логине не отправляется,
   // поэтому запрашиваем его здесь (сервер сам применяет кулдаун/лимиты).
   useEffect(() => {
-    if (!email || reason !== "login" || initRef.current) return;
-    initRef.current = true;
-    resendEmailOtp(email).catch((err) => {
-      const match = /(\d+)\s*секунд/.exec(err?.message || "");
-      if (match) setTimer(Number(match[1]));
-      else if (err?.status === 429) setError(err.message);
-    });
-  }, [email, reason]);
+    if (isPhone) {
+      if (!phone || reason !== "login" || initRef.current) return;
+      initRef.current = true;
+      resendPhoneOtp(phone).catch((err) => {
+        const match = /(\d+)\s*секунд/.exec(err?.message || "");
+        if (match) setTimer(Number(match[1]));
+        else if (err?.status === 429) setError(err.message);
+      });
+    } else {
+      if (!email || reason !== "login" || initRef.current) return;
+      initRef.current = true;
+      resendEmailOtp(email).catch((err) => {
+        const match = /(\d+)\s*секунд/.exec(err?.message || "");
+        if (match) setTimer(Number(match[1]));
+        else if (err?.status === 429) setError(err.message);
+      });
+    }
+  }, [email, phone, reason, isPhone]);
 
   /* =========================================================
      TIMER
@@ -102,8 +112,13 @@ function AuthCodeContent() {
     setError("");
 
     try {
-      await verifyEmailOtp(email, code);
-      localStorage.removeItem("register_email");
+      if (isPhone) {
+        await verifyPhoneOtp(phone, code);
+        localStorage.removeItem("register_phone");
+      } else {
+        await verifyEmailOtp(email, code);
+        localStorage.removeItem("register_email");
+      }
       router.push("/success-register");
       return;
     } catch (error) {
@@ -123,7 +138,12 @@ function AuthCodeContent() {
       return;
     }
 
-    if (!email) {
+    if (isPhone && !phone) {
+      setError("Не удалось определить номер телефона");
+      return;
+    }
+
+    if (!isPhone && !email) {
       setError("Не удалось определить email");
       return;
     }
@@ -132,7 +152,11 @@ function AuthCodeContent() {
     setError("");
 
     try {
-      await resendEmailOtp(email);
+      if (isPhone) {
+        await resendPhoneOtp(phone);
+      } else {
+        await resendEmailOtp(email);
+      }
       setTimer(60);
       setCode("");
 
@@ -173,27 +197,41 @@ function AuthCodeContent() {
 
         <div className={styles.iconWrapper}>
           <div className={styles.icon}>
-            <Mail size={27} />
+            {isPhone ? <Phone size={27} /> : <Mail size={27} />}
           </div>
         </div>
 
         {/* HEADER */}
 
         <div className={styles.header}>
-          <span className={styles.eyebrow}>EMAIL VERIFICATION</span>
+          <span className={styles.eyebrow}>
+            {isPhone ? "SMS VERIFICATION" : "EMAIL VERIFICATION"}
+          </span>
 
           <h1>
             Проверьте
-            <span> почту</span>
+            <span> {isPhone ? "телефон" : "почту"}</span>
           </h1>
 
           <p>
             {reason === "login"
-              ? "Подтвердите email, чтобы войти в аккаунт. Мы отправили вам код."
+              ? isPhone
+                ? "Подтвердите номер телефона, чтобы войти в аккаунт. Мы отправили вам SMS с кодом."
+                : "Подтвердите email, чтобы войти в аккаунт. Мы отправили вам код."
+              : isPhone
+              ? "Мы отправили SMS с кодом подтверждения на ваш номер телефона."
               : "Мы отправили код подтверждения на вашу электронную почту."}
           </p>
 
-          {email && <div className={styles.email}>{email}</div>}
+          {isPhone ? (
+            phone && (
+              <div className={styles.email}>
+                {phone.startsWith("+") ? phone : `+${phone}`}
+              </div>
+            )
+          ) : (
+            email && <div className={styles.email}>{email}</div>
+          )}
         </div>
 
         {/* FORM */}

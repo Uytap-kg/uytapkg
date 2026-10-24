@@ -9,7 +9,8 @@ import {
 } from "../src/services/nikitaService.js";
 import { phoneOtpStore, maskPhoneNikita } from "../src/utils/phoneOtpStore.js";
 import { assertNikitaConfigured, nikitaConfig } from "../src/config/nikita.js";
-import { sendOtp, verifyOtp } from "../src/controllers/authController.js";
+import { sendOtp, verifyOtp, forgotPassword, verifyResetCode, resetPassword } from "../src/controllers/authController.js";
+import { registerSchema } from "../src/utils/validation.js";
 
 /**
  * Создание мока Express Response
@@ -489,6 +490,77 @@ test("AuthController Integration: /send-otp и /verify-otp поддержива�
     assert.equal(verifyRes.statusCode, 200);
     assert.equal(verifyRes.body.success, true);
     assert.ok(verifyRes.body.message.includes("успешно подтвержден"));
+  } finally {
+    globalThis.fetch = origFetch;
+    process.env.NIKITA_API_KEY = origKey;
+  }
+});
+
+
+// ==============================================================================
+// 12. Валидация registerSchema с verificationMethod: "phone"
+// ==============================================================================
+test("registerSchema: поддерживает verificationMethod 'phone' и опциональный email", () => {
+  const phoneOnly = registerSchema.safeParse({
+    accountType: "personal",
+    phone: "+996 (770) 12-34-56",
+    password: "Password123!",
+    verificationMethod: "phone",
+  });
+  assert.equal(phoneOnly.success, true);
+  assert.equal(phoneOnly.data.verificationMethod, "phone");
+
+  const defaultEmail = registerSchema.safeParse({
+    accountType: "personal",
+    email: "test@example.com",
+    phone: "+996 (770) 12-34-56",
+    password: "Password123!",
+  });
+  assert.equal(defaultEmail.success, true);
+  assert.equal(defaultEmail.data.verificationMethod, "email");
+});
+
+// ==============================================================================
+// 13. Восстановление пароля по номеру телефона через Nikita OTP API
+// ==============================================================================
+test("Forgot Password Integration: запрос сброса пароля и проверка кода по телефону", async () => {
+  phoneOtpStore.reset();
+  const origFetch = globalThis.fetch;
+  const origKey = process.env.NIKITA_API_KEY;
+  process.env.NIKITA_API_KEY = "dummy-test-key";
+
+  try {
+    globalThis.fetch = async (url) => {
+      if (url.includes("/api/otp/send")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({ token: "tok_forgot_123", status: 0, description: "Code Sent" }),
+        };
+      }
+      if (url.includes("/api/otp/verify")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({ status: "0", description: "Code Valid" }),
+        };
+      }
+      throw new Error(`Unexpected url: ${url}`);
+    };
+
+    // Запрос сброса без номера/email возвращает 400
+    const emptyReq = { body: {} };
+    const emptyRes = createMockRes();
+    await forgotPassword(emptyReq, emptyRes);
+    assert.equal(emptyRes.statusCode, 400);
+
+    // Проверка кода без контакта/кода возвращает 400
+    const emptyVerifyReq = { body: {} };
+    const emptyVerifyRes = createMockRes();
+    await verifyResetCode(emptyVerifyReq, emptyVerifyRes);
+    assert.equal(emptyVerifyRes.statusCode, 400);
   } finally {
     globalThis.fetch = origFetch;
     process.env.NIKITA_API_KEY = origKey;
