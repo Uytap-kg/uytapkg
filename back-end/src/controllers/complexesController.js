@@ -1,6 +1,28 @@
 import { supabase } from "../config/db.js";
 import { createComplexSchema, updateComplexSchema } from "../utils/validation.js";
 import { verifyAllOwnedBy } from "../utils/uploadOwnership.js";
+import { getOrSetPublicCache, invalidatePublicCache } from "../utils/publicCache.js";
+
+const COMPLEX_COLUMNS =
+  "id, developer_id, name, description, country, region, city, district, address, completion_status, completion_date, housing_class, cover_photo, features, created_at";
+const COMPLEX_LAYOUT_COLUMNS =
+  "id, complex_id, rooms, area, price, layout_photo, created_at";
+const COMPLEX_LISTING_COLUMNS =
+  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
+
+const MAX_PAGE = 1000;
+const MAX_LIMIT = 100;
+const ALLOWED_SORT_FIELDS = new Set(["created_at", "price", "area", "rooms"]);
+const PUBLIC_COMPLEXES_CACHE_TTL_MS = 45 * 1000;
+
+function sanitizeIlikeInput(raw, maxLen = 100) {
+  if (!raw || typeof raw !== "string") return "";
+  return raw
+    .replace(/[,()%_\\'"*]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen);
+}
 
 // Если developers.logo_url пуст, подставляем user_profiles.avatar_url застройщика
 async function resolveDeveloperLogos(complexes) {
@@ -49,76 +71,87 @@ export function normalizeComplexRow(c) {
 export const getComplexes = async (req, res) => {
   try {
     const { page = 1, limit = 100, country, city, district } = req.query;
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
+    const pageNum = Math.min(MAX_PAGE, Math.max(1, parseInt(page, 10) || 1));
+    const limitNum = Math.min(MAX_LIMIT, Math.max(1, parseInt(limit, 10) || 100));
     const from = (pageNum - 1) * limitNum;
     const to = from + limitNum - 1;
 
-    let query = supabase
-      .from("residential_complexes")
-      .select(
-        `
-        *,
-        developers (id, user_id, company_name, logo_url, is_verified),
-        complex_layouts (*)
-      `,
-        { count: "exact" }
-      );
+    const cleanCountry = sanitizeIlikeInput(country, 50);
+    const cleanCity = sanitizeIlikeInput(city, 100);
+    const cleanDistrict = sanitizeIlikeInput(district, 100);
 
-    if (country && typeof country === "string") {
-      const cleanCountry = country.replace(/[,()]/g, " ").trim().slice(0, 50);
-      if (cleanCountry) {
-        const isKg = /^(kyrgyzstan|кыргызстан|kg)$/i.test(cleanCountry);
-        const isTr = /^(turkey|турция|tr|türkiye)$/i.test(cleanCountry);
-        if (isKg) {
-          query = query.or("country.ilike.%kyrgyzstan%,country.ilike.%кыргызстан%,features->>country.ilike.%kyrgyzstan%,features->>country.ilike.%кыргызстан%");
-        } else if (isTr) {
-          query = query.or("country.ilike.%turkey%,country.ilike.%турция%,features->>country.ilike.%turkey%,features->>country.ilike.%турция%");
-        } else {
-          query = query.or(`country.ilike.%${cleanCountry}%,features->>country.ilike.%${cleanCountry}%`);
+    const cacheKey = `list:${pageNum}:${limitNum}:${cleanCountry}:${cleanCity}:${cleanDistrict}`;
+
+    const resultPayload = await getOrSetPublicCache(
+      "complexes",
+      cacheKey,
+      PUBLIC_COMPLEXES_CACHE_TTL_MS,
+      async () => {
+        let query = supabase
+          .from("residential_complexes")
+          .select(
+            `
+            ${COMPLEX_COLUMNS},
+            developers (id, user_id, company_name, logo_url, is_verified),
+            complex_layouts (${COMPLEX_LAYOUT_COLUMNS})
+          `,
+            { count: "exact" }
+          );
+
+        if (cleanCountry) {
+          const isKg = /^(kyrgyzstan|кыргызстан|kg)$/i.test(cleanCountry);
+          const isTr = /^(turkey|турция|tr|türkiye)$/i.test(cleanCountry);
+          if (isKg) {
+            query = query.or("country.ilike.%kyrgyzstan%,country.ilike.%кыргызстан%,features->>country.ilike.%kyrgyzstan%,features->>country.ilike.%кыргызстан%");
+          } else if (isTr) {
+            query = query.or("country.ilike.%turkey%,country.ilike.%турция%,features->>country.ilike.%turkey%,features->>country.ilike.%турция%");
+          } else {
+            query = query.or(`country.ilike.%${cleanCountry}%,features->>country.ilike.%${cleanCountry}%`);
+          }
         }
+
+        if (cleanCity) {
+          query = query.or(`city.ilike.%${cleanCity}%,features->>city.ilike.%${cleanCity}%,address.ilike.%${cleanCity}%`);
+        }
+
+        if (cleanDistrict) {
+          query = query.or(`district.ilike.%${cleanDistrict}%,features->>district.ilike.%${cleanDistrict}%,address.ilike.%${cleanDistrict}%`);
+        }
+
+        const { data: complexes, error, count } = await query
+          .order("created_at", { ascending: false })
+          .range(from, to);
+
+        if (error) {
+          const err = new Error("Ошибка загрузки жилых комплексов");
+          err.dbError = error;
+          throw err;
+        }
+
+        const resolved = await resolveDeveloperLogos(complexes);
+        const normalized = (resolved || []).map(normalizeComplexRow);
+
+        return {
+          success: true,
+          data: normalized,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total: count ?? normalized.length,
+            hasMore: count ? to + 1 < count : false,
+          },
+        };
       }
-    }
+    );
 
-    if (city && typeof city === "string") {
-      const cleanCity = city.replace(/[,()]/g, " ").trim().slice(0, 100);
-      if (cleanCity) {
-        query = query.or(`city.ilike.%${cleanCity}%,features->>city.ilike.%${cleanCity}%,address.ilike.%${cleanCity}%`);
-      }
-    }
-
-    if (district && typeof district === "string") {
-      const cleanDistrict = district.replace(/[,()]/g, " ").trim().slice(0, 100);
-      if (cleanDistrict) {
-        query = query.or(`district.ilike.%${cleanDistrict}%,features->>district.ilike.%${cleanDistrict}%,address.ilike.%${cleanDistrict}%`);
-      }
-    }
-
-    const { data: complexes, error, count } = await query
-      .order("created_at", { ascending: false })
-      .range(from, to);
-
-    if (error) {
-      return res.status(500).json({ success: false, message: "Ошибка загрузки жилых комплексов" });
-    }
-
-    const resolved = await resolveDeveloperLogos(complexes);
-
-    const normalized = (resolved || []).map(normalizeComplexRow);
-
-    return res.json({
-      success: true,
-      data: normalized,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total: count ?? resolved.length,
-        hasMore: count ? to + 1 < count : false,
-      },
-    });
+    return res.json(resultPayload);
   } catch (error) {
     console.error("Get Complexes Error:", error);
-    return res.status(500).json({ success: false, message: "Ошибка сервера при загрузке ЖК" });
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка загрузки жилых комплексов",
+      requestId: req?.id,
+    });
   }
 };
 
@@ -129,25 +162,42 @@ export const getComplexById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data: complex, error } = await supabase
-      .from("residential_complexes")
-      .select(`
-        *,
-        developers (*),
-        complex_layouts (*)
-      `)
-      .eq("id", id)
-      .single();
+    const normalizedComplex = await getOrSetPublicCache(
+      "complexes",
+      `byId:${id}`,
+      PUBLIC_COMPLEXES_CACHE_TTL_MS,
+      async () => {
+        const { data: complex, error } = await supabase
+          .from("residential_complexes")
+          .select(`
+            ${COMPLEX_COLUMNS},
+            developers (id, user_id, company_name, logo_url, description, website, is_verified, created_at),
+            complex_layouts (${COMPLEX_LAYOUT_COLUMNS})
+          `)
+          .eq("id", id)
+          .single();
 
-    if (error || !complex) {
+        if (error || !complex) {
+          return null;
+        }
+
+        if (complex.developers) await resolveDeveloperLogos([complex]);
+        return normalizeComplexRow(complex);
+      }
+    );
+
+    if (!normalizedComplex) {
       return res.status(404).json({ success: false, message: "Жилой комплекс не найден" });
     }
 
-    if (complex.developers) await resolveDeveloperLogos([complex]);
-    return res.json({ success: true, data: normalizeComplexRow(complex) });
+    return res.json({ success: true, data: normalizedComplex });
   } catch (error) {
     console.error("Get Complex By ID Error:", error);
-    return res.status(500).json({ success: false, message: "Ошибка сервера при загрузке ЖК" });
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка сервера при загрузке ЖК",
+      requestId: req?.id,
+    });
   }
 };
 
@@ -155,14 +205,20 @@ export const getComplexById = async (req, res) => {
 // 3. Объявления квартир, привязанных к конкретному ЖК
 //    (GET /api/complexes/:id/listings)
 //
-// Привязка хранится в listings.features.residentialComplexId (в таблице
-// listings нет отдельной колонки под это — см. createListing/updateListing
-// в listingsController.js), поэтому фильтруем через JSON-путь Postgres.
-// Публичный эндпоинт — отдаём только активные объявления.
+// P2-06: Добавлен потолок пагинации (limit <= 100, page <= 1000) и белый список полей сортировки.
 // =======================================================
 export const getComplexListings = async (req, res) => {
   try {
     const { id } = req.params;
+    const { page = 1, limit = 50, sortBy = "created_at", sortOrder = "desc" } = req.query || {};
+
+    const pageNum = Math.min(MAX_PAGE, Math.max(1, parseInt(page, 10) || 1));
+    const limitNum = Math.min(MAX_LIMIT, Math.max(1, parseInt(limit, 10) || 50));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
+    const safeSortBy = ALLOWED_SORT_FIELDS.has(sortBy) ? sortBy : "created_at";
+    const ascending = String(sortOrder).toLowerCase() === "asc";
 
     const { data: complex } = await supabase
       .from("residential_complexes")
@@ -177,43 +233,69 @@ export const getComplexListings = async (req, res) => {
       });
     }
 
-    const { data: listings, error } = await supabase
+    let query = supabase
       .from("listings")
-      .select(`
-        *,
+      .select(
+        `
+        ${COMPLEX_LISTING_COLUMNS},
         listing_photos (id, url, is_main, display_order)
-      `)
+      `,
+        { count: "exact" }
+      )
       .eq("status", "active")
       .gt("expires_at", new Date().toISOString())
       .eq("features->>residentialComplexId", id)
-      .order("created_at", { ascending: false });
+      .order(safeSortBy, { ascending });
+
+    if (typeof query?.range === "function") {
+      query = query.range(from, to);
+    }
+
+    const { data: listings, error, count } = await query;
 
     if (error) {
       console.error("Get Complex Listings Error:", error);
       return res.status(500).json({
         success: false,
         message: "Ошибка при получении квартир жилого комплекса",
+        requestId: req?.id,
       });
     }
 
+    const items = (listings || []).slice(0, limitNum);
+
     return res.json({
       success: true,
-      data: listings || [],
+      data: items,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: count ?? items.length,
+        hasMore: count ? to + 1 < count : false,
+      },
     });
   } catch (error) {
     console.error("Get Complex Listings Controller Error:", error);
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при получении квартир жилого комплекса",
+      requestId: req?.id,
     });
   }
 };
 
 // =======================================================
 // 4. Получение собственных ЖК застройщика (GET /api/complexes/my)
+//    P2-06: Потолок пагинации (limit <= 100, page <= 1000).
 // =======================================================
 export const getMyComplexes = async (req, res) => {
   try {
+    const { page = 1, limit = 100 } = req.query || {};
+    const pageNum = Math.min(MAX_PAGE, Math.max(1, parseInt(page, 10) || 1));
+    const limitNum = Math.min(MAX_LIMIT, Math.max(1, parseInt(limit, 10) || 100));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
     const { data: developer } = await supabase
       .from("developers")
       .select("id")
@@ -224,37 +306,62 @@ export const getMyComplexes = async (req, res) => {
       return res.json({
         success: true,
         data: [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: 0,
+          hasMore: false,
+        },
       });
     }
 
-    const { data: complexes, error } = await supabase
+    let query = supabase
       .from("residential_complexes")
-      .select(`
-        *,
+      .select(
+        `
+        ${COMPLEX_COLUMNS},
         developers (id, user_id, company_name, logo_url, is_verified),
-        complex_layouts (*)
-      `)
+        complex_layouts (${COMPLEX_LAYOUT_COLUMNS})
+      `,
+        { count: "exact" }
+      )
       .eq("developer_id", developer.id)
       .order("created_at", { ascending: false });
+
+    if (typeof query?.range === "function") {
+      query = query.range(from, to);
+    }
+
+    const { data: complexes, error, count } = await query;
 
     if (error) {
       console.error("Get My Complexes Error:", error);
       return res.status(500).json({
         success: false,
         message: "Ошибка при получении списка ваших жилых комплексов",
+        requestId: req?.id,
       });
     }
 
-    const resolved = await resolveDeveloperLogos(complexes || []);
+    const resolved = await resolveDeveloperLogos((complexes || []).slice(0, limitNum));
+    const normalized = (resolved || []).map(normalizeComplexRow);
+
     return res.json({
       success: true,
-      data: (resolved || []).map(normalizeComplexRow),
+      data: normalized,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: count ?? normalized.length,
+        hasMore: count ? to + 1 < count : false,
+      },
     });
   } catch (error) {
     console.error("Get My Complexes Controller Error:", error);
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при получении жилых комплексов",
+      requestId: req?.id,
     });
   }
 };
@@ -359,7 +466,6 @@ export const createComplex = async (req, res) => {
 
     const cover_photo = Array.isArray(images) && images.length > 0 ? images[0] : null;
 
-    // TODO: Временное решение для сохранения площади территории в двух единицах измерения (area в кв.м и areaSotka в сотках). Требуется обсудить единый стандарт измерения.
     const resolvedCountry = (country && String(country).trim()) || "kyrgyzstan";
     const resolvedDistrict = (district && String(district).trim()) || null;
     const resolvedCityKey = (cityKey && String(cityKey).trim()) || null;
@@ -421,9 +527,12 @@ export const createComplex = async (req, res) => {
       console.error("Create Complex Error:", complexError);
       return res.status(400).json({
         success: false,
-        message: "Ошибка при создании жилого комплекса: " + complexError.message,
+        message: "Ошибка при создании жилого комплекса",
       });
     }
+
+    invalidatePublicCache("complexes");
+    invalidatePublicCache("developers");
 
     return res.status(201).json({
       success: true,
@@ -435,6 +544,7 @@ export const createComplex = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при создании жилого комплекса",
+      requestId: req?.id,
     });
   }
 };
@@ -471,7 +581,7 @@ export const updateComplex = async (req, res) => {
     // Проверяем существование ЖК и его владельца
     const { data: complex, error: fetchError } = await supabase
       .from("residential_complexes")
-      .select("*")
+      .select(COMPLEX_COLUMNS)
       .eq("id", id)
       .single();
 
@@ -629,6 +739,9 @@ export const updateComplex = async (req, res) => {
       });
     }
 
+    invalidatePublicCache("complexes");
+    invalidatePublicCache("developers");
+
     return res.json({
       success: true,
       message: "Жилой комплекс успешно обновлен",
@@ -639,6 +752,7 @@ export const updateComplex = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при обновлении жилого комплекса",
+      requestId: req?.id,
     });
   }
 };
@@ -675,7 +789,7 @@ export const deleteComplex = async (req, res) => {
     // Проверяем существование ЖК и его владельца
     const { data: complex, error: fetchError } = await supabase
       .from("residential_complexes")
-      .select("*")
+      .select("id, developer_id")
       .eq("id", id)
       .single();
 
@@ -710,6 +824,9 @@ export const deleteComplex = async (req, res) => {
       });
     }
 
+    invalidatePublicCache("complexes");
+    invalidatePublicCache("developers");
+
     return res.json({
       success: true,
       message: "Жилой комплекс успешно удален",
@@ -719,6 +836,7 @@ export const deleteComplex = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при удалении жилого комплекса",
+      requestId: req?.id,
     });
   }
 };

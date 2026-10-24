@@ -160,18 +160,25 @@ export async function createInstagramRequest({ listingId, userId }) {
 /**
  * Получить список всех заявок (для админки), отсортированных от новых к старым.
  */
-export async function listInstagramRequests() {
-  const { data, error } = await supabase
+export async function listInstagramRequests(limit = 100) {
+  const safeLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
+  let query = supabase
     .from("instagram_requests")
-    .select("*")
+    .select("id, listing_id, user_id, status, created_at, published_at, updated_at, published_by, notes")
     .order("created_at", { ascending: false });
+
+  if (typeof query?.limit === "function") {
+    query = query.limit(safeLimit);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("DB error in listInstagramRequests:", error.message || error);
     throw new Error(error.message || "Не удалось загрузить список заявок на Instagram");
   }
 
-  return (data || []).map(mapRowToRequest);
+  return (data || []).slice(0, safeLimit).map(mapRowToRequest);
 }
 
 /**
@@ -242,8 +249,9 @@ export async function markInstagramRequestPublished(
  * Загрузить заявки Instagram со всеми связанными данными (объявление, фото, пользователь, профиль)
  * одним запросом с вложенным выбором через Supabase SDK.
  */
-export async function fetchInstagramRequestsWithDetails() {
-  const { data: requestRows, error } = await supabase
+export async function fetchInstagramRequestsWithDetails(limit = 100) {
+  const safeLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
+  let query = supabase
     .from("instagram_requests")
     .select(`
       id,
@@ -276,6 +284,12 @@ export async function fetchInstagramRequestsWithDetails() {
     `)
     .order("created_at", { ascending: false });
 
+  if (typeof query?.limit === "function") {
+    query = query.limit(safeLimit);
+  }
+
+  const { data: requestRows, error } = await query;
+
   if (error) {
     // Резервный путь при ошибках разрешения связей в PostgREST:
     // выполняем раздельные параллельные выборки без падения процесса
@@ -283,10 +297,10 @@ export async function fetchInstagramRequestsWithDetails() {
       "Nested select on instagram_requests encountered error, falling back to separate queries:",
       error.message
     );
-    return fetchInstagramRequestsWithDetailsFallback();
+    return fetchInstagramRequestsWithDetailsFallback(safeLimit);
   }
 
-  return (requestRows || []).map(formatRequestWithDetails);
+  return (requestRows || []).slice(0, safeLimit).map(formatRequestWithDetails);
 }
 
 /**

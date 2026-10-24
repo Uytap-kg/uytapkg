@@ -1,4 +1,10 @@
 import { supabase } from "../config/db.js";
+import { getOrSetPublicCache, invalidatePublicCache } from "./publicCache.js";
+import { isBatchCountersEnabled, bufferBannerStat } from "./counterBatcher.js";
+
+const BANNER_COLUMNS =
+  "id, title, image_url, image_position_x, image_position_y, link_url, start_date, end_date, is_active, views_count, clicks_count, created_at, updated_at";
+const PUBLIC_BANNERS_CACHE_TTL_MS = 45 * 1000;
 
 // Регулярное выражение для валидации UUID v4
 const UUID_REGEX =
@@ -75,11 +81,16 @@ export function mapRowToBanner(row) {
 /**
  * Получить все баннеры для админ-панели (сортировка от новых к старым).
  */
-export async function listAllBanners() {
-  const { data, error } = await supabase
+export async function listAllBanners(limit = 200) {
+  const safeLimit = Math.min(200, Math.max(1, parseInt(limit, 10) || 200));
+  let query = supabase
     .from("banners")
-    .select("*")
+    .select(BANNER_COLUMNS)
     .order("created_at", { ascending: false });
+  if (typeof query?.limit === "function") {
+    query = query.limit(safeLimit);
+  }
+  const { data, error } = await query;
 
   if (error) {
     console.error("DB error in listAllBanners:", error.message || error);
@@ -99,20 +110,31 @@ export async function listAllBanners() {
 export async function listActiveBanners() {
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data, error } = await supabase
-    .from("banners")
-    .select("*")
-    .eq("is_active", true)
-    .lte("start_date", today)
-    .or(`end_date.is.null,end_date.gte.${today}`)
-    .order("created_at", { ascending: false });
+  return getOrSetPublicCache(
+    "banners",
+    `active:${today}`,
+    PUBLIC_BANNERS_CACHE_TTL_MS,
+    async () => {
+      let query = supabase
+        .from("banners")
+        .select(BANNER_COLUMNS)
+        .eq("is_active", true)
+        .lte("start_date", today)
+        .or(`end_date.is.null,end_date.gte.${today}`)
+        .order("created_at", { ascending: false });
+      if (typeof query?.limit === "function") {
+        query = query.limit(50);
+      }
+      const { data, error } = await query;
 
-  if (error) {
-    console.error("DB error in listActiveBanners:", error.message || error);
-    throw new Error(error.message || "Не удалось получить список активных баннеров");
-  }
+      if (error) {
+        console.error("DB error in listActiveBanners:", error.message || error);
+        throw new Error(error.message || "Не удалось получить список активных баннеров");
+      }
 
-  return (data || []).map(mapRowToBanner);
+      return (data || []).map(mapRowToBanner);
+    }
+  );
 }
 
 /**
@@ -123,7 +145,7 @@ export async function getBannerById(id) {
 
   const { data, error } = await supabase
     .from("banners")
-    .select("*")
+    .select(BANNER_COLUMNS)
     .eq("id", id)
     .maybeSingle();
 
@@ -167,6 +189,7 @@ export async function createBanner(data) {
     throw new Error(error.message || "Не удалось создать баннер");
   }
 
+  invalidatePublicCache("banners");
   return mapRowToBanner(createdRow);
 }
 
@@ -205,6 +228,7 @@ export async function updateBanner(id, data) {
     throw new Error(error.message || "Не удалось обновить баннер");
   }
 
+  invalidatePublicCache("banners");
   const updated = mapRowToBanner(updatedRow);
   return { previous, updated };
 }
@@ -228,6 +252,7 @@ export async function deleteBanner(id) {
     throw new Error(error.message || "Не удалось удалить баннер");
   }
 
+  invalidatePublicCache("banners");
   return deletedRow ? mapRowToBanner(deletedRow) : null;
 }
 
@@ -250,6 +275,10 @@ export async function incrementBannerStat(bannerId, stat) {
     statParam = "click";
   } else {
     throw new Error(`Недопустимый тип метрики: ${stat}. Разрешено: view, click`);
+  }
+
+  if (isBatchCountersEnabled()) {
+    return bufferBannerStat(bannerId, statParam);
   }
 
   const { error } = await supabase.rpc("increment_banner_stat", {

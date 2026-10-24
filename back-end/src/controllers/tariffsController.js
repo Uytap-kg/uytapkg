@@ -149,28 +149,46 @@ export const searchUsersByPhone = async (req, res) => {
 // =======================================================
 export const listDefaultTariffs = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { page = 1, limit = 100 } = req.query || {};
+    const pageNum = Math.min(1000, Math.max(1, parseInt(page, 10) || 1));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
+    let query = supabase
       .from("subscriptions")
       .select(`id, tariff_id, started_at, expires_at, is_active, users!subscriptions_user_id_fkey(${NESTED_USER_SELECT})`)
       .eq("is_individual", false)
       .order("created_at", { ascending: false });
+
+    if (typeof query?.range === "function") {
+      query = query.range(from, to);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("List Default Tariffs Error:", error);
       return res.status(500).json({
         success: false,
         message: "Ошибка при получении списка тарифов",
+        requestId: req?.id,
       });
     }
 
-    const items = (data || []).filter((row) => row.users).map(toDefaultTariffDto);
+    const items = (data || []).slice(0, limitNum).filter((row) => row.users).map(toDefaultTariffDto);
 
-    return res.json({ success: true, data: items });
+    return res.json({
+      success: true,
+      data: items,
+      pagination: { page: pageNum, limit: limitNum },
+    });
   } catch (error) {
     console.error("List Default Tariffs Controller Error:", error);
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при получении тарифов",
+      requestId: req?.id,
     });
   }
 };
@@ -281,7 +299,13 @@ export const toggleDefaultTariff = async (req, res) => {
 // =======================================================
 export const listIndividualTariffs = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { page = 1, limit = 100 } = req.query || {};
+    const pageNum = Math.min(1000, Math.max(1, parseInt(page, 10) || 1));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
+    let query = supabase
       .from("subscriptions")
       .select(
         `id, custom_name, active_listings_limit, vip_boosts_limit, top_boosts_limit,
@@ -290,22 +314,34 @@ export const listIndividualTariffs = async (req, res) => {
       .eq("is_individual", true)
       .order("created_at", { ascending: false });
 
+    if (typeof query?.range === "function") {
+      query = query.range(from, to);
+    }
+
+    const { data, error } = await query;
+
     if (error) {
       console.error("List Individual Tariffs Error:", error);
       return res.status(500).json({
         success: false,
         message: "Ошибка при получении списка тарифов",
+        requestId: req?.id,
       });
     }
 
-    const items = (data || []).filter((row) => row.users).map(toIndividualTariffDto);
+    const items = (data || []).slice(0, limitNum).filter((row) => row.users).map(toIndividualTariffDto);
 
-    return res.json({ success: true, data: items });
+    return res.json({
+      success: true,
+      data: items,
+      pagination: { page: pageNum, limit: limitNum },
+    });
   } catch (error) {
     console.error("List Individual Tariffs Controller Error:", error);
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при получении тарифов",
+      requestId: req?.id,
     });
   }
 };

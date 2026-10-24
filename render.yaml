@@ -1,9 +1,10 @@
 # ==============================================================================
-# Render Blueprint — uy-tap Full-Stack Platform
+# Render Blueprint — uy-tap Full-Stack Platform (Production Hardened)
 # Docs: https://render.com/docs/blueprint-spec
 # ==============================================================================
 # Этот файл автоматически разворачивает бэкенд (Express API) и фронтенд (Next.js)
-# на платформе Render из нового репозитория.
+# на платформе Render с защитой от OOM (512 MB Starter), потолками параллелизма
+# Sharp / LLM / STT, пулом PostgreSQL и доверенной передачей IP клиента.
 
 services:
   # ----------------------------------------------------------------------------
@@ -27,20 +28,40 @@ services:
         value: production
       - key: PORT
         value: 10000
+      # Ограничение V8 heap под контейнер Render Starter (512 MB RAM), чтобы GC
+      # срабатывал заблаговременно и контейнер не убивался по SIGKILL (OOM 137)
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=384"
+      # Ограничение нативных потоков и параллельных пайплайнов Sharp/libvips под 0.5 CPU / 512 MB
+      - key: SHARP_CONCURRENCY
+        value: "1"
+      - key: SHARP_MAX_CONCURRENT
+        value: "2"
+      # Настройки пула PostgreSQL (5 соединений на инстанс Render) и таймаута запросов (15 с)
+      - key: DB_POOL_MAX
+        value: "5"
+      - key: DB_POOL_IDLE_TIMEOUT_MS
+        value: "30000"
+      - key: DB_POOL_CONN_TIMEOUT_MS
+        value: "5000"
+      - key: DB_STATEMENT_TIMEOUT_MS
+        value: "15000"
+      - key: COUNTER_FLUSH_INTERVAL_MS
+        value: "5000"
       - key: ALLOWED_ORIGINS
-        sync: false # Укажите домен вашего фронтенда, например: https://uytap-frontend.onrender.com
+        sync: false # Укажите домен вашего фронтенда, например: https://uytap-frontend.onrender.com,https://uytap.kg
       - key: INTERNAL_PROXY_SECRET
-        sync: false # Минимум 32 случайных символа (должен совпадать с фронтендом)
+        sync: false # Минимум 32 случайных символа (должен строго совпадать с фронтендом!)
       - key: SUPABASE_URL
         sync: false # REST API URL Supabase (например: https://xyz.supabase.co)
       - key: SUPABASE_KEY
         sync: false # Service Role Key Supabase для серверных операций
       - key: DATABASE_URL
-        sync: false # Прямое подключение к PostgreSQL для пула соединений pg
+        sync: false # Подключение к PostgreSQL (Session Pooler 5432 или Direct DB с ?sslmode=require)
       - key: JWT_SECRET
-        sync: false # 32-64 случайных символа для подписи JWT токенов
+        sync: false # Минимум 32 случайных символа для подписи JWT токенов
       - key: OTP_SECRET
-        sync: false # 32-64 случайных символа для HMAC-хэширования OTP
+        sync: false # Минимум 32 случайных символа (отличный от JWT_SECRET!) для HMAC-хэширования OTP
       - key: AI_PROVIDER
         value: claude
       - key: ANTHROPIC_API_KEY
@@ -51,6 +72,17 @@ services:
         sync: false # (Резерв) Google Gemini API Key
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
+      # Суточные потолки расходов и параллелизма платных сервисов
+      - key: AI_DAILY_USER_LIMIT
+        value: "100"
+      - key: AI_DAILY_GLOBAL_LIMIT
+        value: "3000"
+      - key: DAILY_SMS_LIMIT
+        value: "500"
+      - key: EMAIL_DAILY_LIMIT
+        value: "2000"
+      - key: MAX_PENDING_PAYMENTS_PER_USER
+        value: "5"
       - key: ODENGI_API_URL
         value: https://api.odengi.kg
       - key: ODENGI_SID
@@ -62,7 +94,7 @@ services:
       - key: ODENGI_TEST
         value: "1"
       - key: ODENGI_RESULT_URL
-        sync: false # Callback URL бэкенда для O!Dengi
+        sync: false # Callback URL бэкенда для O!Dengi (например: https://uytap-backend.onrender.com/api/payments/webhook)
       - key: NIKITA_API_KEY
         sync: false # API-ключ SMS-шлюза Nikita OTP
       - key: NIKITA_BASE_URL
@@ -104,23 +136,30 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=384"
       - key: NEXT_PUBLIC_API_URL
         sync: false # Публичный URL бэкенда, например: https://uytap-backend.onrender.com/api
       - key: BACKEND_API_URL
-        sync: false # Внутренний URL бэкенда (Render Private Network или https://uytap-backend.onrender.com/api)
+        sync: false # URL бэкенда для серверного проксирования Next.js: https://uytap-backend.onrender.com/api
       - key: INTERNAL_PROXY_SECRET
-        sync: false # Тот же секрет, что и на бэкенде (>= 16-32 символа)
+        sync: false # Тот же секрет, что и на бэкенде (>= 32 символа)
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false # URL Supabase для оптимизатора изображений
       - key: SUPABASE_URL
         sync: false # URL Supabase для серверной оптимизации изображений
       - key: ELEVENLABS_API_KEY
         sync: false # Ключ ElevenLabs для голосового поиска Speech-to-Text
+      - key: STT_DAILY_IP_LIMIT
+        value: "30"
+      - key: STT_DAILY_GLOBAL_LIMIT
+        value: "500"
+      # Render использует Cloudflare на внешнем периметре (передаёт cf-connecting-ip / true-client-ip)
       - key: ENABLE_CLOUDFLARE
-        value: "false"
+        value: "true"
 
 # ------------------------------------------------------------------------------
-# 3. База данных и кэш (Опционально)
+# 3. База данных (Опционально)
 # ------------------------------------------------------------------------------
 # По умолчанию UyTap подключается к проекту Supabase (см. SUPABASE_URL и DATABASE_URL).
 # Если вы хотите развернуть базу PostgreSQL непосредственно внутри Render:

@@ -210,7 +210,7 @@ test("P1-3: Наличие маршрута /api/listings/map и хелпера 
     "utf8"
   );
   assert.ok(
-    routesSource.includes('router.get("/map", getMapListings)'),
+    (routesSource.includes('router.get("/map", getMapListings)') || routesSource.includes('router.get("/map", publicMapLimiter, getMapListings)')),
     "В listingsRoutes должен быть зарегистрирован GET /map до /:id"
   );
 

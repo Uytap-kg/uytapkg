@@ -1,7 +1,7 @@
 // Единая безопасная обработка X-Forwarded-For для всех Next.js-прокси к бэкенду.
 //
 // Бэкенд принимает X-Forwarded-For ТОЛЬКО при наличии X-Internal-Proxy-Secret.
-// В продакшене перед Next.js могут стоять Cloudflare (cf-connecting-ip),
+// В продакшене перед Next.js могут стоять Cloudflare / Render Ingress (cf-connecting-ip, true-client-ip),
 // Nginx (x-real-ip, при явном TRUST_NGINX_REAL_IP=true) или Vercel (x-vercel-forwarded-for).
 
 const IPV4_REGEX = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
@@ -16,13 +16,17 @@ export function isValidIp(val) {
 export function getTrustedClientIp(request) {
   if (!request) return null;
 
-  // 1. Cloudflare Edge: гарантированно реальный IP посетителя ТОЛЬКО если Cloudflare явно включен в конфигурации
+  // 1. Cloudflare Edge / Render Ingress: гарантированно реальный IP посетителя,
+  // когда Cloudflare явно включён ИЛИ приложение запущено на Render (RENDER=true).
   const isCloudflareEnabled =
     process.env.ENABLE_CLOUDFLARE === "true" ||
-    process.env.BEHIND_CLOUDFLARE === "true";
+    process.env.BEHIND_CLOUDFLARE === "true" ||
+    process.env.RENDER === "true";
 
   if (isCloudflareEnabled) {
-    const cfIp = request.headers?.get?.("cf-connecting-ip");
+    const cfIp =
+      request.headers?.get?.("cf-connecting-ip") ||
+      request.headers?.get?.("true-client-ip");
     if (cfIp && isValidIp(cfIp)) {
       return cfIp.trim();
     }
@@ -90,7 +94,7 @@ export function applyTrustedForwardedFor(headers, request) {
     headers.set("x-forwarded-for", trustedClientIp);
   }
 
-  const proxySecret = process.env.INTERNAL_PROXY_SECRET;
+  const proxySecret = process.env.INTERNAL_PROXY_SECRET || process.env.TRUSTED_PROXY_SECRET;
   if (proxySecret) {
     headers.set("x-internal-proxy-secret", proxySecret);
   }
@@ -100,7 +104,7 @@ export function applyTrustedForwardedFor(headers, request) {
 
 /**
  * Единый надёжный резолвер URL бэкенда для proxy routes.
- * Корректно нормализует суффикс /api для любого хоста (localhost, VPS, Docker, Kubernetes).
+ * Корректно нормализует суффикс /api для любого хоста (localhost, Render, VPS, Docker, Kubernetes).
  */
 export function getBackendApiUrl() {
   let url = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api")

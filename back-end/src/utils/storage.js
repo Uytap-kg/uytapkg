@@ -90,31 +90,61 @@ export const cleanupOrphanedPendingAvatars = async (maxAgeMs = 24 * 60 * 60 * 10
       return { cleanedCount: 0 };
     }
 
+    const pendingPaths = staleFiles
+      .map((f) => ({ name: f.name, path: `pending/${f.name}` }))
+      .filter((item) => /^[a-zA-Z0-9._/-]+$/.test(item.path));
+
     const toDelete = [];
-    for (const file of staleFiles) {
-      const pendingPath = `pending/${file.name}`;
+    const profileSelectProbe = supabase.from("user_profiles").select("avatar_url");
 
-      const { data: userWithAvatar } = await supabase
-        .from("user_profiles")
-        .select("id")
-        .ilike("avatar_url", `%${pendingPath}%`)
-        .limit(1);
+    // Пакетная проверка (P2-06): 2 запроса вместо до 200 последовательных SELECT в цикле
+    if (profileSelectProbe && typeof profileSelectProbe.or === "function" && pendingPaths.length > 0) {
+      const avatarClauses = pendingPaths.map((p) => `avatar_url.ilike.%${p.path}%`).join(",");
+      const logoClauses = pendingPaths.map((p) => `logo_url.ilike.%${p.path}%`).join(",");
 
-      if (userWithAvatar && userWithAvatar.length > 0) {
-        continue;
+      const [{ data: usedProfiles }, { data: usedDevelopers }] = await Promise.all([
+        supabase.from("user_profiles").select("avatar_url").or(avatarClauses),
+        supabase.from("developers").select("logo_url").or(logoClauses),
+      ]);
+
+      const usedUrls = [
+        ...(usedProfiles || []).map((r) => r.avatar_url).filter(Boolean),
+        ...(usedDevelopers || []).map((r) => r.logo_url).filter(Boolean),
+      ];
+
+      for (const item of pendingPaths) {
+        const isReferenced = usedUrls.some((url) => url.includes(item.path));
+        if (!isReferenced) {
+          toDelete.push(item.path);
+        }
       }
+    } else {
+      // Фолбэк для окружений/моков без поддержки .or()
+      for (const file of staleFiles) {
+        const pendingPath = `pending/${file.name}`;
 
-      const { data: devWithLogo } = await supabase
-        .from("developers")
-        .select("id")
-        .ilike("logo_url", `%${pendingPath}%`)
-        .limit(1);
+        const { data: userWithAvatar } = await supabase
+          .from("user_profiles")
+          .select("id")
+          .ilike("avatar_url", `%${pendingPath}%`)
+          .limit(1);
 
-      if (devWithLogo && devWithLogo.length > 0) {
-        continue;
+        if (userWithAvatar && userWithAvatar.length > 0) {
+          continue;
+        }
+
+        const { data: devWithLogo } = await supabase
+          .from("developers")
+          .select("id")
+          .ilike("logo_url", `%${pendingPath}%`)
+          .limit(1);
+
+        if (devWithLogo && devWithLogo.length > 0) {
+          continue;
+        }
+
+        toDelete.push(pendingPath);
       }
-
-      toDelete.push(pendingPath);
     }
 
     if (toDelete.length > 0) {

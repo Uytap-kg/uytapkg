@@ -34,13 +34,17 @@ export function isValidProxySecret(incomingSecret, configuredSecret) {
  * Middleware для надёжного определения IP-адреса клиента:
  * 1. Защита от подмены IP (IP Spoofing): X-Forwarded-For принимается ТОЛЬКО
  *    при наличии валидного секретного заголовка X-Internal-Proxy-Secret от
- *    доверенного прокси фронтенда (Next.js/Vercel).
- * 2. При прямом запросе (без валидного секрета) X-Forwarded-For принудительно
+ *    доверенного прокси фронтенда (Next.js/Render/Nginx/Vercel).
+ * 2. На платформе Render (RENDER=true) для прямых запросов к бэкенду без участия Next.js-прокси
+ *    (например, вебхуки O!Dengi) используется заголовок периметра Render/Cloudflare
+ *    (true-client-ip / cf-connecting-ip), который перезаписывается балансировщиком Render.
+ * 3. При прямом запросе без валидного секрета X-Forwarded-For принудительно
  *    удаляется, а IP берётся строго из прямого сетевого сокета (remoteAddress).
- * 3. Фиксирует доверенный IP в req.ip и req.clientIp.
+ * 4. Фиксирует доверенный IP в req.ip и req.clientIp.
  */
 export function resolveClientIp(req, res, next) {
-  const configuredSecret = process.env.INTERNAL_PROXY_SECRET;
+  const configuredSecret =
+    process.env.INTERNAL_PROXY_SECRET || process.env.TRUSTED_PROXY_SECRET;
   const incomingSecret = req.headers["x-internal-proxy-secret"];
   const rawSocketIp =
     req.socket?.remoteAddress ||
@@ -66,6 +70,12 @@ export function resolveClientIp(req, res, next) {
       if (isValidIp(normCandidate)) {
         clientIp = normCandidate;
       }
+    }
+  } else if (process.env.RENDER === "true" && !incomingSecret) {
+    const renderEdgeIp =
+      req.headers["true-client-ip"] || req.headers["cf-connecting-ip"];
+    if (typeof renderEdgeIp === "string" && isValidIp(renderEdgeIp.trim())) {
+      clientIp = renderEdgeIp.trim();
     }
   } else {
     const hasProxyHeaders = Boolean(

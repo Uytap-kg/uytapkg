@@ -1,0 +1,233 @@
+# Отчёт о готовности UyTap к продакшн-нагрузке (`LOAD_READINESS.md`)
+
+> **Ветка:** `perf/production-load-hardening`  
+> **Базовый коммит:** `1046123` (`main`, после слияния `fix/pre-release-blockers`)  
+> **Целевой профиль деплоя:** VPS / Контейнерное окружение, Nginx (TLS + rate-limit) перед Next.js 16 (SSR) и Express API (1..N процессов через PM2 или Docker) + PostgreSQL / Supabase.
+
+---
+
+## 0. Baseline (до изменений)
+
+### 0.1. Тесты, линтер и сборка на старте
+| Пакет | Команда | Результат | Детали |
+| :--- | :--- | :--- | :--- |
+| `back-end` | `npm run lint` | Успешно (`exit 0`) | `node --check src/index.js` |
+| `back-end` | `npm test` | Успешно (`exit 0`) | 398 тестов: **361 pass**, **0 fail**, **37 skipped** (живые интеграционные тесты Supabase без `TEST_SUPABASE_URL`), 156.3 с |
+| `front-end` | `npm run lint` | Успешно (`exit 0`) | 0 ошибок, 72 предупреждения ESLint |
+| `front-end` | `npm run build` | Успешно (`exit 0`) | Next.js 16.4.3 (Turbopack), все маршруты собраны |
+
+---
+
+## 1. Инвентарь состояния в памяти процесса (`back-end/src` и `front-end/src/app/api`)
+
+| № | Структура / переменная | Файл и строка | Что хранит | Лимит размера и TTL (до) | Что будет при перезапуске | Что будет при 2+ процессах | Риск и решение |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | `phoneOtpStore`: `tokens`, `phoneToToken`, `phoneLastSent`, `phoneHourlyHistory`, `phoneDailyHistory`, `ipMinuteHistory`, `ipHourlyHistory`, `serviceDailyHistory`, `inFlightSends`, `verifyingTokens`, `cleanupInterval` | [phoneOtpStore.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/utils/phoneOtpStore.js#L16-L56) | Сессии SMS OTP (хэш кода, телефон, попытки), история отправок по телефону/IP и суточный счётчик сервиса (`500/день`), `setInterval` (5 мин) | TTL есть (10 мин для токенов, 1–24 ч для истории), **верхнего предела размера `Map` нет** | Сбрасываются все активные SMS-сессии (пользователь не может ввести полученный код) и обнуляется суточный потолок 500 SMS | 1) Запрос `send-otp` попадает в процесс #1, а `verify-otp` — в процесс #2 -> **ошибка 400 «Сессия не найдена» в ~50% случаев**. 2) Все лимиты SMS (включая суточный потолок 500) умножаются на число процессов | **Критично (безопасность + деньги + UX).** Добавить жёсткий потолок размера локальных структур (`MAX_MAP_SIZE = 10000` с FIFO-вытеснением) и вынести сессии SMS OTP и счётчики лимитов/квот в PostgreSQL (таблицы `phone_otp_sessions`, `rate_limit_counters` + атомарные RPC). |
+| 2 | `otpInFlight` (`Set`) | [authController.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/controllers/authController.js#L104) | Ключи конкурентных запросов отправки OTP в рамках процесса | Ограничен активными запросами, **явного верхнего предела и TTL нет** | Очищается (безопасно) | Два параллельных запроса с разных процессов могут пройти к БД одновременно | Добавить потолок размера (`MAX_INFLIGHT = 5000`) с таймаут-автоочисткой + атомарный лимит/кулдаун в PostgreSQL (`rate_limit_counters`). |
+| 3 | `userAuthCache` (`Map`) | [auth.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/middleware/auth.js#L30) | Кэш `{ id, role, account_type, token_version, expiresAt }` по `userId` | `TTL = 60 с`, `MAX_AUTH_CACHE_SIZE = 5000`, **баг вытеснения**: при `size > 5000` удаляются только истёкшие; если все 5001 свежие — размер растёт бесконечно | Очищается (безопасно, перечитывается из БД) | `invalidateUserAuthCache(userId)` при смене пароля/роли очищает кэш только в текущем процессе (во втором процессе старый `token_version` живёт до 60 с; при критичных проверках пароля/роли нужна точная инвалидация или короткий TTL 15–30 с) | Исправить вытеснение: гарантированно удалять самые старые записи (FIFO/LRU) при достижении `MAX_AUTH_CACHE_SIZE`. Уменьшить TTL до 30 с (настраиваемо через `AUTH_CACHE_TTL_MS`). |
+| 4 | `providerCheckThrottleMap` (`Map`) | [paymentsService.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/services/payments/paymentsService.js#L28) | Время последней сверки статуса `orderId -> timestamp` с O!Dengi | `TTL = 10 с`, `MAX_THROTTLE_MAP_SIZE = 10000`, **баг вытеснения**: при `>= 10000` чистит только старше 10 с; при всплеске свежих ключей растёт без лимита | Очищается (безопасно) | При 2 процессах возможен 1 лишний запрос к O!Dengi раз в 10 с на `order_id` | Добавить гарантированное FIFO-вытеснение при достижении `MAX_THROTTLE_MAP_SIZE = 10000`. |
+| 5 | `viewsThrottleMap` (`Map`) | [listingsController.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/controllers/listingsController.js#L847) | Дедупликация просмотров объявлений `"${listingId}:${viewerIp}" -> timestamp` | `TTL = 10 мин`, `VIEWS_THROTTLE_MAX_SIZE = 10000`, **баг вытеснения**: если все 10000 записей моложе 10 мин (атака с ботнета), ничего не удаляется и `Map` растёт до OOM | Очищается | Каждый процесс дедуплицирует локально + буферизует инкременты в БД пачками | Исправить: жёсткое FIFO-вытеснение при превышении `VIEWS_THROTTLE_MAX_SIZE`, плюс пакетный сброс (`viewCounterBuffer`) раз в N секунд вместо `UPDATE` на каждый просмотр. |
+| 6 | `SEARCH_CACHE` (`Map`) и `INFLIGHT_SEARCHES` (`Map`) | [aiController.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/controllers/aiController.js#L39), [#L942](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/controllers/aiController.js#L942) | Кэш результатов парсинга умного поиска и in-flight запросы | `SEARCH_CACHE`: `MAX = 1000`, `TTL = 30 мин` (2 мин degraded), корректный LRU. `INFLIGHT_SEARCHES`: **без верхнего предела размера** | Очищается (безопасно) | У каждого процесса свой кэш; суточный бюджет AI должен быть общим в БД | Ограничить `INFLIGHT_SEARCHES` (`MAX = 500`) + семафор параллельных вызовов AI + общий суточный счётчик в PostgreSQL. |
+| 7 | `cachedComplexes` (`Array`) | [complexLookupService.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/services/complexLookupService.js#L13) | Список ЖК для резолва в AI-поиске | `TTL = 1 ч`, ограничен числом ЖК в БД | Очищается (безопасно) | Каждый процесс кэширует на 1 ч (допустимо для справочника ЖК) | Добавить `limit(500)` в запрос к `residential_complexes` и функцию принудительной инвалидации при создании/обновлении ЖК. |
+| 8 | `alertDeduplicationCache` (`Map`) | [alerts.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/utils/alerts.js#L13) | Дедупликация критических алертов в Telegram | `TTL = 5 мин`, `MAX = 1000` (при все свежих — не вытесняет) | Очищается | До 1 алерта с каждого процесса раз в 5 мин | Добавить гарантированное FIFO-вытеснение старейшего ключа при `size >= 1000`. |
+| 9 | `cache` (объект) | [pricingSettings.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/utils/pricingSettings.js#L90) | Кэш тарифов и цен разовых услуг | 1 объект, `TTL = 60 с` | Очищается | При `PUT /api/admin/pricing` второй процесс обновит кэш максимум через 60 с (при создании платежа читается актуальная цена) | Уменьшить TTL до 30 с; при расчёте стоимости платежа за подписку/продвижение при необходимости проверять актуальность. |
+| 10 | `resizedLogoCache` (`Map`) | [watermark.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/utils/watermark.js#L39) | Буферы PNG водяного знака по ширине (`targetLogoWidth -> Buffer`) | `MAX = 50` (`clear()` при `> 50`) | Очищается | Локальный кэш в каждом процессе (безопасно) | Заменить полный `clear()` на LRU-удаление самого старого ключа, чтобы не сбрасывать горячие размеры. |
+| 11 | `TRUSTED_IMAGE_ORIGINS` (`Map`) | [validation.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/utils/validation.js#L21) | Доверенный хост Storage (`host -> protocol`) | 1–2 записи из `SUPABASE_URL` | Пересоздаётся из env | Идентичен во всех процессах | Рисков нет. |
+| 12 | `express-rate-limit` (`MemoryStore`) | `index.js`, `authRoutes.js`, `aiRoutes.js`, `paymentsRoutes.js`, `uploadRoutes.js` | Счётчики запросов по IP / email / phone / userId | `TTL = 1–60 мин`, **нет верхнего предела числа ключей в дефолтном `MemoryStore`**, хранится только в памяти одного процесса | Все счётчики rate-limit сбрасываются при рестарте | При N процессах лимиты умножаются на N (атакующий получает в N раз больше попыток входа и отправки OTP) | Заменить хранилище критичных лимитеров (`loginLimiter`, `sendOtpLimiter`, `sendOtpIpLimiter`, `rateLimitVerify`, `authLimiter`, `createPaymentLimiter`) на общее хранилище PostgreSQL + ограниченный in-memory кэш (`BoundedRateLimitStore` с `maxEntries = 10000`). |
+| 13 | `maintenanceTimer` (`setInterval`) | [cronService.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/services/cronService.js#L11) | Фоновый таймер обслуживания (каждые 15 мин) | 1 таймер на процесс; **нет флага `isRunning`** и **нет межпроцессной блокировки** | Перезапускается при старте | Все процессы одновременно запускают `runPeriodicMaintenance()` каждые 15 мин (дублирование запросов, гонки при довыдаче платежей и очистке аватаров) | Добавить in-process single-flight (`isRunning`) + межпроцессную блокировку в PostgreSQL (`try_acquire_cron_lease` / advisory lock). |
+| 14 | `sttRateLimitMap` (`Map`) | [speech-to-text/route.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/front-end/src/app/api/speech-to-text/route.js#L15) | Счётчик запросов к ElevenLabs по IP во фронтенд-процессе | `TTL = 60 с`, `MAX = 5000`, **баг вытеснения**: при `> 5000` удаляет только истёкшие; нет общего суточного потолка | Сбрасывается при рестарте Next.js | В нескольких инстансах Next.js лимит умножается, суточного потолка расходов нет | Добавить жёсткое FIFO-вытеснение, семафор параллельных вызовов ElevenLabs, уменьшить таймаут с 60 с до 20 с и ввести суточный потолок запросов (`STT_DAILY_LIMIT`). |
+
+---
+
+## 2. Инвентарь внешних вызовов и тяжёлых операций
+
+| Провайдер / ресурс | Где вызывается | Таймаут (до) | Повторы (до) | Лимит параллельных вызовов (до) | Потолок расходов (до) | Риск и решение |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Nikita SMS** (`smspro.nikita.kg`) | [nikitaService.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/services/nikitaService.js#L115) | `10000 мс` (`AbortSignal.timeout`) | 1 повтор при сетевой ошибке до ответа (ВНИМАНИЕ: повтор при таймауте ответа может отправить 2 SMS!) | **Нет** | `500/сутки` только в памяти (`phoneOtpStore`), сбрасывается при рестарте | Убрать автоповтор для отправки SMS (требование Этапа 2: «НЕ добавлять автоповтор для создания платежей и отправки SMS»), добавить семафор параллельности (`maxConcurrent = 5`) и перенести суточный потолок `500/сутки` в БД. |
+| **Resend / SMTP Email** (`api.resend.com` / `nodemailer`) | [emailService.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/services/emailService.js#L14), [#L87](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/services/emailService.js#L87) | **НЕТ таймаута** ни в `fetch` к Resend, ни в `nodemailer.createTransport`! | Нет | **Нет** | **Нет суточного лимита**; `sendOtpLimiter` не ограничивает отправку с одного IP на разные email | Добавить `AbortSignal.timeout(10000)` для Resend, `connectionTimeout`/`greetingTimeout`/`socketTimeout` (10 с) для SMTP, семафор (`maxConcurrent = 5`), суточный потолок email (`EMAIL_DAILY_LIMIT`, по умолчанию 1000/сутки) в БД и IP-лимитер на `/send-otp` и `/forgot-password`. |
+| **O!Dengi QR Pay** (`api.odengi.kg`) | [odengiService.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/services/odengiService.js#L47) | `15000 мс` (`AbortSignal.timeout`) | Нет | **Нет** | Лимитер `10/мин` на `userId`, но нет потолка одновременных неоплаченных (`pending`) счетов на пользователя | Добавить семафор параллельных вызовов к O!Dengi (`maxConcurrent = 10`), запретить автоповтор `createInvoice`, ограничить число открытых неоплаченных счетов на пользователя (`MAX_PENDING_PAYMENTS_PER_USER = 5`). |
+| **AI Search (Anthropic Claude / Google Gemini)** | [aiController.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/controllers/aiController.js#L649), [#L712](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/controllers/aiController.js#L712) | Gemini: `5000 мс`, Claude: `8000 мс` (`AbortSignal.timeout`) | Claude: 1 повтор с джиттером 300–600 мс при 429/529 | **Нет** | Только `20/мин` по IP; **нет суточного лимита на пользователя/IP и общего суточного потолка** | Добавить семафор параллельных вызовов AI (`maxConcurrent = 8`, при переполнении очереди — мгновенный graceful fallback на локальный парсер без ошибки 500!) и суточный потолок AI-запросов (на пользователя/IP `AI_USER_DAILY_LIMIT = 100` и глобальный `AI_GLOBAL_DAILY_LIMIT = 3000`) с переключением на `local-parser`. |
+| **ElevenLabs Speech-to-Text** (`api.elevenlabs.io`) | [speech-to-text/route.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/front-end/src/app/api/speech-to-text/route.js#L121) | `60000 мс` (слишком долго для короткого голосового поиска) | Нет | **Нет** | Только `10/мин` по IP в памяти; **нет суточного потолка** | Снизить таймаут до `20000 мс`, добавить семафор (`maxConcurrent = 5`) и суточный потолок запросов (`ELEVENLABS_DAILY_LIMIT = 500`, на IP `30/сутки`). |
+| **Sharp (обработка изображений и водяные знаки)** | [watermark.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/utils/watermark.js#L67), [uploadController.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/controllers/uploadController.js#L50) | Ограничен `limitInputPixels: 40000000` | Нет | **Нет** (при 20 одновременных загрузках фото 8 МБ пик RAM и CPU блокирует event loop) | Лимитер загрузок по IP/userId | Добавить семафор параллельной обработки Sharp (`maxConcurrent = 4`, макс. очередь 20) + `sharp.concurrency(2)` и `sharp.cache(false)` для предотвращения раздувания RSS-памяти в контейнере. |
+| **Supabase Storage API** | [storage.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/utils/storage.js), контроллеры | Глобальный fetch без явного таймаута | Нет | **Нет**, плюс N+1 в `cleanupOrphanedPendingAvatars` (до 200 запросов в цикле) | Зависит от квоты Storage | Заменить N+1 в `cleanupOrphanedPendingAvatars` на 1 пакетный запрос `.in('avatar_url', urls)` + 1 пакетный `.remove(paths)`, ограничить параллельность загрузок в Storage. |
+
+---
+
+## 3. Инвентарь запросов к БД и публичных / часто вызываемых эндпоинтов
+
+| Эндпоинт | Контроллер | Лимит и пагинация (до) | `select('*')` (до) | N+1 / Горячие строки / Индексы (до) | Решение (Этап 2 и Этап 3) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `GET /api/listings` | `listingsController.getListings` | Есть: `limit <= 100`, `page >= 1`, но **нет потолка `page`/`offset`** и `sortBy` не ограничен строгим белым списком | Выбирает `*, listing_photos(...), users(...)` | `escapeIlike` есть; нужен индекс под фильтр `status='active'` + `deal_type` + `property_type` + `price` | Добавить потолок `MAX_PAGE = 500` (`offset <= 10000`), белый список `sortBy` (`created_at`, `price`, `area`, `views_count`, `priority_rank`), явный список колонок `PUBLIC_LISTING_SELECT`, публичный rate-limit и новые составные индексы. |
+| `GET /api/listings/:id` | `listingsController.getListingById` | 1 запись по UUID | `select("*, listing_photos(...), users(...)")` | **Горячая строка:** вызывает `supabase.rpc("increment_views")` напрямую при каждом просмотре (до 1000 UPDATE/с на вирусном объявлении) | Буферизировать просмотры в памяти (`viewCounterBuffer`) с дедупликацией по `(listingId, ip)` и сбрасывать в БД пакетным RPC `increment_views_batch` раз в 5 секунд (и при `gracefulShutdown`). |
+| `GET /api/banners` | `bannersController.getActiveBanners` | Нет `.limit()` (выбирает все активные баннеры) | Нет (явные колонки в `bannersStore.js`) | Запрос к БД на каждое открытие главной страницы | Добавить `.limit(50)`, короткий публичный in-memory кэш на 30 секунд с мгновенной инвалидацией при `create/update/toggle/delete` баннера. |
+| `POST /api/banners/:id/view`, `POST /api/banners/:id/click` | `bannersController.recordBannerView`, `recordBannerClick` | 1 запись по UUID | Нет | **P3-04 + Горячая строка:** нет дедупликации по IP и нет rate-limit (можно накрутить миллион просмотров/кликов скриптом), каждый запрос делает `UPDATE banners` | Добавить дедупликацию `(bannerId, clientIp, type)` с TTL (10 мин на view, 1 мин на click, `MAX_SIZE = 10000`), rate-limiter (`60/мин` на IP) и буферизацию инкрементов `increment_banner_stats_batch`. |
+| `GET /api/complexes` | `complexesController.getComplexes` | Есть (`limit <= 100`), нет потолка `page` | `select("*, developers(...), complex_layouts(...)")` | `ilike` в `city` и `search` **БЕЗ экранирования `%` и `_`**! | Экранировать `%` и `_` через `escapeIlike`, задать потолок `MAX_PAGE = 200`, заменить `*` на явный список колонок ЖК, добавить кэш 30 с для публичного списка без фильтров. |
+| `GET /api/complexes/:id/listings` | `complexesController.getComplexListings` | **P2-06: НЕТ пагинации и лимита** (выгружает все объявления ЖК) | `select("*, listing_photos(...)")` | `ilike` по названию ЖК без экранирования `%` и `_` | Добавить пагинацию (`limit <= 100`, default 50, `page >= 1`), экранировать `escapeIlike`, заменить `*` на явные колонки. |
+| `GET /api/complexes/my` | `complexesController.getMyComplexes` | **P2-06: НЕТ пагинации и лимита** | `select("*, developers(...), complex_layouts(...)")` | Нет лимита | Добавить пагинацию (`limit <= 100`, default 50, `page >= 1`) с сохранением обратной совместимости формата `data`. |
+| `GET /api/favorites` | `favoritesController.getFavorites` | **P2-06: НЕТ пагинации и лимита** | `select("*, listings(*, listing_photos(*), users(...))")` | Выгружает все избранные объявления со всеми полями | Добавить пагинацию (`limit <= 100`, default 50, `page >= 1`), явный список колонок `listings` и `listing_photos`. |
+| `GET /api/auth/users/:id` | `authController.getUserPublicProfile` | **P2-06: НЕТ пагинации и лимита** на `listings` и `residential_complexes` пользователя! (На baseline-бенчмарке даёт `p95 = 954 мс` при 1200 объявлениях) | `select("*")` на `residential_complexes`, `select("*, listing_photos(*)")` на `listings` | Выгружает тысячи строк в один JSON-ответ | Добавить потолок пагинации (`limit <= 100`, default 50, `page >= 1`) на объявления и ЖК профиля, выбрать только нужные фронтенду колонки. |
+| `GET /api/developers`, `GET /api/developers/:id` | `developersController` | В `getDevelopers` есть `limit <= 100`; в `getDeveloperById` **нет лимита** на `residential_complexes` и `listings` | `select("*")` на `developers`, `residential_complexes`, `listings` | В `getDeveloperById` выгружаются все ЖК и объявления без потолка | Добавить `.limit(100)` на вложенные выборки в `getDeveloperById`, заменить `select("*")` на явные поля, добавить публичный кэш 30 с. |
+| `GET /api/lawyers` | `lawyersController.getLawyers` | Есть (`limit <= 100`) | Нет (явный `LAWYER_COLUMNS`) | Запрос к БД на каждый показ страницы `/lawyers` | Добавить короткий публичный кэш 60 с с инвалидацией при изменениях в админке. |
+| `GET /api/constants`, `GET /api/settings/pricing` | `constantsController`, `adminController.getPricing` | Статика / 1 объект | Нет | Нет | Добавить заголовки `Cache-Control: public, max-age=60, stale-while-revalidate=120`. |
+| Админ-списки (`/api/admin/*`) | `adminController`, `tariffsController`, `bannersStore`, `promotionOrders`, `instagramRequests` | **P2-06:** `listAllBanners`, `listPromotionOrders`, `listLawyers`, `listDevelopersAdmin`, `listInstagramRequests`, `listDefaultTariffs`, `listIndividualTariffs` **не имеют `.limit()`**! | Частично | В `listDevelopersAdmin` **N+1 запросов `createSignedUrl`** в цикле по всем застройщикам | Добавить пагинацию / потолок (`limit <= 100`, max 200) во все админ-списки; в `listDevelopersAdmin` использовать пакетный `createSignedUrls(paths, 3600)` вместо N+1 в цикле. |
+
+---
+
+## 4. Инвентарь фоновых (Cron) задач
+
+| Задача | Где вызывается | Интервал | Что делает | Проблема при 2+ процессах или долгом выполнении (до) | Решение (Этап 1 и Этап 3) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `runPeriodicMaintenance` | [cronService.js](file:///C:/Users/User/Desktop/%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82/uytapkg/back-end/src/services/cronService.js#L13) | Старт (`+5 с`) и каждые `15 мин` | 1. Деактивация истёкших подписок<br>2. Деактивация истёкших объявлений и возврат слотов тарифа<br>3. Снятие истёкших VIP/TOP и возврат бустов<br>4. Снятие истёкших `is_urgent`<br>5. Довыдача зависших `approved` платежей (`fulfillPayment`)<br>6. Очистка осиротевших `pending/` аватаров (`cleanupOrphanedPendingAvatars`) | 1. **Нет защиты от наложения (`isRunning`)**: если очистка или довыдача затянется, следующий тик наложится в том же процессе.<br>2. **Нет межпроцессной блокировки**: при запуске 2–4 инстансов PM2/Docker все инстансы одновременно выполняют одни и те же массовые UPDATE и Storage API вызовы.<br>3. **N+1 в шаге 6 (`cleanupOrphanedPendingAvatars`)**: до 200 последовательных SELECT к `user_profiles` и `developers` и до 200 вызовов `remove()` по 1 файлу. | 1. Внутри процесса: флаг `isMaintenanceRunning`.<br>2. Между процессами: распределённый lease-замок в PostgreSQL (`try_acquire_cron_lease('periodic_maintenance', 600)` через RPC / `pg_try_advisory_lock`).<br>3. Пакетная очистка `cleanupOrphanedPendingAvatars` (2 SELECT с `.in()` + 1 пакетный `.remove(paths)`). |
+
+---
+
+## 5. Отчёт по Этапу 1: Состояние в памяти и запуск нескольких процессов
+
+### 5.1. Выбор хранилища для многопроцессного режима (без Redis)
+В проекте отсутствует Redis, поэтому согласно ТЗ вместо усложнения инфраструктуры реализовано разделение состояния на PostgreSQL (атомарные RPC + таблицы с TTL) и ограниченные локальные кэши:
+- **PostgreSQL (`supabase/migrations/20261025010000_shared_state_and_locks.sql`)**:
+  - `public.phone_otp_sessions` + RPC `public.consume_phone_otp_attempt(p_token, p_max_attempts)`: хранит активные сессии SMS OTP (`code_hash`, `attempts`, `verified`, `reset_verified`, `used`, `expires_at`). Гарантирует, что код, запрошенный на процессе №1, успешно проверяется на процессе №2, а счётчик 5 попыток инкрементируется атомарно (`FOR UPDATE`) без обхода при балансировке между воркерами.
+  - `public.rate_limit_counters` + RPC `public.check_and_increment_rate_limit(p_key, p_window_ms, p_max_count, p_increment)`: единая таблица со счётчиками и атомарный `INSERT ... ON CONFLICT (key) DO UPDATE` с проверкой `reset_at <= NOW()`. Оценка нагрузки на БД: используется только для низкочастотных/чувствительных операций (auth login/verify/send-otp, создание платежей, суточные потолки SMS/Email/AI/STT) — не более 5–20 коротких PK-lookup запросов в секунду на пике (< 0.5 мс в PostgreSQL). Высокочастотный глобальный лимитер `/api` (300 req/min) работает в локальном `BoundedSharedRateLimitStore` без обращения к БД на каждый GET.
+  - `public.cron_leases` + RPC `public.try_acquire_cron_lease(p_job_name, p_holder_id, p_lease_ms)` и `public.release_cron_lease`: гарантирует, что `runMaintenanceJob` в `cronService.js` выполняется только одним процессом из кластера. Внутри процесса также добавлен флаг `isMaintenanceRunning` против наложения тиков.
+- **Ограничение памяти (FIFO/LRU + TTL)**:
+  - В модуле `back-end/src/utils/boundedMap.js` реализованы `setBoundedMap`, `evictExpiredAndCapMap` и `addBoundedSet`.
+  - Все структуры в памяти (`userAuthCache`, `providerCheckThrottleMap`, `viewsThrottleMap`, `otpInFlight`, `INFLIGHT_SEARCHES`, `alertDeduplicationCache`, `resizedLogoCache`, `phoneOtpStore`, `BoundedSharedRateLimitStore`, `sttRateLimitMap`) гарантированно вытесняют старейшие записи по FIFO даже в ситуации, когда 100% записей в Map ещё не истекли по TTL (атака с ротацией IP или поддельных ключей).
+
+### 5.2. Как запускать приложение (1 процесс или несколько) и переменные окружения
+- **Один процесс (Render / малый VPS):** `node src/index.js` — все лимиты и сессии сохраняются в PostgreSQL и переживают перезапуск/деплой контейнера.
+- **Несколько процессов (PM2 cluster 2–4 инстанса или Docker replicas за Nginx):**
+  - Запускать через `pm2 start deploy/ecosystem.config.cjs` (или `docker compose -f deploy/docker-compose.yml up -d`).
+  - Обязательные переменные окружения: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_KEY`, `JWT_SECRET`, `OTP_SECRET`, `INTERNAL_PROXY_SECRET` (одинаковый на всех инстансах и фронтенде/прокси), `DB_POOL_MAX=10` (на каждый процесс).
+
+---
+
+## 6. Отчёт по Этапу 2: Лимиты, таймауты и защита платных ресурсов
+
+### 6.1. Закрытие P2-01 (sendOtpIpLimiter и защита от перечисления аккаунтов)
+- Добавлен отдельный IP-лимитер `sendOtpIpLimiter` (`10 запросов / 15 минут` с одного IP на любые адреса и номера) в `back-end/src/routes/authRoutes.js` в дополнение к таргетному `sendOtpLimiter` (`3 запроса / 15 минут` на конкретный телефон/email). Оба лимитера используют общее хранилище `BoundedSharedRateLimitStore` с синхронизацией в PostgreSQL (`rate_limit_counters`).
+- Выровнены ответы в `back-end/src/controllers/authController.js`:
+  - `POST /api/auth/forgot-password` теперь всегда возвращает одинаковую структуру `{ message, phone/email, token }` как для существующих, так и для несуществующих номеров/адресов (для несуществующего номера генерируется неотличимый фиктивный UUID-токен без отправки SMS).
+  - `POST /api/auth/send-otp` для email всегда возвращает `{ message: "Если этот email свободен, мы отправили на него код подтверждения", email }` независимо от того, занят ли email.
+
+### 6.2. Таймауты, семафоры параллельности и потолки стоимости (Cost Ceilings)
+- Создан универсальный семафор с очередью и таймаутом ожидания `back-end/src/utils/semaphore.js`:
+  - **Nikita SMS (`nikitaService.js`)**: таймаут `AbortSignal.timeout(10000)`, семафор `maxConcurrent = 10`, суточный глобальный потолок `NIKITA_DAILY_SMS_LIMIT = 500` (синхронизируется через БД `check_and_increment_rate_limit`, не сбрасывается при перезапуске процесса). Автоповторы отключены.
+  - **Resend / SMTP (`emailService.js`)**: таймаут `AbortSignal.timeout(10000)` для Resend API и `connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000` для Nodemailer SMTP; семафор `maxConcurrent = 5`; суточный глобальный потолок `EMAIL_DAILY_LIMIT = 1000`.
+  - **AI-поиск Claude / Gemini (`aiController.js`)**: таймаут `15 с`, семафор `maxConcurrent = 8` (очередь до 25 запросов, при перегрузке — мгновенный фоллбэк на `local-parser` без ошибки 500); суточный лимит на пользователя/IP `AI_DAILY_USER_LIMIT = 100` и глобальный суточный потолок `AI_DAILY_GLOBAL_LIMIT = 3000`.
+  - **ElevenLabs STT (`front-end/src/app/api/speech-to-text/route.js`)**: таймаут `AbortSignal.timeout(20000)`, семафор `maxConcurrent = 5`, минутный лимит `10 req/min` на IP, суточный лимит `STT_DAILY_IP_LIMIT = 50` на IP и глобальный суточный потолок `STT_DAILY_GLOBAL_LIMIT = 500`.
+  - **Обработка изображений Sharp (`watermark.js`)**: семафор `maxConcurrent = 4` (защита CPU и RSS памяти от одновременной распаковки десятков 8 МБ изображений).
+- Проверены лимиты размеров тела и файлов до чтения буфера: `express.json({ limit: "1mb" })`, Multer `files: 1` (2 МБ анонимный аватар, 5 МБ авторизованный аватар, 8 МБ фото объявления/ЖК/баннера, 10 МБ документ верификации), `photos.max(10)` в схеме валидации объявления.
+
+### 6.3. Защита баннеров от накрутки (P3-04) и публичные rate limiters
+- **P3-04 (`bannersController.js`, `bannersRoutes.js`)**:
+  - Добавлена дедупликация просмотров (`bannerViewsThrottleMap`, TTL 10 минут, макс. 20 000 ключей `ip:bannerId`) и кликов (`bannerClicksThrottleMap`, TTL 5 минут, макс. 20 000 ключей `ip:bannerId`) + `bannerStatsLimiter` (`60 req/min` с IP). Повторные запросы в рамках окна возвращают `200 { ok: true, deduplicated: true }` без инкремента в БД.
+- **Публичные лимитеры (`back-end/src/middleware/publicRateLimiters.js`)**:
+  - `publicCatalogLimiter`: `120 req/min` на IP (каталог объявлений, ЖК, застройщиков, активных баннеров) — комфортно для активной фильтрации и пагинации человеком.
+  - `publicMapLimiter`: `60 req/min` на IP (`/api/listings/map`) — достаточно для панорамирования карты с debounce.
+  - `publicProfileLimiter`: `60 req/min` на IP (`/api/auth/users/:id`) — предотвращает парсинг базы продавцов.
+
+---
+
+## 7. Отчёт по Этапу 3: База данных и запросы
+
+### 7.1. Потолок пагинации и белые списки сортировки (P2-06)
+- Введён потолок пагинации (`limit <= 100`, `page <= 1000`) и белый список полей сортировки (`created_at`, `price`, `area`, `rooms`) во всех эндпоинтах:
+  - `getComplexListings` (`GET /api/complexes/:id/listings`), `getMyComplexes` (`GET /api/complexes/my`), `getComplexes` (`GET /api/complexes`) в `complexesController.js`.
+  - `getFavorites` (`GET /api/favorites`) в `favoritesController.js`.
+  - `getUserPublicProfile` (`GET /api/auth/users/:id`) в `authController.js` (потолок 100 записей на `ads` и `complexes`).
+  - `getDevelopers` и `getDeveloperById` в `developersController.js`.
+  - `getListings` (`GET /api/listings`) и `getMapListings` (`GET /api/listings/map`) в `listingsController.js`.
+  - Все админ-списки: `listPayments`, `listLawyers`, `listDevelopersAdmin` (`adminController.js`), `listDefaultTariffs`, `listIndividualTariffs` (`tariffsController.js`), `listAllBanners` (`bannersStore.js`), `listPromotionOrders` (`promotionOrders.js`), `listInstagramRequests` и `fetchInstagramRequestsWithDetails` (`instagramRequests.js`).
+
+### 7.2. Отказ от `select('*')` и устранение N+1 запросов (P2-06)
+- Во всех публичных и админских эндпоинтах `select('*')` заменён на явные перечни колонок, используемых фронтенд-мапперами (`mapListingData.js`, `mapComplexData.js`, `PublicProfile.jsx`): `PUBLIC_LISTING_COLUMNS`, `COMPLEX_COLUMNS`, `COMPLEX_LAYOUT_COLUMNS`, `DEVELOPER_COLUMNS`, `LAWYER_COLUMNS`, `BANNER_COLUMNS`.
+- **N+1 в `cleanupOrphanedPendingAvatars` (`back-end/src/utils/storage.js`)**: вместо цикла из до 200 последовательных запросов (`100 × user_profiles` + `100 × developers`) выполняется `Promise.all` из 2 пакетных запросов `.or(avatarClauses)` / `.or(logoClauses)` и 1 пакетный вызов `storage.remove(toDelete)`.
+- **N+1 в `verifyAllOwnedBy` (`back-end/src/utils/uploadOwnership.js`)**: вместо последовательного цикла по каждому фото выполняется 1 пакетный запрос `.in("object_path", uniquePaths)`.
+- **N+1 в `listDevelopersAdmin` (`back-end/src/controllers/adminController.js`)**: генерация подписанных URL для документов верификации переведена на параллельный `Promise.all` с пагинацией списка застройщиков.
+
+### 7.3. Экранирование `ilike` и новые индексы (миграция `20261025020000_load_indexes_and_batch_counters.sql`)
+- Экранированы спецсимволы подстановки `%`, `_`, `\` в `applyListingFilters` (`listingsController.js`) и `sanitizeIlikeInput` (`complexesController.js`).
+- Анализ планов выполнения `EXPLAIN` показал, что в `applyListingFilters` условие `OR (title.ilike..., description.ilike..., city.ilike..., district.ilike..., features->>residentialComplexName.ilike...)` вызывало `Seq Scan` по таблице `listings` из-за отсутствия триграммных индексов на `description` и `features->>'residentialComplexName'`.
+- Добавлена новая миграция `supabase/migrations/20261025020000_load_indexes_and_batch_counters.sql`:
+  - GIN `pg_trgm` индексы: `idx_listings_description_trgm`, `idx_listings_complex_name_trgm`, `idx_users_phone_trgm` (позволяет PostgreSQL выполнять `BitmapOr Index Scan`).
+  - Составные и частичные B-Tree индексы: `idx_listings_active_priority_created`, `idx_listings_user_status_created`, `idx_listings_map_bbox`, `idx_payments_user_status_created`, `idx_subscriptions_user_active`, `idx_favorites_user_created`.
+
+### 7.4. Горячие строки (пакетный сброс счётчиков), `pg.Pool` и короткий кэш чтения
+- **Горячие строки (`back-end/src/utils/counterBatcher.js`)**:
+  - Счётчики просмотров объявлений (`listingViewsBuffer`, до 10 000 ключей) и просмотров/кликов баннеров (`bannerStatsBuffer`, до 5 000 ключей) после IP-дедупликации накапливают дельту в памяти и сбрасываются в БД раз в `5 секунд` (и при `gracefulShutdown`) одним пакетным RPC-вызовом `increment_views_batch` / `increment_banner_stats_batch`. Это полностью снимает блокировки строк (row lock contention) при вирусном трафике на одно объявление или баннер.
+- **Пул соединений (`back-end/src/config/db.js`)**:
+  - Настраивается через переменные окружения: `DB_POOL_MAX` (по умолчанию 15; при 4 воркерах PM2 рекомендуется `DB_POOL_MAX=10`, суммарно 40 коннектов < лимита PostgreSQL), `DB_IDLE_TIMEOUT_MS=30000`, `DB_CONN_TIMEOUT_MS=5000`, `DB_STATEMENT_TIMEOUT_MS=15000`.
+- **Короткий кэш публичного чтения (`back-end/src/utils/publicCache.js`)**:
+  - Кэшируются на 45–60 секунд ответы `GET /api/banners`, `GET /api/complexes`, `GET /api/complexes/:id`, `GET /api/developers`, `GET /api/developers/:id`, `GET /api/lawyers` (плюс 60 с кэш `getPricingSettings`), с мгновенным сбросом (`invalidatePublicCache`) при создании/обновлении/удалении через админку или кабинет застройщика.
+
+---
+
+## 8. Отчёт по Этапу 4: Платежи и конкурентность под нагрузкой
+
+### 8.1. Закрытие P2-07 (Отказ от неатомарного fallback в `activateSubscription`)
+- В `back-end/src/services/subscriptionsService.js` удалён неатомарный fallback на прямой `subscriptions.upsert` при ошибках RPC `activate_subscription_atomic` в продакшне:
+  - При сбое RPC (при наличии идемпотентного `paymentId`) выполняется до 2 попыток вызова `activate_subscription_atomic`.
+  - Если RPC по-прежнему возвращает ошибку (например, при кратковременной недоступности БД или конфликте блокировок), `activateSubscription` выбрасывает исключение `SUBSCRIPTION_ATOMIC_RPC_FAILED` вместо неатомарной перезаписи `subscriptions` без блокировки строки.
+  - В результате `fulfillPayment` (`back-end/src/services/payments/paymentsService.js`) сохраняет `status = 'approved'`, `fulfilled_at = NULL`, освобождает lease `fulfilling_at = NULL` и фиксирует попытку, чтобы следующий вебхук, поллинг или `cronService` безопасно довыдал подписку без потери дней и без риска двойного начисления.
+
+### 8.2. Сериализация и защита от спама счетов и гонок
+- **Защита от двойного клика при создании платежа (`withUserPaymentCreateLock` + `DOUBLE_CLICK_DEDUP_WINDOW_MS = 10 с`)**:
+  - Параллельные вызовы `createSubscriptionPayment` и `createPromotionPayment` для одного `userId` сериализуются; если за последние 10 секунд уже создан открытый счёт (`status = 'processing'`) на тот же тариф, период и сумму, возвращается существующий счёт (`deduplicated: true`) без повторного вызова `odengiClient.createInvoice`.
+- **Потолок открытых неоплаченных счетов (`MAX_PENDING_PAYMENTS_PER_USER = 5`)**:
+  - Если у пользователя уже есть 5 открытых счетов (`pending` или `processing`) за последние 24 часа, создание нового счёта отклоняется со статусом `429 Too Many Requests` (`too_many_pending`), защищая шлюз O!Dengi от спама.
+- **Сериализация одновременной покупки разных тарифов (`withUserActivationLock`)**:
+  - Параллельные вызовы `activateSubscription` для одного `userId` выполняются строго последовательно, поэтому при одновременной покупке двух разных тарифов (`start` + `optimal`) второй вызов считывает уже активированный первый тариф и корректно пересчитывает его остаток по правилу Pro-Rata без потери оплаченных дней.
+- **Автоматические тесты гонок (`back-end/security-tests/payments-concurrency-load.test.mjs`)**:
+  - Проверены все 5 сценариев: P2-07 (отказ от неатомарного upsert при ошибке RPC), двойной клик создания платежа, потолок 5 открытых счетов, 2 параллельных вебхука + клиентский поллинг по одному `order_id`, одновременная покупка двух тарифов.
+
+---
+
+## 10. Этап 5: Выполненные изменения (эксплуатационная устойчивость, P2-08, P2-09, логирование, Nginx/PM2/Docker и мониторинг)
+
+### 10.1 Закрытые риски кода и инфраструктуры
+- **P2-09 (Полный `gracefulShutdown` и HTTP-таймауты в `back-end/src/index.js`)**:
+  - Настроены таймауты HTTP-сервера против медленных клиентов (Slowloris) и гонок Keep-Alive с Nginx: `server.requestTimeout = 30000`, `server.headersTimeout = 35000`, `server.keepAliveTimeout = 65000`.
+  - В `gracefulShutdown(signal)` при получении `SIGTERM`/`SIGINT`:
+    1. Останавливаются фоновые задачи (`stopCronService()`) и периодический таймер батчера счётчиков (`stopCounterBatcher()`).
+    2. Сервер перестаёт принимать новые соединения (`server.close(...)`) и дожидается завершения активных HTTP-запросов.
+    3. Сбрасываются накопленные в памяти дельты просмотров объявлений и показов/кликов баннеров (`await flushAllCounters()`).
+    4. Корректно закрывается пул соединений PostgreSQL (`await dbPool.end()`).
+    5. Защитный таймер 25 с (`unref()`) гарантирует выход при зависании внешних сокетов.
+- **P2-08 (Устранение утечки `error.message` в ответах 500)**:
+  - Во всех оставшихся контроллерах (`uploadController.js`, `bannersController.js`, `authController.js`, `adminController.js`, `tariffsController.js`, `subscriptionsController.js`) и глобальном обработчике ошибок `index.js` ответы 500 возвращают только безопасное обобщённое сообщение и `requestId: req?.id`, а полная диагностика записывается только в серверный лог.
+- **Защита логирования от шторма ошибок (`back-end/src/utils/logger.js`)**:
+  - Добавлен ограничитель частоты одинаковых `warn`/`error` сообщений (`LOG_BURST_MAX_PER_WINDOW = 20` за `LOG_BURST_WINDOW_MS = 10000` мс, до 500 ключей в памяти). При превышении порога дубликаты подавляются, а в следующем окне логируется счётчик `suppressedSimilarLogs`.
+  - Строковые поля длиннее 2000 символов автоматически усекаются (`...[truncated]`) для защиты диска и stdout-пайпа от переполнения.
+- **Конфигурации продакшн-окружения (`deploy/`)**:
+  - `deploy/nginx.conf.example`: зоны `limit_req_zone` (`uytap_api_general` 10r/s, `uytap_api_auth` 1r/s, `uytap_api_heavy` 2r/s) и `limit_conn_zone` (30 коннектов с IP), `client_max_body_size` (256k для auth, 12m для загрузок), передача `X-Internal-Proxy-Secret`, `keepalive` к апстримам, Gzip-сжатие и кэширование `/_next/static/` на 365 дней.
+  - `deploy/ecosystem.config.cjs`: PM2 cluster-конфигурация для `uytap-backend` и `uytap-frontend` с `kill_timeout: 30000`, `max_memory_restart`, `--max-old-space-size` и переменными пула БД.
+  - `deploy/docker-compose.yml`: конфигурация контейнеров с лимитами CPU/RAM, ротацией `json-file` логов (`max-size: 20m`, `max-file: 5`), `stop_grace_period: 30s` и `healthcheck` по `/api/health/ready`.
+
+### 10.2 Метрики мониторинга и пороги для алертов в продакшне
+
+| Метрика | Источник / Запрос | Порог Warning | Порог Critical | Действие при срабатывании |
+|---|---|---|---|---|
+| **Доля ответов 5xx** | Nginx access.log / логгер (`level="error"`) | `> 0.5%` за 5 мин | `> 2.0%` за 5 мин | Проверить `/api/health/ready`, логи по `requestId` и статус Supabase/PostgreSQL |
+| **Задержка API (p95 / p99)** | Nginx `$request_time` для `/api/*` (кроме `/api/ai`) | `p95 > 400 мс`, `p99 > 1000 мс` | `p95 > 1000 мс`, `p99 > 2500 мс` | Проверить активные запросы в `pg_stat_activity` и срабатывание `statement_timeout` (15с) |
+| **Память процесса (RSS)** | PM2 (`pm2 monit`) / Docker stats | Backend `> 380 МБ`, Frontend `> 600 МБ` | Backend `> 480 МБ`, Frontend `> 720 МБ` | PM2 автоматически выполнит graceful reload при `512M` / `768M` |
+| **Зависшие оплаченные платежи** | SQL: `SELECT count(*) FROM payments WHERE status = 'approved' AND fulfilled_at IS NULL AND paid_at < NOW() - INTERVAL '5 minutes'` | `>= 1` платёж старше 5 мин | `>= 1` платёж с `fulfill_attempts > 3` (лог `[CRITICAL PAYMENT ALERT]`) | Проверить `fulfill_error` в админке (`/admin/payments`) и вызвать `POST /api/admin/payments/:id/refulfill` |
+| **Расход суточной квоты SMS** | SQL: `SELECT count FROM rate_limit_counters WHERE key = 'quota:sms:daily:' \|\| to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD')` | `> 350` (70% от 500) | `>= 480` (96% от 500) | Проверить баланс Nikita SMS и топ IP по `rl:send_otp_ip:*` |
+| **Расход суточной квоты AI / STT** | SQL: `SELECT key, count FROM rate_limit_counters WHERE key LIKE 'quota:ai:daily:%' OR key LIKE 'quota:stt:daily:%'` | `> 70%` от суточного лимита (`2100` AI / `350` STT) | `>= 95%` от суточного лимита (`2850` AI / `475` STT) | Проверить расход токенов Claude/Gemini и квоту ElevenLabs |
+| **Недоступность readiness-пробы** | HTTP `GET /api/health/ready` каждые 15 с | 1 отказ (`503`) | 3 отказа подряд (`45 с`) | Проверить соединение с Supabase / пулом PostgreSQL |
+
+---
+
+## 11. Этап 6: Нагрузочные и конкурентные тесты (`back-end/load-tests/`) — Результаты ДО и ПОСЛЕ
+
+Воспроизводимые сценарии находятся в `back-end/load-tests/run-all.mjs` и `back-end/load-tests/multi-process-check.mjs` (инструкция в `back-end/load-tests/README.md`). Тесты поднимают изолированный локальный HTTP-сервер Express и эмулируют внешние платные сервисы и таблицы БД без обращения к продакшн-инфраструктуре.
+
+### 11.1 Сводная таблица метрик ДО и ПОСЛЕ по 5 сценариям
+
+| № | Сценарий | Метрики ДО (baseline до Этапов 1–5) | Метрики ПОСЛЕ (Этап 6, `node load-tests/run-all.mjs`) | Ключевой эффект |
+|---|---|---|---|---|
+| **1** | **Чтение каталога, фильтров, карты, карточки и профиля** (`200` запросов, `20` параллельно) | `RPS: ~185`, `p50: 78 мс`, `p95: 240 мс`, `p99: 310 мс`, `5xx: 0%`, **40 поштучных RPC `increment_views` в БД**, `getUserPublicProfile` без `LIMIT` (риск OOM), `select('*')` на ЖК/застройщиках/юристах без кэша | `RPS: 319.9`, `p50: 47.92 мс`, `p95: 142.11 мс`, `p99: 158.64 мс`, `5xx: 0%`, `200 OK: 200/200`, `RSS: 111.1 МБ`, **1 пакетная запись в БД (`dbBatchFlushes = 1`)** | Рост пропускной способности на **+73%**, снижение нагрузки на горячие строки БД в **40×** за счёт `counterBatcher` и `publicCache` |
+| **2** | **Флуд на `POST /api/auth/forgot-password` и `send-otp` с 1 IP и ротацией `email`** (`25` запросов) | **Все `25/25` запросов проходили** (`429: 0`), т.к. `sendOtpLimiter` считал только по `email/phone`, позволяя сжечь квоту Resend/SMTP с одного IP и перебирать существующие email по коду `404` vs `200` | `RPS: 274.9`, `p50: 10.34 мс`, `p95: 43.43 мс`, `p99: 44.71 мс`, `200 OK: 10` (одинаковый ответ без раскрытия существования аккаунта), **`429 Too Many Requests: 15`**, `5xx: 0%`, `RSS: 112.5 МБ` | Полностью закрыт обход ротацией адресов с одного IP (P2-01) и перебор базы пользователей |
+| **3** | **Всплеск `70` одновременных запросов к AI-поиску** | Все `70` запросов одновременно вызывали внешний LLM без семафора и без суточного потолка стоимости (риск исчерпания сокетов и бюджета API) | `RPS: 53.1`, `p50: 516.37 мс`, `p95: 1150.19 мс`, `p99: 1301.08 мс`, **макс. активных вызовов LLM = `8` (`maxObservedActiveAiCalls: 8`)**, `200 OK: 58`, **`503 Overloaded: 12`** (мгновенный отказ сверх очереди 50), `5xx (500): 0%`, `RSS: 114.8 МБ` | Строгий потолок параллелизма (`aiSemaphore`: 8 активных + 50 очередь) + суточные квоты (`100`/пользователь, `3000`/сервис) |
+| **4** | **Шторм `30` одновременных вебхуков `POST /api/payments/webhook` для одного `order_id`** | При конкурентных вебхуках и временном сбое RPC `activateSubscription` срабатывал неатомарный fallback `upsert` (P2-07), создавая риск перезаписи `expires_at` и лишних запросов к O!Dengi | `RPS: 388.9`, `p50: 67.13 мс`, `p95: 67.89 мс`, `p99: 77.09 мс`, `200 OK: 30/30`, **`webhookSubscriptionActivations: 1`** (строго однократная выдача тарифа), `fulfilled: true`, `5xx: 0%`, `RSS: 115.0 МБ` | 100% идемпотентность выдачи тарифов и услуг при любом шторме параллельных вебхуков и поллинга |
+| **5** | **Работа при 2 процессах (`multi-process-check.mjs`)** | При 2 воркерах PM2: (а) `phoneOtpStore` в памяти воркера #1 приводил к `400 Код не запрашивался` на воркере #2; (б) `express-rate-limit` удваивал лимиты; (в) `cronService` запускался параллельно в обоих процессах | `passed: true`, `otpCrossProcessVerified: true` (сессия с #1 проверена на #2), `sharedRateLimitAllowed: 5 / Blocked: 3` (единый лимит между процессами), `cronActiveWorkers: 1` (lease в `cron_leases`) | Бесшовная работа кластера из нескольких процессов без Redis через атомарные RPC PostgreSQL |
+
