@@ -410,20 +410,41 @@ export const register = async (req, res) => {
         });
       }
 
-      // 6. 0 профилей
-      const { count: profilesCount } = await supabase
-        .from("user_profiles")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", existingByPhone.id);
+      // 6. 0 подписок, избранного и заявок на верификацию
+      // (базовая строка в user_profiles создаётся при регистрации и удаляется вместе с брошенным аккаунтом)
+      const [
+        { count: subscriptionsCount },
+        { count: favoritesCount },
+        { count: verificationsCount },
+      ] = await Promise.all([
+        supabase
+          .from("subscriptions")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", existingByPhone.id),
+        supabase
+          .from("favorites")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", existingByPhone.id),
+        supabase
+          .from("verification_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", existingByPhone.id),
+      ]);
 
-      if (profilesCount && profilesCount > 0) {
+      if (
+        (subscriptionsCount && subscriptionsCount > 0) ||
+        (favoritesCount && favoritesCount > 0) ||
+        (verificationsCount && verificationsCount > 0)
+      ) {
         return res.status(409).json({
           success: false,
           message: "Пользователь с таким номером телефона уже существует",
         });
       }
 
-      // Все строгие условия соблюдены: брошенная регистрация освобождает номер
+      // Все строгие условия соблюдены: брошенная регистрация освобождает номер вместе с базовым профилем
+      await supabase.from("user_profiles").delete().eq("user_id", existingByPhone.id);
+      await supabase.from("developers").delete().eq("user_id", existingByPhone.id);
       await supabase.from("users").delete().eq("id", existingByPhone.id);
     }
 
@@ -468,7 +489,11 @@ export const register = async (req, res) => {
 
       if (verificationMethod === "phone") {
         const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "127.0.0.1";
-        const otpResult = await nikitaService.sendOtp({ phone: formattedPhone, ip: clientIp });
+        const otpResult = await nikitaService.sendOtp({
+          phone: formattedPhone,
+          ip: clientIp,
+          purpose: "registration",
+        });
         if (!otpResult.success) {
           const httpStatus = otpResult.rateLimited ? 429 : 400;
           return res.status(httpStatus).json({
@@ -521,7 +546,11 @@ export const register = async (req, res) => {
     // 4. Генерация и отправка OTP. JWT НЕ выдаётся до подтверждения.
     if (verificationMethod === "phone") {
       const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "127.0.0.1";
-      const otpResult = await nikitaService.sendOtp({ phone: formattedPhone, ip: clientIp });
+      const otpResult = await nikitaService.sendOtp({
+        phone: formattedPhone,
+        ip: clientIp,
+        purpose: "registration",
+      });
       if (!otpResult.success) {
         const httpStatus = otpResult.rateLimited ? 429 : 400;
         return res.status(httpStatus).json({
@@ -1264,7 +1293,12 @@ export const sendOtp = async (req, res) => {
       }
 
       const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "127.0.0.1";
-      const result = await nikitaService.sendOtp({ phone: formattedPhone, ip: clientIp });
+      const otpPurpose = req.user?.id ? "phone_change" : "registration";
+      const result = await nikitaService.sendOtp({
+        phone: formattedPhone,
+        ip: clientIp,
+        purpose: otpPurpose,
+      });
 
       if (!result.success) {
         const httpStatus = result.rateLimited ? 429 : (result.status === 7 ? 400 : 400);
@@ -1335,10 +1369,15 @@ export const verifyOtp = async (req, res) => {
         return res.status(400).json({ success: false, message: "Укажите код подтверждения" });
       }
 
+      const expectedPurpose = req.user?.id
+        ? ["phone_change", "registration"]
+        : "registration";
+
       const result = await nikitaService.verifyOtp({
         token: rawToken,
         phone: rawPhone,
         code,
+        purpose: expectedPurpose,
       });
 
       if (!result.success) {
@@ -1349,48 +1388,62 @@ export const verifyOtp = async (req, res) => {
         });
       }
 
+      // Доверяем ИСКЛЮЧИТЕЛЬНО номеру из серверной SMS-сессии (result.phone), никогда не rawPhone из body
+      const verifiedPhone = result.phone ? normalizePhone(result.phone) : null;
+      if (!verifiedPhone) {
+        return res.status(400).json({
+          success: false,
+          message: "Не удалось определить подтверждённый номер телефона",
+        });
+      }
+
       let updatedUser = null;
 
-      // Если пользователь авторизован, подтверждаем телефон в профиле
+      // Если пользователь авторизован, подтверждаем и привязываем ТОЛЬКО проверенный телефон сессии
       if (req.user?.id) {
-        const targetPhone = rawPhone ? normalizePhone(rawPhone) : null;
-        if (targetPhone) {
-          const { data: conflict } = await supabase
-            .from("users")
-            .select("id")
-            .eq("phone", targetPhone)
-            .neq("id", req.user.id)
-            .maybeSingle();
+        const { data: conflict } = await supabase
+          .from("users")
+          .select("id")
+          .eq("phone", verifiedPhone)
+          .neq("id", req.user.id)
+          .maybeSingle();
 
-          if (conflict) {
-            return res.status(400).json({
+        if (conflict) {
+          return res.status(400).json({
+            success: false,
+            message: "Этот номер телефона уже привязан к другому аккаунту",
+          });
+        }
+
+        await supabase
+          .from("users")
+          .update({
+            phone: verifiedPhone,
+            is_verified: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", req.user.id);
+      } else {
+        // Неавторизованный verifyOtp выдаёт JWT ТОЛЬКО если пользователь ещё не подтверждён (is_verified === false)
+        const { data: existingUser } = await supabase
+          .from("users")
+          .select("id, account_type, email, phone, is_verified, is_email_verified, token_version")
+          .eq("phone", verifiedPhone)
+          .maybeSingle();
+
+        if (existingUser) {
+          if (existingUser.is_verified === true) {
+            return res.status(403).json({
               success: false,
-              message: "Этот номер телефона уже привязан к другому аккаунту",
+              message: "Номер телефона уже подтверждён. Пожалуйста, войдите по паролю",
             });
           }
 
-          await supabase
-            .from("users")
-            .update({
-              phone: targetPhone,
-              is_verified: true,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", req.user.id);
-        } else {
-          await supabase
-            .from("users")
-            .update({ is_verified: true, updated_at: new Date().toISOString() })
-            .eq("id", req.user.id);
-        }
-      } else {
-        const phoneToFind = rawPhone || result.phone;
-        if (phoneToFind) {
-          const formattedPhone = normalizePhone(phoneToFind);
           const { data } = await supabase
             .from("users")
             .update({ is_verified: true, updated_at: new Date().toISOString() })
-            .eq("phone", formattedPhone)
+            .eq("id", existingUser.id)
+            .eq("is_verified", false)
             .select("id, account_type, email, phone, is_verified, is_email_verified, token_version")
             .maybeSingle();
           updatedUser = data;
@@ -1438,6 +1491,27 @@ export const verifyOtp = async (req, res) => {
     const email = rawEmail;
     if (!email || !code) {
       return res.status(400).json({ success: false, message: "Укажите email и код" });
+    }
+
+    // Если запрос авторизован, проверяем, что подтверждаемый email принадлежит текущему пользователю
+    if (req.user?.id) {
+      let authUserEmail =
+        typeof req.user.email === "string" ? req.user.email.toLowerCase().trim() : "";
+      if (!authUserEmail) {
+        const { data: authDbUser } = await supabase
+          .from("users")
+          .select("email")
+          .eq("id", req.user.id)
+          .maybeSingle();
+        authUserEmail =
+          typeof authDbUser?.email === "string" ? authDbUser.email.toLowerCase().trim() : "";
+      }
+      if (!authUserEmail || authUserEmail !== email) {
+        return res.status(403).json({
+          success: false,
+          message: "Подтверждаемый email не совпадает с email вашего аккаунта",
+        });
+      }
     }
 
     // Последний активный код: только он может быть валидным
@@ -1525,7 +1599,7 @@ export const verifyOtp = async (req, res) => {
       });
 
     if (targetUserId) {
-      userQuery = userQuery.eq("id", targetUserId);
+      userQuery = userQuery.eq("id", targetUserId).eq("email", email);
     } else {
       userQuery = userQuery.eq("email", email);
     }
@@ -1619,7 +1693,11 @@ export const forgotPassword = async (req, res) => {
       }
 
       const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "127.0.0.1";
-      const result = await nikitaService.sendOtp({ phone: formattedPhone, ip: clientIp });
+      const result = await nikitaService.sendOtp({
+        phone: formattedPhone,
+        ip: clientIp,
+        purpose: "password_reset",
+      });
 
       if (!result.success) {
         const httpStatus = result.rateLimited ? 429 : 400;
@@ -1707,6 +1785,7 @@ export const verifyResetCode = async (req, res) => {
         token: rawToken,
         phone: rawPhone,
         code,
+        purpose: "password_reset",
       });
 
       if (!result.success) {
@@ -1717,13 +1796,20 @@ export const verifyResetCode = async (req, res) => {
         });
       }
 
-      const phoneToFind = rawPhone || result.phone;
-      const formattedPhone = phoneToFind ? normalizePhone(phoneToFind) : null;
-      let userQuery = supabase.from("users").select("id, email, phone, token_version");
-      if (formattedPhone) {
-        userQuery = userQuery.eq("phone", formattedPhone);
+      // Доверяем ИСКЛЮЧИТЕЛЬНО номеру из серверной SMS-сессии (result.phone), никогда не rawPhone из body
+      const formattedPhone = result.phone ? normalizePhone(result.phone) : null;
+      if (!formattedPhone) {
+        return res.status(400).json({
+          success: false,
+          message: "Не удалось определить подтверждённый номер телефона",
+        });
       }
-      const { data: user, error: userError } = await userQuery.maybeSingle();
+
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("id, email, phone, token_version")
+        .eq("phone", formattedPhone)
+        .maybeSingle();
 
       if (userError || !user) {
         return res.status(400).json({
