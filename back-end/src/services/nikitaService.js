@@ -1,7 +1,15 @@
 import crypto from "crypto";
 import { nikitaConfig, assertNikitaConfigured } from "../config/nikita.js";
 import { phoneOtpStore, maskPhoneNikita } from "../utils/phoneOtpStore.js";
+import { Semaphore } from "../utils/semaphore.js";
 import logger from "../utils/logger.js";
+
+export const smsSemaphore = new Semaphore({
+  maxConcurrent: 10,
+  maxQueue: 100,
+  acquireTimeoutMs: 12000,
+  name: "nikita_sms",
+});
 
 // =======================================================
 // Клиент SMS-сервиса Nikita OTP API (https://smspro.nikita.kg).
@@ -86,28 +94,30 @@ export function generateTransactionId() {
 async function postNikita(endpoint, body) {
   assertNikitaConfigured();
 
-  const url = `${nikitaConfig.baseUrl}${endpoint}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-KEY": nikitaConfig.apiKey,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(nikitaConfig.timeoutMs),
+  return smsSemaphore.run(async () => {
+    const url = `${nikitaConfig.baseUrl}${endpoint}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-KEY": nikitaConfig.apiKey,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(nikitaConfig.timeoutMs),
+    });
+
+    const text = await response.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(
+        `Nikita API вернул невалидный JSON (HTTP ${response.status}): ${text.slice(0, 200)}`
+      );
+    }
+
+    return { response, json };
   });
-
-  const text = await response.text();
-  let json;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    throw new Error(
-      `Nikita API вернул невалидный JSON (HTTP ${response.status}): ${text.slice(0, 200)}`
-    );
-  }
-
-  return { response, json };
 }
 
 export async function sendOtp({ phone, ip, purpose = "registration" }) {

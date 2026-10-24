@@ -1339,7 +1339,11 @@ export const sendOtp = async (req, res) => {
         .maybeSingle();
 
       if (!user || user.is_email_verified !== false) {
-        return res.json({ success: true, message: "Если аккаунт существует, код отправлен" });
+        return res.json({
+          success: true,
+          message: "Если аккаунт существует, код отправлен",
+          email,
+        });
       }
 
       const limit = await guardedIssueOtp(email);
@@ -1347,7 +1351,11 @@ export const sendOtp = async (req, res) => {
         return res.status(429).json({ success: false, message: limit.message });
       }
 
-      return res.json({ success: true, message: "Код подтверждения отправлен", email });
+      return res.json({
+        success: true,
+        message: "Если аккаунт существует, код отправлен",
+        email,
+      });
     }
 
     return res.status(400).json({ success: false, message: "Укажите номер телефона или email" });
@@ -1692,9 +1700,12 @@ export const forgotPassword = async (req, res) => {
       }
 
       if (!user) {
+        // P2-01: Выравниваем структуру ответа (включая синтетический token),
+        // чтобы нельзя было определить, зарегистрирован ли номер телефона в системе.
         return res.json({
           success: true,
           message: "Если аккаунт существует, код отправлен по SMS",
+          token: crypto.randomBytes(16).toString("hex"),
         });
       }
 

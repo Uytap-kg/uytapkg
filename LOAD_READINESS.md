@@ -85,7 +85,7 @@
 
 ### 5.1. Выбор хранилища для многопроцессного режима (без Redis)
 В проекте отсутствует Redis, поэтому согласно ТЗ вместо усложнения инфраструктуры реализовано разделение состояния на PostgreSQL (атомарные RPC + таблицы с TTL) и ограниченные локальные кэши:
-- **PostgreSQL (`supabase/migrations/20261025000000_shared_state_and_locks.sql`)**:
+- **PostgreSQL (`supabase/migrations/20261025010000_shared_state_and_locks.sql`)**:
   - `public.phone_otp_sessions` + RPC `public.consume_phone_otp_attempt(p_token, p_max_attempts)`: хранит активные сессии SMS OTP (`code_hash`, `attempts`, `verified`, `reset_verified`, `used`, `expires_at`). Гарантирует, что код, запрошенный на процессе №1, успешно проверяется на процессе №2, а счётчик 5 попыток инкрементируется атомарно (`FOR UPDATE`) без обхода при балансировке между воркерами.
   - `public.rate_limit_counters` + RPC `public.check_and_increment_rate_limit(p_key, p_window_ms, p_max_count, p_increment)`: единая таблица со счётчиками и атомарный `INSERT ... ON CONFLICT (key) DO UPDATE` с проверкой `reset_at <= NOW()`. Оценка нагрузки на БД: используется только для низкочастотных/чувствительных операций (auth login/verify/send-otp, создание платежей, суточные потолки SMS/Email/AI/STT) — не более 5–20 коротких PK-lookup запросов в секунду на пике (< 0.5 мс в PostgreSQL). Высокочастотный глобальный лимитер `/api` (300 req/min) работает в локальном `BoundedSharedRateLimitStore` без обращения к БД на каждый GET.
   - `public.cron_leases` + RPC `public.try_acquire_cron_lease(p_job_name, p_holder_id, p_lease_ms)` и `public.release_cron_lease`: гарантирует, что `runMaintenanceJob` в `cronService.js` выполняется только одним процессом из кластера. Внутри процесса также добавлен флаг `isMaintenanceRunning` против наложения тиков.
@@ -98,3 +98,30 @@
 - **Несколько процессов (PM2 cluster 2–4 инстанса или Docker replicas за Nginx):**
   - Запускать через `pm2 start deploy/ecosystem.config.cjs` (или `docker compose -f deploy/docker-compose.yml up -d`).
   - Обязательные переменные окружения: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_KEY`, `JWT_SECRET`, `OTP_SECRET`, `INTERNAL_PROXY_SECRET` (одинаковый на всех инстансах и фронтенде/прокси), `DB_POOL_MAX=10` (на каждый процесс).
+
+---
+
+## 6. Отчёт по Этапу 2: Лимиты, таймауты и защита платных ресурсов
+
+### 6.1. Закрытие P2-01 (sendOtpIpLimiter и защита от перечисления аккаунтов)
+- Добавлен отдельный IP-лимитер `sendOtpIpLimiter` (`10 запросов / 15 минут` с одного IP на любые адреса и номера) в `back-end/src/routes/authRoutes.js` в дополнение к таргетному `sendOtpLimiter` (`3 запроса / 15 минут` на конкретный телефон/email). Оба лимитера используют общее хранилище `BoundedSharedRateLimitStore` с синхронизацией в PostgreSQL (`rate_limit_counters`).
+- Выровнены ответы в `back-end/src/controllers/authController.js`:
+  - `POST /api/auth/forgot-password` теперь всегда возвращает одинаковую структуру `{ message, phone/email, token }` как для существующих, так и для несуществующих номеров/адресов (для несуществующего номера генерируется неотличимый фиктивный UUID-токен без отправки SMS).
+  - `POST /api/auth/send-otp` для email всегда возвращает `{ message: "Если этот email свободен, мы отправили на него код подтверждения", email }` независимо от того, занят ли email.
+
+### 6.2. Таймауты, семафоры параллельности и потолки стоимости (Cost Ceilings)
+- Создан универсальный семафор с очередью и таймаутом ожидания `back-end/src/utils/semaphore.js`:
+  - **Nikita SMS (`nikitaService.js`)**: таймаут `AbortSignal.timeout(10000)`, семафор `maxConcurrent = 10`, суточный глобальный потолок `NIKITA_DAILY_SMS_LIMIT = 500` (синхронизируется через БД `check_and_increment_rate_limit`, не сбрасывается при перезапуске процесса). Автоповторы отключены.
+  - **Resend / SMTP (`emailService.js`)**: таймаут `AbortSignal.timeout(10000)` для Resend API и `connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000` для Nodemailer SMTP; семафор `maxConcurrent = 5`; суточный глобальный потолок `EMAIL_DAILY_LIMIT = 1000`.
+  - **AI-поиск Claude / Gemini (`aiController.js`)**: таймаут `15 с`, семафор `maxConcurrent = 8` (очередь до 25 запросов, при перегрузке — мгновенный фоллбэк на `local-parser` без ошибки 500); суточный лимит на пользователя/IP `AI_DAILY_USER_LIMIT = 100` и глобальный суточный потолок `AI_DAILY_GLOBAL_LIMIT = 3000`.
+  - **ElevenLabs STT (`front-end/src/app/api/speech-to-text/route.js`)**: таймаут `AbortSignal.timeout(20000)`, семафор `maxConcurrent = 5`, минутный лимит `10 req/min` на IP, суточный лимит `STT_DAILY_IP_LIMIT = 50` на IP и глобальный суточный потолок `STT_DAILY_GLOBAL_LIMIT = 500`.
+  - **Обработка изображений Sharp (`watermark.js`)**: семафор `maxConcurrent = 4` (защита CPU и RSS памяти от одновременной распаковки десятков 8 МБ изображений).
+- Проверены лимиты размеров тела и файлов до чтения буфера: `express.json({ limit: "1mb" })`, Multer `files: 1` (2 МБ анонимный аватар, 5 МБ авторизованный аватар, 8 МБ фото объявления/ЖК/баннера, 10 МБ документ верификации), `photos.max(10)` в схеме валидации объявления.
+
+### 6.3. Защита баннеров от накрутки (P3-04) и публичные rate limiters
+- **P3-04 (`bannersController.js`, `bannersRoutes.js`)**:
+  - Добавлена дедупликация просмотров (`bannerViewsThrottleMap`, TTL 10 минут, макс. 20 000 ключей `ip:bannerId`) и кликов (`bannerClicksThrottleMap`, TTL 5 минут, макс. 20 000 ключей `ip:bannerId`) + `bannerStatsLimiter` (`60 req/min` с IP). Повторные запросы в рамках окна возвращают `200 { ok: true, deduplicated: true }` без инкремента в БД.
+- **Публичные лимитеры (`back-end/src/middleware/publicRateLimiters.js`)**:
+  - `publicCatalogLimiter`: `120 req/min` на IP (каталог объявлений, ЖК, застройщиков, активных баннеров) — комфортно для активной фильтрации и пагинации человеком.
+  - `publicMapLimiter`: `60 req/min` на IP (`/api/listings/map`) — достаточно для панорамирования карты с debounce.
+  - `publicProfileLimiter`: `60 req/min` на IP (`/api/auth/users/:id`) — предотвращает парсинг базы продавцов.
