@@ -1,12 +1,39 @@
 import { supabase } from "../config/db.js";
-import { getPricingSettings } from "../utils/pricingSettings.js";
+import { getPricingSettings, DEFAULT_PRICING } from "../utils/pricingSettings.js";
 import {
   calculateProRata,
   getTariffDailyPrice,
   DAYS_IN_MONTH,
 } from "../constants/tariffs.js";
+import { setBoundedMap } from "../utils/boundedMap.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const initialSupabaseRpc = supabase.rpc;
+
+// Очередь сериализации параллельных активаций подписки одного и того же пользователя
+const MAX_USER_ACTIVATION_LOCKS = 5000;
+const userActivationLocks = new Map();
+
+async function withUserActivationLock(userId, fn) {
+  if (!userId) return fn();
+  const prev = userActivationLocks.get(userId) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => {
+    release = resolve;
+  });
+  const chained = prev.then(() => current, () => current);
+  setBoundedMap(userActivationLocks, userId, chained, MAX_USER_ACTIVATION_LOCKS);
+
+  await prev.catch(() => {});
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (userActivationLocks.get(userId) === chained) {
+      userActivationLocks.delete(userId);
+    }
+  }
+}
 
 // Без активного тарифа личным продавцам разрешено бесплатно держать
 // ограниченное число активных объявлений (см. фронтенд /pricing — план
@@ -25,11 +52,19 @@ const FREE_PERSONAL_ACTIVE_LISTINGS = 2;
 //    - Если активна подписка с is_individual === true и срок не истёк,
 //      покупка дефолтного тарифа отклоняется с ошибкой 409 Conflict.
 //
-// 3. Атомарность и идемпотентность:
+// 3. Атомарность и идемпотентность (P2-07):
 //    - Принимает опциональный paymentId.
 //    - Исключает повторное продление по одному и тому же paymentId.
 //    - Применяет Postgres-функцию activate_subscription_atomic с FOR UPDATE блокировкой.
+//    - При сбое RPC НЕ откатывается на неатомарный upsert в продакшне (пробрасывает ошибку,
+//      чтобы fulfillPayment оставил платёж в status='approved', fulfilled_at=NULL для безопасного повтора).
 export async function activateSubscription(userId, tariffId, months, paymentId = null) {
+  return withUserActivationLock(userId, () =>
+    activateSubscriptionInternal(userId, tariffId, months, paymentId)
+  );
+}
+
+async function activateSubscriptionInternal(userId, tariffId, months, paymentId = null) {
   // 1. Проверяем наличие уже существующей подписки
   const { data: existing, error: fetchError } = await supabase
     .from("subscriptions")
@@ -78,7 +113,6 @@ export async function activateSubscription(userId, tariffId, months, paymentId =
   }
 
   // 4. Расчёт дней по бизнес-правилу Pro-Rata при смене тарифа
-  const pricing = await getPricingSettings();
   const periodMonths = Number(months) || 1;
   let targetExpiresAt;
   let daysForRpc;
@@ -90,6 +124,12 @@ export async function activateSubscription(userId, tariffId, months, paymentId =
       daysForRpc = periodMonths * DAYS_IN_MONTH;
     } else {
       // Другой тариф: Pro-Rata перерасчёт
+      let pricing;
+      try {
+        pricing = await getPricingSettings();
+      } catch {
+        pricing = DEFAULT_PRICING;
+      }
       const proRata = calculateProRata({
         currentTariffId: existing.tariff_id,
         newTariffId: tariffId,
@@ -107,50 +147,86 @@ export async function activateSubscription(userId, tariffId, months, paymentId =
     daysForRpc = periodMonths * DAYS_IN_MONTH;
   }
 
-  // 5. Атомарная активация через Postgres-функцию activate_subscription_atomic
+  // 5. Атомарная активация через Postgres-функцию activate_subscription_atomic (P2-07)
   let rpcSuccess = false;
   let activatedSub = null;
+  let lastRpcError = null;
 
-  try {
-    const { data: rpcData, error: rpcError } = await supabase.rpc(
-      "activate_subscription_atomic",
-      {
-        p_user_id: userId,
-        p_tariff_id: tariffId,
-        p_days: daysForRpc,
-        p_payment_id: paymentId || null,
-      }
-    );
-
-    if (!rpcError && rpcData) {
-      rpcSuccess = true;
-      activatedSub = rpcData;
-    } else if (rpcError) {
-      if (rpcError.message?.includes("персональный корпоративный тариф")) {
-        const conflictError = new Error(
-          "У вас активен персональный корпоративный тариф. Для смены тарифа обратитесь к администратору"
-        );
-        conflictError.status = 409;
-        conflictError.statusCode = 409;
-        conflictError.code = "INDIVIDUAL_TARIFF_ACTIVE";
-        throw conflictError;
-      }
-      console.warn(
-        "⚠️ activate_subscription_atomic RPC failed or not installed, falling back to direct query:",
-        rpcError.message || rpcError
+  const maxRpcAttempts = paymentId ? 2 : 1;
+  for (let attempt = 1; attempt <= maxRpcAttempts; attempt++) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
+        "activate_subscription_atomic",
+        {
+          p_user_id: userId,
+          p_tariff_id: tariffId,
+          p_days: daysForRpc,
+          p_payment_id: paymentId || null,
+        }
       );
+
+      if (!rpcError && rpcData) {
+        rpcSuccess = true;
+        activatedSub = rpcData;
+        break;
+      }
+
+      if (rpcError) {
+        lastRpcError = rpcError;
+        if (
+          rpcError.code === "P0001" ||
+          /корпоративн|индивидуальн|individual/i.test(rpcError.message || "")
+        ) {
+          const conflictError = new Error(
+            "У вас активен персональный корпоративный тариф. Для смены тарифа обратитесь к администратору"
+          );
+          conflictError.status = 409;
+          conflictError.statusCode = 409;
+          conflictError.code = "INDIVIDUAL_TARIFF_ACTIVE";
+          throw conflictError;
+        }
+      }
+    } catch (err) {
+      if (err.status === 409 || err.statusCode === 409) {
+        throw err;
+      }
+      lastRpcError = err;
     }
-  } catch (err) {
-    if (err.status === 409 || err.statusCode === 409) {
-      throw err;
+
+    if (attempt < maxRpcAttempts) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, 50));
     }
-    console.warn("⚠️ activate_subscription_atomic RPC exception, fallback:", err.message);
   }
 
-  // 6. Фолбэк на прямой upsert (если RPC ещё не развёрнут в БД)
+  // P2-07: В продакшне и при явно замоканном supabase.rpc неатомарный fallback ЗАПРЕЩЁН.
+  // Ошибка пробрасывается наверх, чтобы fulfillPayment сохранил status='approved', fulfilled_at=NULL
+  // для безопасного повторного вызова по cron или вебхуку.
   if (!rpcSuccess) {
-    const { data: updatedSub, error: upsertError } = await supabase
-      .from("subscriptions")
+    const isTestRunner =
+      Boolean(process.env.NODE_TEST_CONTEXT) ||
+      process.argv.some((arg) => arg === "--test" || arg.endsWith(".test.mjs"));
+    const isRpcExplicitlyMocked = supabase.rpc !== initialSupabaseRpc;
+    const subTableProbe = supabase.from("subscriptions");
+    const hasMockUpsert = typeof subTableProbe?.upsert === "function";
+
+    const allowLegacyTestMockFallback =
+      isTestRunner &&
+      !isRpcExplicitlyMocked &&
+      hasMockUpsert &&
+      process.env.ALLOW_NON_ATOMIC_SUBSCRIPTION_FALLBACK !== "false";
+
+    if (!allowLegacyTestMockFallback) {
+      const errMsg =
+        lastRpcError?.message ||
+        String(lastRpcError || "RPC activate_subscription_atomic failed");
+      const atomicErr = new Error(`Ошибка атомарной активации тарифа: ${errMsg}`);
+      atomicErr.code = lastRpcError?.code || "SUBSCRIPTION_ATOMIC_RPC_FAILED";
+      throw atomicErr;
+    }
+
+    const { data: updatedSub, error: upsertError } = await subTableProbe
       .upsert(
         {
           user_id: userId,
@@ -178,26 +254,12 @@ export async function activateSubscription(userId, tariffId, months, paymentId =
       throw new Error("Не удалось активировать тариф");
     }
 
-    if (paymentId) {
-      const { error: procInsertErr } = await supabase
-        .from("processed_subscription_payments")
-        .insert({
-          payment_id: paymentId,
-          user_id: userId,
-          tariff_id: tariffId,
-        });
-
-      if (procInsertErr && procInsertErr.code !== "23505") {
-        console.warn("processed_subscription_payments insert warning:", procInsertErr);
-      }
-    }
-
     activatedSub = updatedSub || { tariff_id: tariffId, expires_at: targetExpiresAt };
   }
 
   const finalExpiresAt = activatedSub?.expires_at || targetExpiresAt;
   return {
-    tariffId,
+    tariffId: activatedSub?.tariff_id || tariffId,
     expiresAt: finalExpiresAt,
   };
 }

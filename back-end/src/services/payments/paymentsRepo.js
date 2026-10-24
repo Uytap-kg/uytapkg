@@ -2,6 +2,40 @@ import { supabase } from "../../config/db.js";
 import { createPromotionOrder } from "../../utils/promotionOrders.js";
 
 /**
+ * Найти открытые неоплаченные счета пользователя (pending / processing) за последние 24 часа.
+ * Используется для ограничения числа параллельно открытых счетов и дедупликации двойного клика.
+ */
+export async function findOpenPaymentsByUser(userId, cutoffIso) {
+  try {
+    const table = supabase.from("payments");
+    if (!table || typeof table.select !== "function") {
+      return { data: [], error: null };
+    }
+    let query = table.select("*").eq("user_id", userId);
+    if (typeof query?.in !== "function") {
+      return { data: [], error: null };
+    }
+    query = query.in("status", ["pending", "processing"]);
+    if (cutoffIso && typeof query?.gte === "function") {
+      query = query.gte("created_at", cutoffIso);
+    }
+    if (typeof query?.order === "function") {
+      query = query.order("created_at", { ascending: false });
+    }
+    if (typeof query?.limit === "function") {
+      query = query.limit(20);
+    }
+    const res = await query;
+    return {
+      data: Array.isArray(res?.data) ? res.data : [],
+      error: res?.error || null,
+    };
+  } catch {
+    return { data: [], error: null };
+  }
+}
+
+/**
  * Создать базовую запись платежа в статусе 'pending' (для подписок PRO).
  */
 export async function createPendingPayment({

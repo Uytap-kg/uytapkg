@@ -11,10 +11,38 @@ import {
 import * as odengi from "../odengiService.js";
 import { alerts } from "../../utils/alerts.js";
 import { logger } from "../../utils/logger.js";
-import { evictExpiredAndCapMap } from "../../utils/boundedMap.js";
+import { evictExpiredAndCapMap, setBoundedMap } from "../../utils/boundedMap.js";
 import * as repo from "./paymentsRepo.js";
 
 export const PROMOTION_TARIFF_PREFIX = "promo_";
+export const MAX_PENDING_PAYMENTS_PER_USER =
+  Math.max(1, Number(process.env.MAX_PENDING_PAYMENTS_PER_USER) || 5);
+export const DOUBLE_CLICK_DEDUP_WINDOW_MS = 10 * 1000;
+
+// Очередь сериализации создания платежей на одного пользователя (защита от двойного клика)
+const MAX_USER_CREATE_LOCKS = 5000;
+const userPaymentCreateLocks = new Map();
+
+async function withUserPaymentCreateLock(userId, fn) {
+  if (!userId) return fn();
+  const prev = userPaymentCreateLocks.get(userId) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => {
+    release = resolve;
+  });
+  const chained = prev.then(() => current, () => current);
+  setBoundedMap(userPaymentCreateLocks, userId, chained, MAX_USER_CREATE_LOCKS);
+
+  await prev.catch(() => {});
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (userPaymentCreateLocks.get(userId) === chained) {
+      userPaymentCreateLocks.delete(userId);
+    }
+  }
+}
 
 export const SERVICE_TITLES = {
   vip: "VIP-размещение",
@@ -80,74 +108,113 @@ export async function createSubscriptionPayment({ userId, tariffId, months }) {
     return { error: "bad_request", message: "tariffId и months обязательны" };
   }
 
-  // Защита активного индивидуального тарифа
-  const currentSub = await getActiveSubscription(userId);
-  if (currentSub?.is_individual) {
-    return {
-      error: "conflict",
-      message:
-        "У вас активен персональный корпоративный тариф. Для смены тарифа обратитесь к администратору",
-    };
-  }
+  return withUserPaymentCreateLock(userId, async () => {
+    // Защита активного индивидуального тарифа
+    const currentSub = await getActiveSubscription(userId);
+    if (currentSub?.is_individual) {
+      return {
+        error: "conflict",
+        message:
+          "У вас активен персональный корпоративный тариф. Для смены тарифа обратитесь к администратору",
+      };
+    }
 
-  // Расчёт суммы только на сервере
-  const pricing = await getPricingSettings();
-  const calc = calculateTariffTotal(tariffId, months, pricing);
+    // Расчёт суммы только на сервере
+    const pricing = await getPricingSettings();
+    const calc = calculateTariffTotal(tariffId, months, pricing);
 
-  if (!calc || calc.total <= 0) {
-    return { error: "bad_request", message: "Неизвестный тариф или период оплаты" };
-  }
+    if (!calc || calc.total <= 0) {
+      return { error: "bad_request", message: "Неизвестный тариф или период оплаты" };
+    }
 
-  const orderId = generateOrderId();
-  const amountKopecks = Math.round(calc.total * 100);
+    const amountKopecks = Math.round(calc.total * 100);
 
-  const { data: payment, error: insertError } = await repo.createPendingPayment({
-    userId,
-    orderId,
-    tariffId: calc.tariff.id,
-    months: calc.months,
-    amountKopecks,
-  });
+    // Проверка открытых неоплаченных счетов пользователя и защита от двойного клика
+    const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: openPayments } = await repo.findOpenPaymentsByUser(userId, cutoffIso);
+    if (Array.isArray(openPayments) && openPayments.length > 0) {
+      const nowMs = Date.now();
+      const recentDuplicate = openPayments.find(
+        (p) =>
+          p.status === "processing" &&
+          p.invoice_id &&
+          p.tariff_id === calc.tariff.id &&
+          Number(p.months) === Number(calc.months) &&
+          Number(p.amount) === amountKopecks &&
+          p.created_at &&
+          nowMs - new Date(p.created_at).getTime() <= DOUBLE_CLICK_DEDUP_WINDOW_MS
+      );
 
-  if (insertError || !payment) {
-    logger.error("Create Payment Insert Error", { error: insertError?.message });
-    return { error: "db_error", message: "Не удалось создать платёж" };
-  }
+      if (recentDuplicate) {
+        return {
+          data: {
+            ...toPublicPayment(recentDuplicate),
+            tariffTitle: calc.tariff.title,
+            pricePerMonth: calc.pricePerMonth,
+            discountPercent: calc.discountPercent,
+            deduplicated: true,
+          },
+        };
+      }
 
-  let invoice;
-  try {
-    invoice = await odengiClient.createInvoice({
+      if (openPayments.length >= MAX_PENDING_PAYMENTS_PER_USER) {
+        return {
+          error: "too_many_pending",
+          message: `У вас уже открыто максимальное число неоплаченных счетов (${MAX_PENDING_PAYMENTS_PER_USER}). Оплатите или отмените текущий счёт перед созданием нового.`,
+        };
+      }
+    }
+
+    const orderId = generateOrderId();
+
+    const { data: payment, error: insertError } = await repo.createPendingPayment({
+      userId,
       orderId,
-      description: `UyTap PRO — тариф ${calc.tariff.title}, ${calc.months} мес.`,
+      tariffId: calc.tariff.id,
+      months: calc.months,
       amountKopecks,
     });
-  } catch (providerError) {
-    logger.error("O!Dengi createInvoice Error", { error: providerError?.message });
-    await repo.updatePaymentStatus(payment.id, "failed");
+
+    if (insertError || !payment) {
+      logger.error("Create Payment Insert Error", { error: insertError?.message });
+      return { error: "db_error", message: "Не удалось создать платёж" };
+    }
+
+    let invoice;
+    try {
+      invoice = await odengiClient.createInvoice({
+        orderId,
+        description: `UyTap PRO — тариф ${calc.tariff.title}, ${calc.months} мес.`,
+        amountKopecks,
+      });
+    } catch (providerError) {
+      logger.error("O!Dengi createInvoice Error", { error: providerError?.message });
+      await repo.updatePaymentStatus(payment.id, "failed");
+      return {
+        error: "service_unavailable",
+        message: "Платёжный сервис временно недоступен. Попробуйте позже.",
+      };
+    }
+
+    const { data: updated, error: updateError } = await repo.updatePaymentInvoice(
+      payment.id,
+      invoice
+    );
+
+    if (updateError || !updated) {
+      logger.error("Update Payment After Invoice Error", { error: updateError?.message });
+      return { error: "db_error", message: "Не удалось сохранить данные счёта" };
+    }
+
     return {
-      error: "service_unavailable",
-      message: "Платёжный сервис временно недоступен. Попробуйте позже.",
+      data: {
+        ...toPublicPayment(updated),
+        tariffTitle: calc.tariff.title,
+        pricePerMonth: calc.pricePerMonth,
+        discountPercent: calc.discountPercent,
+      },
     };
-  }
-
-  const { data: updated, error: updateError } = await repo.updatePaymentInvoice(
-    payment.id,
-    invoice
-  );
-
-  if (updateError || !updated) {
-    logger.error("Update Payment After Invoice Error", { error: updateError?.message });
-    return { error: "db_error", message: "Не удалось сохранить данные счёта" };
-  }
-
-  return {
-    data: {
-      ...toPublicPayment(updated),
-      tariffTitle: calc.tariff.title,
-      pricePerMonth: calc.pricePerMonth,
-      discountPercent: calc.discountPercent,
-    },
-  };
+  });
 }
 
 /**
@@ -156,96 +223,109 @@ export async function createSubscriptionPayment({ userId, tariffId, months }) {
 export async function createPromotionPayment({ userId, listingId, serviceType, days: inputDays }) {
   const days = serviceType === "instagram" ? 1 : inputDays || 1;
 
-  // Проверка принадлежности объявления
-  const { data: listing, error: listingError } = await supabase
-    .from("listings")
-    .select("id, user_id, title")
-    .eq("id", listingId)
-    .maybeSingle();
+  return withUserPaymentCreateLock(userId, async () => {
+    // Проверка принадлежности объявления
+    const { data: listing, error: listingError } = await supabase
+      .from("listings")
+      .select("id, user_id, title")
+      .eq("id", listingId)
+      .maybeSingle();
 
-  if (listingError || !listing) {
-    return { error: "not_found", message: "Объявление не найдено" };
-  }
+    if (listingError || !listing) {
+      return { error: "not_found", message: "Объявление не найдено" };
+    }
 
-  if (listing.user_id !== userId) {
-    return {
-      error: "forbidden",
-      message: "Вы можете продвигать только свои объявления",
-    };
-  }
+    if (listing.user_id !== userId) {
+      return {
+        error: "forbidden",
+        message: "Вы можете продвигать только свои объявления",
+      };
+    }
 
-  // Расчёт стоимости
-  const pricing = await getPricingSettings();
-  const pricePerUnit = Number(pricing.services?.[serviceType]);
+    // Расчёт стоимости
+    const pricing = await getPricingSettings();
+    const pricePerUnit = Number(pricing.services?.[serviceType]);
 
-  if (!Number.isFinite(pricePerUnit) || pricePerUnit <= 0) {
-    return { error: "bad_request", message: "Неизвестная услуга продвижения" };
-  }
+    if (!Number.isFinite(pricePerUnit) || pricePerUnit <= 0) {
+      return { error: "bad_request", message: "Неизвестная услуга продвижения" };
+    }
 
-  const total = serviceType === "instagram" ? pricePerUnit : pricePerUnit * days;
-  const orderId = generateOrderId();
-  const amountKopecks = Math.round(total * 100);
-  const tariffId = `${PROMOTION_TARIFF_PREFIX}${serviceType}`;
+    const total = serviceType === "instagram" ? pricePerUnit : pricePerUnit * days;
+    const amountKopecks = Math.round(total * 100);
+    const tariffId = `${PROMOTION_TARIFF_PREFIX}${serviceType}`;
 
-  // Атомарное создание payments + promotion_orders
-  const { data: payment, error: insertError } = await repo.createPromotionPaymentRecord({
-    userId,
-    orderId,
-    tariffId,
-    days,
-    amountKopecks,
-    listingId,
-    serviceType,
-  });
+    // Проверка открытых неоплаченных счетов пользователя
+    const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: openPayments } = await repo.findOpenPaymentsByUser(userId, cutoffIso);
+    if (Array.isArray(openPayments) && openPayments.length >= MAX_PENDING_PAYMENTS_PER_USER) {
+      return {
+        error: "too_many_pending",
+        message: `У вас уже открыто максимальное число неоплаченных счетов (${MAX_PENDING_PAYMENTS_PER_USER}). Оплатите или отмените текущий счёт перед созданием нового.`,
+      };
+    }
 
-  if (insertError || !payment) {
-    logger.error("Create Promotion Payment Insert Error", { error: insertError?.message });
-    return { error: "db_error", message: "Не удалось создать платёж" };
-  }
+    const orderId = generateOrderId();
 
-  let invoice;
-  try {
-    invoice = await odengiClient.createInvoice({
+    // Атомарное создание payments + promotion_orders
+    const { data: payment, error: insertError } = await repo.createPromotionPaymentRecord({
+      userId,
       orderId,
-      description: `UyTap — ${SERVICE_TITLES[serviceType]}${
-        serviceType === "instagram" ? "" : `, ${days} дн.`
-      } — «${listing.title}»`,
-      amountKopecks,
-    });
-  } catch (providerError) {
-    logger.error("O!Dengi createInvoice Error (promotion)", {
-      error: providerError?.message,
-    });
-    await repo.updatePaymentStatus(payment.id, "failed");
-    return {
-      error: "service_unavailable",
-      message: "Платёжный сервис временно недоступен. Попробуйте позже.",
-    };
-  }
-
-  const { data: updated, error: updateError } = await repo.updatePaymentInvoice(
-    payment.id,
-    invoice
-  );
-
-  if (updateError || !updated) {
-    logger.error("Update Promotion Payment After Invoice Error", {
-      error: updateError?.message,
-    });
-    return { error: "db_error", message: "Не удалось сохранить данные счёта" };
-  }
-
-  return {
-    data: {
-      ...toPublicPayment(updated),
-      serviceType,
-      serviceTitle: SERVICE_TITLES[serviceType],
-      listingId,
-      listingTitle: listing.title,
+      tariffId,
       days,
-      pricePerUnit,
-    },
-  };
+      amountKopecks,
+      listingId,
+      serviceType,
+    });
+
+    if (insertError || !payment) {
+      logger.error("Create Promotion Payment Insert Error", { error: insertError?.message });
+      return { error: "db_error", message: "Не удалось создать платёж" };
+    }
+
+    let invoice;
+    try {
+      invoice = await odengiClient.createInvoice({
+        orderId,
+        description: `UyTap — ${SERVICE_TITLES[serviceType]}${
+          serviceType === "instagram" ? "" : `, ${days} дн.`
+        } — «${listing.title}»`,
+        amountKopecks,
+      });
+    } catch (providerError) {
+      logger.error("O!Dengi createInvoice Error (promotion)", {
+        error: providerError?.message,
+      });
+      await repo.updatePaymentStatus(payment.id, "failed");
+      return {
+        error: "service_unavailable",
+        message: "Платёжный сервис временно недоступен. Попробуйте позже.",
+      };
+    }
+
+    const { data: updated, error: updateError } = await repo.updatePaymentInvoice(
+      payment.id,
+      invoice
+    );
+
+    if (updateError || !updated) {
+      logger.error("Update Promotion Payment After Invoice Error", {
+        error: updateError?.message,
+      });
+      return { error: "db_error", message: "Не удалось сохранить данные счёта" };
+    }
+
+    return {
+      data: {
+        ...toPublicPayment(updated),
+        serviceType,
+        serviceTitle: SERVICE_TITLES[serviceType],
+        listingId,
+        listingTitle: listing.title,
+        days,
+        pricePerUnit,
+      },
+    };
+  });
 }
 
 /**

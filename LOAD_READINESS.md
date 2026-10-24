@@ -159,3 +159,23 @@
   - Настраивается через переменные окружения: `DB_POOL_MAX` (по умолчанию 15; при 4 воркерах PM2 рекомендуется `DB_POOL_MAX=10`, суммарно 40 коннектов < лимита PostgreSQL), `DB_IDLE_TIMEOUT_MS=30000`, `DB_CONN_TIMEOUT_MS=5000`, `DB_STATEMENT_TIMEOUT_MS=15000`.
 - **Короткий кэш публичного чтения (`back-end/src/utils/publicCache.js`)**:
   - Кэшируются на 45–60 секунд ответы `GET /api/banners`, `GET /api/complexes`, `GET /api/complexes/:id`, `GET /api/developers`, `GET /api/developers/:id`, `GET /api/lawyers` (плюс 60 с кэш `getPricingSettings`), с мгновенным сбросом (`invalidatePublicCache`) при создании/обновлении/удалении через админку или кабинет застройщика.
+
+---
+
+## 8. Отчёт по Этапу 4: Платежи и конкурентность под нагрузкой
+
+### 8.1. Закрытие P2-07 (Отказ от неатомарного fallback в `activateSubscription`)
+- В `back-end/src/services/subscriptionsService.js` удалён неатомарный fallback на прямой `subscriptions.upsert` при ошибках RPC `activate_subscription_atomic` в продакшне:
+  - При сбое RPC (при наличии идемпотентного `paymentId`) выполняется до 2 попыток вызова `activate_subscription_atomic`.
+  - Если RPC по-прежнему возвращает ошибку (например, при кратковременной недоступности БД или конфликте блокировок), `activateSubscription` выбрасывает исключение `SUBSCRIPTION_ATOMIC_RPC_FAILED` вместо неатомарной перезаписи `subscriptions` без блокировки строки.
+  - В результате `fulfillPayment` (`back-end/src/services/payments/paymentsService.js`) сохраняет `status = 'approved'`, `fulfilled_at = NULL`, освобождает lease `fulfilling_at = NULL` и фиксирует попытку, чтобы следующий вебхук, поллинг или `cronService` безопасно довыдал подписку без потери дней и без риска двойного начисления.
+
+### 8.2. Сериализация и защита от спама счетов и гонок
+- **Защита от двойного клика при создании платежа (`withUserPaymentCreateLock` + `DOUBLE_CLICK_DEDUP_WINDOW_MS = 10 с`)**:
+  - Параллельные вызовы `createSubscriptionPayment` и `createPromotionPayment` для одного `userId` сериализуются; если за последние 10 секунд уже создан открытый счёт (`status = 'processing'`) на тот же тариф, период и сумму, возвращается существующий счёт (`deduplicated: true`) без повторного вызова `odengiClient.createInvoice`.
+- **Потолок открытых неоплаченных счетов (`MAX_PENDING_PAYMENTS_PER_USER = 5`)**:
+  - Если у пользователя уже есть 5 открытых счетов (`pending` или `processing`) за последние 24 часа, создание нового счёта отклоняется со статусом `429 Too Many Requests` (`too_many_pending`), защищая шлюз O!Dengi от спама.
+- **Сериализация одновременной покупки разных тарифов (`withUserActivationLock`)**:
+  - Параллельные вызовы `activateSubscription` для одного `userId` выполняются строго последовательно, поэтому при одновременной покупке двух разных тарифов (`start` + `optimal`) второй вызов считывает уже активированный первый тариф и корректно пересчитывает его остаток по правилу Pro-Rata без потери оплаченных дней.
+- **Автоматические тесты гонок (`back-end/security-tests/payments-concurrency-load.test.mjs`)**:
+  - Проверены все 5 сценариев: P2-07 (отказ от неатомарного upsert при ошибке RPC), двойной клик создания платежа, потолок 5 открытых счетов, 2 параллельных вебхука + клиентский поллинг по одному `order_id`, одновременная покупка двух тарифов.

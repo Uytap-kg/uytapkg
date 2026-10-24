@@ -557,7 +557,7 @@ curl -s https://uytap-backend.onrender.com/api/listings | head -n 20
 
 Приложение полностью готово к запуску как в **однопроцессном**, так и в **многопроцессном** (PM2 cluster / несколько реплик Docker) режиме без использования Redis:
 
-1. **Состояние безопасности и денег синхронизировано через PostgreSQL** (миграция `20261025000000_shared_state_and_locks.sql`):
+1. **Состояние безопасности и денег синхронизировано через PostgreSQL** (миграция `20261025010000_shared_state_and_locks.sql`):
    - `public.phone_otp_sessions` + RPC `consume_phone_otp_attempt`: сессии SMS OTP и атомарный счётчик попыток общие между всеми процессами (запрос кода на инстансе #1 и проверка кода на инстансе #2 работают бесшовно).
    - `public.rate_limit_counters` + RPC `check_and_increment_rate_limit`: межпроцессные счётчики лимитов отправки SMS/Email, входа (`/login`), проверки OTP (`/verify-otp`, `/verify-reset-code`) и суточных квот платных API.
    - `public.cron_leases` + RPC `try_acquire_cron_lease` / `release_cron_lease`: фоновая задача `runMaintenanceJob` захватывает межпроцессный lease-замок и выполняется ровно в одном процессе кластера, а внутри процесса защищена флагом `isMaintenanceRunning`.
