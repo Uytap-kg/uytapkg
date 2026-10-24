@@ -5815,5 +5815,20 @@ const ky = {
       update: "Турак жай комплексин жаңыртуу мүмкүн болгон жок",
     },
   },
+  matchedComplex: {
+    badge: "Турак жай комплекси",
+    foundEyebrow: "Сизге ылайыктуу долбоор",
+    projectLabel: "Сиз үчүн табылган ТЖК",
+    cardLabel: "Турак жай комплексинин карточкасы",
+    defaultName: "Турак жай комплекси",
+    dismiss: "Карточканы жашыруу",
+    developerLabel: "Куруучу компания",
+    addressLabel: "Дареги",
+    completionLabel: "Пайдаланууга берилет",
+    listingsFound: "Сатуудагы батирлер:",
+    showingListings: "Бул комплекстеги батирлер",
+    availableLabel: "Сунуштарды көрүү",
+    viewProject: "Турак жай комплекси жөнүндө",
+  },
 };
 export default ky;

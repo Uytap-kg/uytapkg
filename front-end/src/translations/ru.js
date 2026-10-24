@@ -5446,7 +5446,7 @@ const ru = {
     rooms: {
       one: "комната",
       many: "комнат",
-      few: "комнаты"
+      few: "комнаты",
     },
     details: "Подробнее",
   },
@@ -5571,6 +5571,22 @@ const ru = {
       delete: "Не удалось удалить жилой комплекс",
       update: "Не удалось обновить жилой комплекс",
     },
+  },
+
+  matchedComplex: {
+    badge: "Жилой комплекс",
+    foundEyebrow: "Подходящий проект",
+    projectLabel: "Ваш найденный ЖК",
+    cardLabel: "Карточка жилого комплекса",
+    defaultName: "Жилой комплекс",
+    dismiss: "Скрыть карточку",
+    developerLabel: "Застройщик",
+    addressLabel: "Адрес",
+    completionLabel: "Срок сдачи",
+    listingsFound: "Квартир в продаже:",
+    showingListings: "Квартиры этого ЖК",
+    availableLabel: "Смотрите предложения",
+    viewProject: "Подробнее о ЖК",
   },
 };
 
