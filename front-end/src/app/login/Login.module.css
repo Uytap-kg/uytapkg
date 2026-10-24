@@ -306,6 +306,24 @@
     0 0 20px rgba(72, 61, 246, 0.04);
 }
 
+.phoneHint {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: -6px 0 4px;
+  padding-left: 2px;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.phoneHint span {
+  flex-shrink: 0;
+  color: #1f10f1;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
 .method svg,
 .activeMethod svg {
   width: 17px;

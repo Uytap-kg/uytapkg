@@ -190,18 +190,25 @@ export default function Login() {
           >
             <form className={styles.form} onSubmit={handleLogin}>
               {method === "phone" ? (
-                <div className={styles.inputBox}>
-                  <Phone />
+                <>
+                  <div className={styles.inputBox}>
+                    <Phone />
 
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={handlePhone}
-                    placeholder="+996 555 555 555"
-                    autoComplete="tel"
-                    required
-                  />
-                </div>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={handlePhone}
+                      placeholder="+996 555 555 555"
+                      autoComplete="tel"
+                      required
+                    />
+                  </div>
+
+                  <p className={styles.phoneHint}>
+                    <span>⚠</span>
+                    Временно доступны только операторы Beeline и MEGA.
+                  </p>
+                </>
               ) : (
                 <div className={styles.inputBox}>
                   <Mail />
