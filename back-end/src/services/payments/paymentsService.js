@@ -11,6 +11,7 @@ import {
 import * as odengi from "../odengiService.js";
 import { alerts } from "../../utils/alerts.js";
 import { logger } from "../../utils/logger.js";
+import { evictExpiredAndCapMap } from "../../utils/boundedMap.js";
 import * as repo from "./paymentsRepo.js";
 
 export const PROMOTION_TARIFF_PREFIX = "promo_";
@@ -392,14 +393,17 @@ export async function reconcilePaymentStatus(payment, { force = false } = {}) {
     return payment;
   }
 
+  if (providerCheckThrottleMap.has(payment.order_id)) {
+    providerCheckThrottleMap.delete(payment.order_id);
+  }
   providerCheckThrottleMap.set(payment.order_id, now);
 
   if (providerCheckThrottleMap.size > MAX_THROTTLE_MAP_SIZE) {
-    for (const [key, timestamp] of providerCheckThrottleMap.entries()) {
-      if (now - timestamp >= ODENGI_THROTTLE_MS) {
-        providerCheckThrottleMap.delete(key);
-      }
-    }
+    evictExpiredAndCapMap(
+      providerCheckThrottleMap,
+      MAX_THROTTLE_MAP_SIZE,
+      (timestamp) => now - timestamp >= ODENGI_THROTTLE_MS
+    );
   }
 
   const statusData = await odengiClient.statusPayment({

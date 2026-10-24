@@ -26,6 +26,7 @@ import {
 } from "../ai/smartSearch.normalize.js";
 import { extractCategoryFeatures } from "../ai/smartSearch.features.js";
 import { resolveComplexFromText } from "../services/complexLookupService.js";
+import { setBoundedMap } from "../utils/boundedMap.js";
 
 // Числа с единицей площади (для локального парсера): «50 квадратов», «80 м2», «от 80 до 100 кв».
 const AREA_NUMBER_RE = new RegExp(`(?<![\\p{L}\\d.,])\\d+(?:[.,]\\d+)?\\s*${AREA_UNIT}`, "giu");
@@ -939,6 +940,7 @@ export const fallbackParse = (prompt) => {
 // Умный Поиск: вызов LLM с таймаутом, дедупликацией и LRU
 // =======================================================
 
+export const MAX_INFLIGHT_SEARCHES = 500;
 export const INFLIGHT_SEARCHES = new Map();
 
 const LOCAL_PARSER_SOURCE = "local-parser";
@@ -1079,7 +1081,7 @@ export const aiSearch = async (req, res) => {
       inflightPromise = executeAiSearch(prompt).finally(() => {
         INFLIGHT_SEARCHES.delete(cacheKey);
       });
-      INFLIGHT_SEARCHES.set(cacheKey, inflightPromise);
+      setBoundedMap(INFLIGHT_SEARCHES, cacheKey, inflightPromise, MAX_INFLIGHT_SEARCHES);
     }
 
     const { filters, matchedComplex, source, degraded } = await inflightPromise;

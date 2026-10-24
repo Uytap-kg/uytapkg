@@ -23,6 +23,8 @@ import logger from "./utils/logger.js";
 import requestContext from "./middleware/requestContext.js";
 import resolveClientIp from "./middleware/clientIp.js";
 import { enforceProductionSecrets } from "./config/runtimeCheck.js";
+import { BoundedSharedRateLimitStore } from "./utils/sharedState.js";
+import { ipKeyGenerator } from "./routes/authRoutes.js";
 
 dotenv.config();
 
@@ -111,13 +113,19 @@ app.get("/api/health/ready", async (req, res) => {
 
 // Глобальный базовый лимит на весь API (300 запросов/мин с IP). Более строгие
 // лимитеры на чувствительных маршрутах (auth, payments, upload, ai) — в routes/.
-// Хранилище в памяти: корректно для одного процесса (Render/VPS). При запуске
-// нескольких инстансов (pm2 cluster и т.п.) перенесите на Redis-store.
+// Хранилище ограничено в памяти (BoundedSharedRateLimitStore) для защиты от утечек при атаках с ротацией IP.
 app.use(
   "/api",
   rateLimit({
     windowMs: 60 * 1000,
     max: 300,
+    keyGenerator: (req) => ipKeyGenerator(req),
+    validate: { xForwardedForHeader: false },
+    store: new BoundedSharedRateLimitStore({
+      prefix: "rl:global_api:",
+      windowMs: 60 * 1000,
+      maxEntries: 20000,
+    }),
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => req.path.startsWith("/health"),

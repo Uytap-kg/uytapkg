@@ -37,6 +37,7 @@ import {
   MAX_DRAFTS_PER_USER,
 } from "../services/subscriptionsService.js";
 import { verifyAllOwnedBy } from "../utils/uploadOwnership.js";
+import { evictExpiredAndCapMap } from "../utils/boundedMap.js";
 
 // Удаляет из пользовательского объекта features системные ключи:
 // promotionExpiresAt, urgentExpiresAt, residentialComplexId,
@@ -844,6 +845,7 @@ export function getClientIp(req) {
 
 // Защита от спама просмотров: не чаще 1 инкремента с одного IP на объявление за 10 минут
 export const VIEW_THROTTLE_MS = 10 * 60 * 1000;
+export const VIEWS_THROTTLE_MAX_SIZE = 10000;
 export const viewsThrottleMap = new Map();
 
 export function shouldIncrementView(ip, listingId) {
@@ -854,15 +856,18 @@ export function shouldIncrementView(ip, listingId) {
   if (lastViewTime && now - lastViewTime < VIEW_THROTTLE_MS) {
     return false;
   }
+  if (viewsThrottleMap.has(key)) {
+    viewsThrottleMap.delete(key);
+  }
   viewsThrottleMap.set(key, now);
 
-  // Защита от утечки памяти при большом числе ключей
-  if (viewsThrottleMap.size > 10000) {
-    for (const [k, timestamp] of viewsThrottleMap.entries()) {
-      if (now - timestamp >= VIEW_THROTTLE_MS) {
-        viewsThrottleMap.delete(k);
-      }
-    }
+  // Защита от утечки памяти при большом числе ключей (TTL + FIFO)
+  if (viewsThrottleMap.size > VIEWS_THROTTLE_MAX_SIZE) {
+    evictExpiredAndCapMap(
+      viewsThrottleMap,
+      VIEWS_THROTTLE_MAX_SIZE,
+      (timestamp) => now - timestamp >= VIEW_THROTTLE_MS
+    );
   }
   return true;
 }

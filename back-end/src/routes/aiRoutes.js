@@ -2,6 +2,8 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import { aiSearch, aiGenerateDescription } from "../controllers/aiController.js";
 import { authenticateToken } from "../middleware/auth.js";
+import { BoundedSharedRateLimitStore } from "../utils/sharedState.js";
+import { ipKeyGenerator } from "./authRoutes.js";
 
 const router = express.Router();
 
@@ -14,6 +16,14 @@ const router = express.Router();
 const aiSearchLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 30,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:ai_search:",
+    windowMs: 5 * 60 * 1000,
+    maxEntries: 5000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много запросов умного поиска. Попробуйте снова через несколько минут.",
@@ -23,6 +33,14 @@ const aiSearchLimiter = rateLimit({
 const aiDescriptionLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:ai_desc:",
+    windowMs: 15 * 60 * 1000,
+    maxEntries: 5000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много запросов генерации описания. Попробуйте снова через 15 минут.",

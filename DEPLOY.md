@@ -550,3 +550,21 @@ curl -s https://uytap-backend.onrender.com/api/listings | head -n 20
   1. Откройте логи деплоя в Render Dashboard, найдите имя упавшего SQL-файла.
   2. Исправьте синтаксис в локальном окружении, проверьте через `node back-end/scripts/migrate.js`.
   3. Запушьте исправление в PR. Старая версия бэкенда все это время продолжает обслуживать пользователей без даунтайма.
+
+---
+
+## 11. Запуск на VPS в многопроцессном режиме (PM2 / Docker + Nginx)
+
+Приложение полностью готово к запуску как в **однопроцессном**, так и в **многопроцессном** (PM2 cluster / несколько реплик Docker) режиме без использования Redis:
+
+1. **Состояние безопасности и денег синхронизировано через PostgreSQL** (миграция `20261025000000_shared_state_and_locks.sql`):
+   - `public.phone_otp_sessions` + RPC `consume_phone_otp_attempt`: сессии SMS OTP и атомарный счётчик попыток общие между всеми процессами (запрос кода на инстансе #1 и проверка кода на инстансе #2 работают бесшовно).
+   - `public.rate_limit_counters` + RPC `check_and_increment_rate_limit`: межпроцессные счётчики лимитов отправки SMS/Email, входа (`/login`), проверки OTP (`/verify-otp`, `/verify-reset-code`) и суточных квот платных API.
+   - `public.cron_leases` + RPC `try_acquire_cron_lease` / `release_cron_lease`: фоновая задача `runMaintenanceJob` захватывает межпроцессный lease-замок и выполняется ровно в одном процессе кластера, а внутри процесса защищена флагом `isMaintenanceRunning`.
+2. **Ограничение памяти (Bounded In-Memory Maps):**
+   - Все локальные кэши (`userAuthCache`, `SEARCH_CACHE`, `providerCheckThrottleMap`, `viewsThrottleMap`, `BoundedSharedRateLimitStore`, `sttRateLimitMap`) имеют жёсткий верхний предел размера и вытеснение по TTL + FIFO/LRU.
+3. **Переменные окружения для многопроцессного запуска:**
+   - `DATABASE_URL` — строка подключения к PostgreSQL (или порт `6543` Supavisor/PgBouncer).
+   - `DB_POOL_MAX` — размер пула `pg.Pool` **на один процесс** (по умолчанию `10`; при запуске `N=2` воркеров суммарно до `20` коннектов, при `N=4` рекомендуется `DB_POOL_MAX=5..8`).
+   - `INTERNAL_PROXY_SECRET` — единый секрет между Nginx / Next.js и всеми воркерами Express для доверенной передачи реального IP клиента (`X-Forwarded-For`).
+   - Конфигурационные шаблоны находятся в каталоге `deploy/` (`deploy/ecosystem.config.cjs`, `deploy/docker-compose.yml`, `deploy/nginx.conf.example`).

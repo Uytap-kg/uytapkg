@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import sharp from "sharp";
+import { setBoundedMap } from "./boundedMap.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = path.join(__dirname, "..", "assets", "watermark-logo.png");
@@ -91,10 +92,8 @@ async function getResizedLogo(targetWidth) {
   const result = { whitePng, shadowPng, width: info.width, height: info.height };
 
   // Кэш маленький и ограниченный (ширины водяного знака укладываются в
-  // WATERMARK_MIN_WIDTH..WATERMARK_MAX_WIDTH), но на всякий случай не даём
-  // ему расти бесконечно при очень разных размерах фото.
-  if (resizedLogoCache.size > 50) resizedLogoCache.clear();
-  resizedLogoCache.set(targetWidth, result);
+  // WATERMARK_MIN_WIDTH..WATERMARK_MAX_WIDTH), вытесняем старейший по FIFO/LRU (без сброса всего кэша).
+  setBoundedMap(resizedLogoCache, targetWidth, result, 50);
 
   return result;
 }

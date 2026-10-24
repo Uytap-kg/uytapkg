@@ -5,9 +5,11 @@
 // Всегда дублирует запись в структурный logger.
 
 import logger from "./logger.js";
+import { evictExpiredAndCapMap } from "./boundedMap.js";
 
 const DEDUPLICATION_WINDOW_MS = 5 * 60 * 1000; // 5 минут
 const TELEGRAM_TIMEOUT_MS = 3000; // 3 секунды
+export const MAX_ALERT_DEDUP_CACHE_SIZE = 1000;
 
 // Кэш для дедупликации: key -> timestamp последней отправки
 const alertDeduplicationCache = new Map();
@@ -28,15 +30,18 @@ function shouldSendAlert(key) {
   if (lastSent && now - lastSent < DEDUPLICATION_WINDOW_MS) {
     return false;
   }
+  if (alertDeduplicationCache.has(key)) {
+    alertDeduplicationCache.delete(key);
+  }
   alertDeduplicationCache.set(key, now);
 
-  // Очистка старых записей из кэша (memory leak protection)
-  if (alertDeduplicationCache.size > 1000) {
-    for (const [k, ts] of alertDeduplicationCache.entries()) {
-      if (now - ts >= DEDUPLICATION_WINDOW_MS) {
-        alertDeduplicationCache.delete(k);
-      }
-    }
+  // Очистка старых записей из кэша + FIFO-вытеснение при переполнении
+  if (alertDeduplicationCache.size > MAX_ALERT_DEDUP_CACHE_SIZE) {
+    evictExpiredAndCapMap(
+      alertDeduplicationCache,
+      MAX_ALERT_DEDUP_CACHE_SIZE,
+      (ts) => now - ts >= DEDUPLICATION_WINDOW_MS
+    );
   }
 
   return true;

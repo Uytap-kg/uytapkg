@@ -1,5 +1,6 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
+import { BoundedSharedRateLimitStore } from "../utils/sharedState.js";
 import {
   register,
   login,
@@ -101,6 +102,12 @@ export const rateLimitVerify = rateLimit({
   skipSuccessfulRequests: true, // Учитываем только неудачные попытки (статус >= 400)
   keyGenerator: verifyKeyGenerator,
   validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:verify:",
+    windowMs: 15 * 60 * 1000,
+    maxEntries: 10000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много неудачных попыток ввода кода с вашего IP-адреса. Попробуйте снова через 15 минут.",
@@ -118,6 +125,12 @@ export const loginLimiter = rateLimit({
     return `${ipKeyGenerator(req)}|${identifier}`;
   },
   validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:login:",
+    windowMs: 15 * 60 * 1000,
+    maxEntries: 10000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много попыток входа. Попробуйте снова через 15 минут.",
@@ -134,6 +147,12 @@ export const sendOtpLimiter = rateLimit({
     return email || phone || ipKeyGenerator(req);
   },
   validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:send_otp:",
+    windowMs: 60 * 1000,
+    maxEntries: 10000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много запросов на отправку кода. Подождите минуту.",
@@ -146,6 +165,12 @@ export const authLimiter = rateLimit({
   max: 100,
   keyGenerator: (req) => ipKeyGenerator(req),
   validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:auth:",
+    windowMs: 15 * 60 * 1000,
+    maxEntries: 10000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много запросов. Попробуйте снова через 15 минут.",

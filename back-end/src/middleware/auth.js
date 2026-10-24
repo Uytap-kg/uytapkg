@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import { supabase } from "../config/db.js";
+import { evictExpiredAndCapMap } from "../utils/boundedMap.js";
 
 dotenv.config();
 
@@ -37,6 +38,27 @@ export function invalidateUserAuthCache(userId) {
 
 export function clearUserAuthCache() {
   userAuthCache.clear();
+}
+
+function storeUserInAuthCache(userId, userRole, fetchedUser, now) {
+  if (userAuthCache.has(userId)) {
+    userAuthCache.delete(userId);
+  }
+  userAuthCache.set(userId, {
+    role: userRole,
+    account_type: fetchedUser.account_type,
+    token_version: fetchedUser.token_version ?? 0,
+    email: fetchedUser.email,
+    cachedAt: now,
+  });
+
+  if (userAuthCache.size > MAX_AUTH_CACHE_SIZE) {
+    evictExpiredAndCapMap(
+      userAuthCache,
+      MAX_AUTH_CACHE_SIZE,
+      (item) => now - item.cachedAt >= AUTH_CACHE_TTL_MS
+    );
+  }
 }
 
 // Middleware для проверки токена доступа
@@ -113,22 +135,7 @@ export const authenticateToken = (req, res, next) => {
         } else if (fetchedUser) {
           userRole = fetchedUser.role || "user";
           dbUser = fetchedUser;
-
-          userAuthCache.set(userId, {
-            role: userRole,
-            account_type: fetchedUser.account_type,
-            token_version: fetchedUser.token_version ?? 0,
-            email: fetchedUser.email,
-            cachedAt: now,
-          });
-
-          if (userAuthCache.size > MAX_AUTH_CACHE_SIZE) {
-            for (const [uid, item] of userAuthCache.entries()) {
-              if (now - item.cachedAt >= AUTH_CACHE_TTL_MS) {
-                userAuthCache.delete(uid);
-              }
-            }
-          }
+          storeUserInAuthCache(userId, userRole, fetchedUser, now);
         }
       }
 
@@ -220,22 +227,7 @@ export const optionalAuth = (req, res, next) => {
 
         userRole = fetchedUser.role || "user";
         dbUser = fetchedUser;
-
-        userAuthCache.set(userId, {
-          role: userRole,
-          account_type: fetchedUser.account_type,
-          token_version: fetchedUser.token_version ?? 0,
-          email: fetchedUser.email,
-          cachedAt: now,
-        });
-
-        if (userAuthCache.size > MAX_AUTH_CACHE_SIZE) {
-          for (const [uid, item] of userAuthCache.entries()) {
-            if (now - item.cachedAt >= AUTH_CACHE_TTL_MS) {
-              userAuthCache.delete(uid);
-            }
-          }
-        }
+        storeUserInAuthCache(userId, userRole, fetchedUser, now);
       }
 
       if (!dbUser || (dbUser.token_version ?? 0) !== tokenVersion) {

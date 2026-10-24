@@ -11,18 +11,23 @@ const MAX_CONTENT_LENGTH_BYTES = MAX_AUDIO_SIZE_BYTES + 64 * 1024;
 // Rate limit: не более 5 запросов в минуту с одного IP для защиты баланса ElevenLabs
 export const STT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 export const STT_RATE_LIMIT_MAX = 5;
-const MAX_STT_MAP_SIZE = 5000;
+export const MAX_STT_MAP_SIZE = 5000;
 export const sttRateLimitMap = new Map();
 
 function checkSttRateLimit(ip) {
   const key = ip || "unknown";
   const now = Date.now();
 
-  if (sttRateLimitMap.size > MAX_STT_MAP_SIZE) {
+  if (sttRateLimitMap.size >= MAX_STT_MAP_SIZE && !sttRateLimitMap.has(key)) {
     for (const [k, timestamps] of sttRateLimitMap.entries()) {
       const valid = timestamps.filter((t) => now - t < STT_RATE_LIMIT_WINDOW_MS);
       if (valid.length === 0) sttRateLimitMap.delete(k);
       else sttRateLimitMap.set(k, valid);
+    }
+    while (sttRateLimitMap.size >= MAX_STT_MAP_SIZE) {
+      const oldestKey = sttRateLimitMap.keys().next().value;
+      if (oldestKey === undefined) break;
+      sttRateLimitMap.delete(oldestKey);
     }
   }
 
@@ -39,6 +44,9 @@ function checkSttRateLimit(ip) {
   }
 
   history.push(now);
+  if (sttRateLimitMap.has(key)) {
+    sttRateLimitMap.delete(key);
+  }
   sttRateLimitMap.set(key, history);
   return { allowed: true, retryAfter: 0 };
 }

@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { supabase } from "../config/db.js";
 import { registerSchema, loginSchema, updateMeSchema, normalizePhone } from "../utils/validation.js";
 import { generateSecureOtp, safeCompare } from "../utils/otp.js";
+import { addBoundedSet } from "../utils/boundedMap.js";
 import { sendOtpEmail } from "../services/emailService.js";
 import nikitaService from "../services/nikitaService.js";
 import { generateToken, invalidateUserAuthCache } from "../middleware/auth.js";
@@ -100,8 +101,9 @@ export function hashOtpCode(code) {
   return crypto.createHmac("sha256", secret).update(String(code)).digest("hex");
 }
 
-// Защита от параллельных запросов на один email внутри процесса
-const otpInFlight = new Set();
+// Защита от параллельных запросов на один email внутри процесса (с верхним пределом размера)
+export const MAX_OTP_INFLIGHT = 5000;
+export const otpInFlight = new Set();
 
 // Проверка кулдауна, часового и суточного лимитов отправки кодов для email.
 // Возвращает { message } при превышении, иначе null.
@@ -213,7 +215,7 @@ async function guardedIssueOtp(email, { type = "registration", dryRun = false } 
   if (otpInFlight.has(flightKey) || otpInFlight.has(email)) {
     return { message: "Повторная отправка возможна через 60 секунд" };
   }
-  otpInFlight.add(flightKey);
+  addBoundedSet(otpInFlight, flightKey, MAX_OTP_INFLIGHT);
   try {
     const limited = await checkOtpSendLimits(email, type);
     if (limited) return limited;
