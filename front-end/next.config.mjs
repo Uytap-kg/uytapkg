@@ -52,14 +52,10 @@ const supabasePattern = getSupabaseRemotePattern();
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   devIndicators: false,
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${targetApiUrl}/:path*`,
-      },
-    ];
-  },
+  // Rewrites закомментированы: проксирование выполняется через Route Handler
+  // front-end/src/app/api/[...path]/route.js, который корректно внедряет
+  // заголовок x-internal-proxy-secret и доверенный IP клиента (applyTrustedForwardedFor).
+  // При активном rewrites Vercel Edge перехватывает /api/* и не передаёт секрет.
   images: {
     // Список конкретных хостов вместо "**" — next/image проксирует
     // и скачивает изображения на сервере, поэтому разрешение любого

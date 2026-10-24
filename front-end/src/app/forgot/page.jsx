@@ -38,6 +38,7 @@ export default function Forgot() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [phonePrefix, setPhonePrefix] = useState("+996");
+  const [otpToken, setOtpToken] = useState("");
 
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -55,7 +56,13 @@ export default function Forgot() {
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  const normalizedPhone = `${phonePrefix}${phone.replace(/\D/g, "")}`;
+  const rawDigits = phone.replace(/\D/g, "");
+  const cleanDigits = rawDigits.startsWith("996")
+    ? rawDigits.slice(3)
+    : rawDigits.startsWith("0")
+    ? rawDigits.slice(1)
+    : rawDigits;
+  const normalizedPhone = cleanDigits ? `+996${cleanDigits}` : "";
 
   const contact = method === "email" ? normalizedEmail : normalizedPhone;
 
@@ -93,6 +100,7 @@ export default function Forgot() {
     setStep(1);
     setCode("");
     setResetToken("");
+    setOtpToken("");
     setPassword("");
     setConfirmPassword("");
     setSuccessMessage("");
@@ -150,6 +158,10 @@ export default function Forgot() {
     try {
       const data = await requestPasswordReset(normalizedPhone);
 
+      if (data?.token) {
+        setOtpToken(data.token);
+      }
+
       setCountdown(60);
       setInfoMessage(
         data?.message || "Если аккаунт существует, код отправлен по SMS.",
@@ -180,6 +192,10 @@ export default function Forgot() {
     try {
       const target = method === "email" ? normalizedEmail : normalizedPhone;
       const data = await requestPasswordReset(target);
+
+      if (data?.token) {
+        setOtpToken(data.token);
+      }
 
       setCountdown(60);
       setInfoMessage(
@@ -221,7 +237,7 @@ export default function Forgot() {
 
     try {
       const target = method === "email" ? normalizedEmail : normalizedPhone;
-      const data = await verifyPasswordResetCode(target, cleanCode);
+      const data = await verifyPasswordResetCode(target, cleanCode, otpToken);
 
       if (!data?.resetToken) {
         setErrorMessage("Сервер не вернул токен для сброса пароля.");
@@ -289,6 +305,7 @@ export default function Forgot() {
       setStep(1);
       setCode("");
       setResetToken("");
+      setOtpToken("");
     } else {
       router.push("/login");
     }

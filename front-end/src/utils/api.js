@@ -248,9 +248,11 @@ export async function requestPasswordReset(identifier) {
   return data;
 }
 
-export async function verifyPasswordResetCode(identifier, code) {
+export async function verifyPasswordResetCode(identifier, code, token) {
   const isEmail = typeof identifier === "string" && identifier.includes("@");
-  const payload = isEmail ? { email: identifier, code } : { phone: identifier, code };
+  const payload = isEmail
+    ? { email: identifier, code }
+    : { phone: identifier, code, ...(token ? { token } : {}) };
   const response = await fetch(`${API_URL}/auth/verify-reset-code`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
