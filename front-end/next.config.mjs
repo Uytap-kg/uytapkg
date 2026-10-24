@@ -51,6 +51,7 @@ const supabasePattern = getSupabaseRemotePattern();
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  devIndicators: false,
   async rewrites() {
     return [
       {
