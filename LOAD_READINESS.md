@@ -179,3 +179,38 @@
   - Параллельные вызовы `activateSubscription` для одного `userId` выполняются строго последовательно, поэтому при одновременной покупке двух разных тарифов (`start` + `optimal`) второй вызов считывает уже активированный первый тариф и корректно пересчитывает его остаток по правилу Pro-Rata без потери оплаченных дней.
 - **Автоматические тесты гонок (`back-end/security-tests/payments-concurrency-load.test.mjs`)**:
   - Проверены все 5 сценариев: P2-07 (отказ от неатомарного upsert при ошибке RPC), двойной клик создания платежа, потолок 5 открытых счетов, 2 параллельных вебхука + клиентский поллинг по одному `order_id`, одновременная покупка двух тарифов.
+
+---
+
+## 10. Этап 5: Выполненные изменения (эксплуатационная устойчивость, P2-08, P2-09, логирование, Nginx/PM2/Docker и мониторинг)
+
+### 10.1 Закрытые риски кода и инфраструктуры
+- **P2-09 (Полный `gracefulShutdown` и HTTP-таймауты в `back-end/src/index.js`)**:
+  - Настроены таймауты HTTP-сервера против медленных клиентов (Slowloris) и гонок Keep-Alive с Nginx: `server.requestTimeout = 30000`, `server.headersTimeout = 35000`, `server.keepAliveTimeout = 65000`.
+  - В `gracefulShutdown(signal)` при получении `SIGTERM`/`SIGINT`:
+    1. Останавливаются фоновые задачи (`stopCronService()`) и периодический таймер батчера счётчиков (`stopCounterBatcher()`).
+    2. Сервер перестаёт принимать новые соединения (`server.close(...)`) и дожидается завершения активных HTTP-запросов.
+    3. Сбрасываются накопленные в памяти дельты просмотров объявлений и показов/кликов баннеров (`await flushAllCounters()`).
+    4. Корректно закрывается пул соединений PostgreSQL (`await dbPool.end()`).
+    5. Защитный таймер 25 с (`unref()`) гарантирует выход при зависании внешних сокетов.
+- **P2-08 (Устранение утечки `error.message` в ответах 500)**:
+  - Во всех оставшихся контроллерах (`uploadController.js`, `bannersController.js`, `authController.js`, `adminController.js`, `tariffsController.js`, `subscriptionsController.js`) и глобальном обработчике ошибок `index.js` ответы 500 возвращают только безопасное обобщённое сообщение и `requestId: req?.id`, а полная диагностика записывается только в серверный лог.
+- **Защита логирования от шторма ошибок (`back-end/src/utils/logger.js`)**:
+  - Добавлен ограничитель частоты одинаковых `warn`/`error` сообщений (`LOG_BURST_MAX_PER_WINDOW = 20` за `LOG_BURST_WINDOW_MS = 10000` мс, до 500 ключей в памяти). При превышении порога дубликаты подавляются, а в следующем окне логируется счётчик `suppressedSimilarLogs`.
+  - Строковые поля длиннее 2000 символов автоматически усекаются (`...[truncated]`) для защиты диска и stdout-пайпа от переполнения.
+- **Конфигурации продакшн-окружения (`deploy/`)**:
+  - `deploy/nginx.conf.example`: зоны `limit_req_zone` (`uytap_api_general` 10r/s, `uytap_api_auth` 1r/s, `uytap_api_heavy` 2r/s) и `limit_conn_zone` (30 коннектов с IP), `client_max_body_size` (256k для auth, 12m для загрузок), передача `X-Internal-Proxy-Secret`, `keepalive` к апстримам, Gzip-сжатие и кэширование `/_next/static/` на 365 дней.
+  - `deploy/ecosystem.config.cjs`: PM2 cluster-конфигурация для `uytap-backend` и `uytap-frontend` с `kill_timeout: 30000`, `max_memory_restart`, `--max-old-space-size` и переменными пула БД.
+  - `deploy/docker-compose.yml`: конфигурация контейнеров с лимитами CPU/RAM, ротацией `json-file` логов (`max-size: 20m`, `max-file: 5`), `stop_grace_period: 30s` и `healthcheck` по `/api/health/ready`.
+
+### 10.2 Метрики мониторинга и пороги для алертов в продакшне
+
+| Метрика | Источник / Запрос | Порог Warning | Порог Critical | Действие при срабатывании |
+|---|---|---|---|---|
+| **Доля ответов 5xx** | Nginx access.log / логгер (`level="error"`) | `> 0.5%` за 5 мин | `> 2.0%` за 5 мин | Проверить `/api/health/ready`, логи по `requestId` и статус Supabase/PostgreSQL |
+| **Задержка API (p95 / p99)** | Nginx `$request_time` для `/api/*` (кроме `/api/ai`) | `p95 > 400 мс`, `p99 > 1000 мс` | `p95 > 1000 мс`, `p99 > 2500 мс` | Проверить активные запросы в `pg_stat_activity` и срабатывание `statement_timeout` (15с) |
+| **Память процесса (RSS)** | PM2 (`pm2 monit`) / Docker stats | Backend `> 380 МБ`, Frontend `> 600 МБ` | Backend `> 480 МБ`, Frontend `> 720 МБ` | PM2 автоматически выполнит graceful reload при `512M` / `768M` |
+| **Зависшие оплаченные платежи** | SQL: `SELECT count(*) FROM payments WHERE status = 'approved' AND fulfilled_at IS NULL AND paid_at < NOW() - INTERVAL '5 minutes'` | `>= 1` платёж старше 5 мин | `>= 1` платёж с `fulfill_attempts > 3` (лог `[CRITICAL PAYMENT ALERT]`) | Проверить `fulfill_error` в админке (`/admin/payments`) и вызвать `POST /api/admin/payments/:id/refulfill` |
+| **Расход суточной квоты SMS** | SQL: `SELECT count FROM rate_limit_counters WHERE key = 'quota:sms:daily:' \|\| to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD')` | `> 350` (70% от 500) | `>= 480` (96% от 500) | Проверить баланс Nikita SMS и топ IP по `rl:send_otp_ip:*` |
+| **Расход суточной квоты AI / STT** | SQL: `SELECT key, count FROM rate_limit_counters WHERE key LIKE 'quota:ai:daily:%' OR key LIKE 'quota:stt:daily:%'` | `> 70%` от суточного лимита (`2100` AI / `350` STT) | `>= 95%` от суточного лимита (`2850` AI / `475` STT) | Проверить расход токенов Claude/Gemini и квоту ElevenLabs |
+| **Недоступность readiness-пробы** | HTTP `GET /api/health/ready` каждые 15 с | 1 отказ (`503`) | 3 отказа подряд (`45 с`) | Проверить соединение с Supabase / пулом PostgreSQL |

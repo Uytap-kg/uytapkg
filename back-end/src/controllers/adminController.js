@@ -812,9 +812,10 @@ export const createInstagramRequestAdmin = async (req, res) => {
     }
 
     console.error("Admin Create Instagram Request Error:", error);
-    return res.status(error.status || 500).json({
+    return res.status(500).json({
       success: false,
-      message: error.message || "Ошибка сервера при создании заявки",
+      message: "Ошибка сервера при создании заявки",
+      requestId: req?.id,
     });
   }
 };

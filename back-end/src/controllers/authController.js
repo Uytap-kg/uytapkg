@@ -1203,7 +1203,8 @@ export const uploadUserAvatar = async (req, res) => {
     console.error("Upload Avatar Error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Ошибка сервера при загрузке аватара",
+      message: "Ошибка сервера при загрузке аватара",
+      requestId: req?.id,
     });
   }
 };
@@ -2399,7 +2400,8 @@ export const uploadVerificationDocument = async (req, res) => {
     console.error("Upload Verification Document Error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Ошибка сервера при загрузке документа",
+      message: "Ошибка сервера при загрузке документа",
+      requestId: req?.id,
     });
   }
 };

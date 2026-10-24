@@ -124,7 +124,8 @@ export const uploadBannerImage = async (req, res) => {
     console.error("Upload Banner Image Error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Не удалось загрузить изображение",
+      message: "Не удалось загрузить изображение",
+      requestId: req?.id,
     });
   }
 };
