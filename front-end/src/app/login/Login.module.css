@@ -223,7 +223,7 @@
 }
 
 .activeTab {
-  background: #483df6 !important;
+  background: #1f10f1 !important;
   color: #fff !important;
 
   box-shadow:
@@ -298,8 +298,8 @@
 }
 
 .activeMethod {
-  background: rgba(72, 61, 246, 0.1);
-  color: #483df6;
+  background-color: #1f10f1;
+  color: #ffff;
 
   box-shadow:
     inset 0 0 0 1px rgba(72, 61, 246, 0.2),
