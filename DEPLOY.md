@@ -553,7 +553,23 @@ curl -s https://uytap-backend.onrender.com/api/listings | head -n 20
 
 ---
 
-## 11. Запуск на VPS в многопроцессном режиме (PM2 / Docker + Nginx)
+## 11. Особенности эксплуатации под нагрузкой на Render и при переходе на VPS (PM2 / Docker + Nginx)
+
+### 11.1. Работа на Render (Starter 512 MB RAM / 0.5 CPU и горизонтальное масштабирование инстансов)
+В `render.yaml` уже заложены все настройки для стабильной работы на Render без падений по памяти (OOM 137) и без потери реальных IP клиентов:
+1. **Защита от OOM в контейнере 512 МБ (`NODE_OPTIONS` и `SHARP_*`)**:
+   - Для `uytap-backend` и `uytap-frontend` задано `NODE_OPTIONS="--max-old-space-size=384"`, чтобы сборщик мусора V8 освобождал память до достижения жёсткого лимита контейнера Render Starter (512 MB).
+   - В `watermark.js` отключён нативный кэш `sharp.cache(false)` и через `SHARP_CONCURRENCY=1`, `SHARP_MAX_CONCURRENT=2` ограничен параллелизм `libvips`, чтобы обработка фотографий не создавала пиков нативной C++ памяти вне V8 heap.
+2. **Корректное определение реального IP клиента на Render**:
+   - Внешний периметр Render работает через Cloudflare и передаёт реальный IP пользователя в заголовках `CF-Connecting-IP` и `True-Client-IP`, а также автоматически выставляет переменную `RENDER=true`.
+   - Фронтенд-прокси (`front-end/src/app/api/_lib/forwardedFor.js`) при `RENDER=true` или `ENABLE_CLOUDFLARE=true` извлекает реальный IP посетителя и передаёт его в `uytap-backend` вместе с заголовком `X-Internal-Proxy-Secret` (`INTERNAL_PROXY_SECRET`).
+   - Для прямых запросов к `uytap-backend.onrender.com` (например, вебхуки O!Dengi) middleware `resolveClientIp` при `RENDER=true` считывает `true-client-ip` / `cf-connecting-ip`, не позволяя всем клиентам слиться в один внутренний IP балансировщика Render (`10.x.x.x`).
+3. **Zero-Downtime Deploys и `preDeployCommand` на Render**:
+   - Миграции БД (`npm run migrate`), включая `20261025010000_shared_state_and_locks.sql` и `20261025020000_load_indexes_and_batch_counters.sql`, автоматически выполняются на шаге `preDeployCommand` перед переключением трафика.
+   - При остановке старого контейнера Render посылает `SIGTERM` и ждёт до 30 секунд — `gracefulShutdown` в `src/index.js` (таймаут 25 с) успевает завершить активные запросы, сбросить буфер просмотров/кликов (`flushAllCounters()`) и закрыть `dbPool.end()`.
+   - Если в настройках Render увеличить число инстансов (`Scaling -> Instances > 1`), сессии SMS OTP, лимиты/квоты и `cron_leases` автоматически синхронизируются через PostgreSQL.
+
+### 11.2. Запуск на VPS в многопроцессном режиме (PM2 / Docker + Nginx)
 
 Приложение полностью готово к запуску как в **однопроцессном**, так и в **многопроцессном** (PM2 cluster / несколько реплик Docker) режиме без использования Redis:
 
@@ -565,6 +581,6 @@ curl -s https://uytap-backend.onrender.com/api/listings | head -n 20
    - Все локальные кэши (`userAuthCache`, `SEARCH_CACHE`, `providerCheckThrottleMap`, `viewsThrottleMap`, `BoundedSharedRateLimitStore`, `sttRateLimitMap`) имеют жёсткий верхний предел размера и вытеснение по TTL + FIFO/LRU.
 3. **Переменные окружения для многопроцессного запуска:**
    - `DATABASE_URL` — строка подключения к PostgreSQL (или порт `6543` Supavisor/PgBouncer).
-   - `DB_POOL_MAX` — размер пула `pg.Pool` **на один процесс** (по умолчанию `10`; при запуске `N=2` воркеров суммарно до `20` коннектов, при `N=4` рекомендуется `DB_POOL_MAX=5..8`).
+   - `DB_POOL_MAX` — размер пула `pg.Pool` **на один процесс** (по умолчанию `10`; на Render Starter задано `5`; при запуске `N=2` воркеров на VPS суммарно до `20` коннектов).
    - `INTERNAL_PROXY_SECRET` — единый секрет между Nginx / Next.js и всеми воркерами Express для доверенной передачи реального IP клиента (`X-Forwarded-For`).
-   - Конфигурационные шаблоны находятся в каталоге `deploy/` (`deploy/ecosystem.config.cjs`, `deploy/docker-compose.yml`, `deploy/nginx.conf.example`).
+   - Конфигурационные шаблоны находятся в `render.yaml` (для Render) и в каталоге `deploy/` (`deploy/ecosystem.config.cjs`, `deploy/docker-compose.yml`, `deploy/nginx.conf.example` для VPS).

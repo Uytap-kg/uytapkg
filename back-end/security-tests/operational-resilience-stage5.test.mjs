@@ -103,4 +103,10 @@ test("Stage 5 (Deploy Configs): наличие и полнота deploy/nginx.co
   const dockerConf = fs.readFileSync(path.join(REPO_ROOT, "deploy/docker-compose.yml"), "utf8");
   assert.ok(dockerConf.includes("stop_grace_period: 30s"), "docker-compose.yml должен задавать stop_grace_period: 30s");
   assert.ok(dockerConf.includes("max-size"), "docker-compose.yml должен ограничивать размер логов контейнеров");
+
+  const renderConf = fs.readFileSync(path.join(REPO_ROOT, "render.yaml"), "utf8");
+  assert.ok(renderConf.includes("--max-old-space-size=384"), "render.yaml должен ограничивать V8 heap под 512 MB Starter");
+  assert.ok(renderConf.includes("SHARP_CONCURRENCY"), "render.yaml должен задавать SHARP_CONCURRENCY для защиты от OOM");
+  assert.ok(renderConf.includes("ENABLE_CLOUDFLARE"), "render.yaml должен включать ENABLE_CLOUDFLARE для периметра Render");
 });
+

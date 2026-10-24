@@ -5,8 +5,13 @@ import sharp from "sharp";
 import { setBoundedMap } from "./boundedMap.js";
 import { Semaphore } from "./semaphore.js";
 
+// Ограничиваем нативный кэш и число потоков libvips (особенно важно для Render Starter 512 MB RAM / 0.5 CPU,
+// где os.cpus() возвращает ядра всего хоста, а нативный кэш libvips по умолчанию держит до 50 МБ вне V8 heap).
+sharp.cache(false);
+sharp.concurrency(Math.max(1, Number(process.env.SHARP_CONCURRENCY) || 2));
+
 export const sharpSemaphore = new Semaphore({
-  maxConcurrent: 4,
+  maxConcurrent: Math.max(1, Number(process.env.SHARP_MAX_CONCURRENT) || 4),
   maxQueue: 50,
   acquireTimeoutMs: 15000,
   name: "sharp_watermark",
