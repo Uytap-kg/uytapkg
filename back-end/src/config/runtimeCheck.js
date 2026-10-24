@@ -37,12 +37,49 @@ export function checkProductionSecrets(env = process.env) {
 }
 
 /**
+ * Проверка боевой конфигурации платёжного шлюза O!Dengi в production-режиме (P1-05).
+ */
+export function checkProductionOdengiConfig(env = process.env) {
+  const errors = [];
+
+  if (env.ODENGI_TEST !== "0") {
+    errors.push(
+      "КРИТИЧЕСКАЯ ОШИБКА КОНФИГУРАЦИИ: В production режиме ODENGI_TEST обязан быть равен '0' (боевой режим O!Dengi)."
+    );
+  }
+
+  const resultUrl = typeof env.ODENGI_RESULT_URL === "string" ? env.ODENGI_RESULT_URL.trim() : "";
+  let isValidWebhookUrl = false;
+  if (resultUrl) {
+    try {
+      const parsed = new URL(resultUrl);
+      isValidWebhookUrl =
+        (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+        parsed.pathname.replace(/\/+$/, "") === "/api/payments/webhook";
+    } catch {
+      isValidWebhookUrl = false;
+    }
+  }
+
+  if (!isValidWebhookUrl) {
+    errors.push(
+      "КРИТИЧЕСКАЯ ОШИБКА КОНФИГУРАЦИИ: В production режиме ODENGI_RESULT_URL обязан указывать на /api/payments/webhook."
+    );
+  }
+
+  return errors;
+}
+
+/**
  * Вызывает process.exit(1) при обнаружении ошибок конфигурации в production.
  */
 export function enforceProductionSecrets(env = process.env) {
   if (env.NODE_ENV !== "production") return;
 
-  const errors = checkProductionSecrets(env);
+  const errors = [
+    ...checkProductionSecrets(env),
+    ...checkProductionOdengiConfig(env),
+  ];
   if (errors.length > 0) {
     for (const msg of errors) {
       logger.error(msg);

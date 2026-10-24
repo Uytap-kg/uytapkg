@@ -11,12 +11,6 @@ import { odengiConfig, assertOdengiConfigured } from "../config/odengi.js";
 /**
  * Подпись запроса: HMAC-MD5 от компактного (без пробелов) JSON тела
  * запроса БЕЗ поля "hash", с паролем мерчанта в качестве ключа.
- *
- * Источник: вкладка "Формирование hash для подписи запроса" в
- * личном кабинете sandbox (https://sandbox.dengi.kg/), пример на PHP:
- *   $hash = hash_hmac('md5', $json, $passw);
- * где $json — это JSON.stringify({cmd, version, sid, mktime, lang, data})
- * в том же порядке полей, что и в самом запросе.
  */
 function buildRequestHash({ cmd, version, sid, mktime, lang, data }) {
   const json = JSON.stringify({ cmd, version, sid, mktime, lang, data });
@@ -49,10 +43,12 @@ async function callOdengi(cmd, data) {
     data,
   });
 
+  const timeoutMs = Number(odengiConfig.timeoutMs) > 0 ? Number(odengiConfig.timeoutMs) : 15000;
   const response = await fetch(odengiConfig.apiUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   const text = await response.text();

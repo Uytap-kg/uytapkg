@@ -19,8 +19,10 @@ export const odengiConfig = {
   // 1 = тестовый платёж (sandbox), 0 = боевой
   test: process.env.ODENGI_TEST === "0" ? 0 : 1,
   lang: process.env.ODENGI_LANG || "ru",
-  // Публичный URL бэкенда, на который O!Dengi шлёт callback об изменении статуса счёта
+  // Публичный URL бэкенда, на который O!Dengi шлёт callback об изменении статуса счёта (/api/payments/webhook)
   resultUrl: process.env.ODENGI_RESULT_URL || "",
+  // Таймаут сетевого запроса к O!Dengi API (по умолчанию 15 секунд)
+  timeoutMs: Number(process.env.ODENGI_TIMEOUT_MS || 15000),
 };
 
 export function assertOdengiConfigured() {

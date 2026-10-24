@@ -1040,8 +1040,8 @@ export const createListing = async (req, res) => {
       } else {
         initialStatus = "draft";
       }
-    } else if (listingType === "urgent") {
-      // "Срочно" не входит в лимиты тарифа — всегда только платно.
+    } else if (listingType === "urgent" || listingType === "instagram") {
+      // "Срочно" и "Instagram" не входят в лимиты тарифа — всегда только платно через экран оплаты.
       initialStatus = "draft";
     }
 
@@ -1270,20 +1270,8 @@ export const createListing = async (req, res) => {
       newListing.photos_count = photos.length;
     }
 
-    // Тип размещения "instagram" публикует объявление как обычное (оплата
-    // услуги пока не реализована), но создаёт заявку для админки — там её
-    // подтверждают вручную после фактической публикации в Instagram UyTap.
-    if (listingType === "instagram") {
-      try {
-        await createInstagramRequest({ listingId: newListing.id, userId });
-      } catch (instagramError) {
-        if (instagramError.status === 409 || instagramError.code === "23505") {
-          console.warn("Instagram request already exists for listing:", newListing.id);
-        } else {
-          console.error("Instagram Request Create Error:", instagramError);
-        }
-      }
-    }
+    // Заявка в Instagram (instagram_requests) создаётся ТОЛЬКО после подтверждения оплаты
+    // в promotionsService.applyPromotion (защита от спама бесплатными заявками P1-06).
 
     let finalListing = newListing;
 
@@ -1326,7 +1314,9 @@ export const createListing = async (req, res) => {
       // POST /api/payments/promotion/create → успешная оплата.
       needsPayment: initialStatus === "draft",
       promotion:
-        initialStatus === "draft" ? { serviceType: listingType, days: boostDays } : null,
+        initialStatus === "draft"
+          ? { serviceType: listingType, days: listingType === "instagram" ? 1 : boostDays }
+          : null,
     });
   } catch (error) {
     console.error("Create Listing Error:", error);
