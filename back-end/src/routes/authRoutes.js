@@ -1,5 +1,6 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
+import { BoundedSharedRateLimitStore } from "../utils/sharedState.js";
 import {
   register,
   login,
@@ -101,6 +102,12 @@ export const rateLimitVerify = rateLimit({
   skipSuccessfulRequests: true, // Учитываем только неудачные попытки (статус >= 400)
   keyGenerator: verifyKeyGenerator,
   validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:verify:",
+    windowMs: 15 * 60 * 1000,
+    maxEntries: 10000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много неудачных попыток ввода кода с вашего IP-адреса. Попробуйте снова через 15 минут.",
@@ -118,13 +125,19 @@ export const loginLimiter = rateLimit({
     return `${ipKeyGenerator(req)}|${identifier}`;
   },
   validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:login:",
+    windowMs: 15 * 60 * 1000,
+    maxEntries: 10000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много попыток входа. Попробуйте снова через 15 минут.",
   },
 });
 
-// 3. Лимитер отправки OTP (/send-otp, /forgot-password): 3 запроса в минуту
+// 3. Лимитер отправки OTP по цели (/send-otp, /forgot-password): 3 запроса в минуту на email/телефон
 export const sendOtpLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
   max: 3,
@@ -134,9 +147,50 @@ export const sendOtpLimiter = rateLimit({
     return email || phone || ipKeyGenerator(req);
   },
   validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:send_otp:",
+    windowMs: 60 * 1000,
+    maxEntries: 10000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много запросов на отправку кода. Подождите минуту.",
+  },
+});
+
+// 3b. P2-01: Отдельный лимитер отправки OTP по IP на любые адреса и номера (10 запросов за 15 минут с одного IP)
+export const sendOtpIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:send_otp_ip:",
+    windowMs: 15 * 60 * 1000,
+    maxEntries: 10000,
+    syncShared: true,
+  }),
+  message: {
+    success: false,
+    message: "Слишком много запросов на отправку кода с вашего IP-адреса. Попробуйте позже.",
+  },
+});
+
+// 3c. Лимитер публичных профилей продавцов (/users/:id): 60 запросов в минуту с одного IP
+export const publicProfileLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:pub_profile:",
+    windowMs: 60 * 1000,
+    maxEntries: 10000,
+  }),
+  message: {
+    success: false,
+    message: "Слишком много запросов к профилю. Попробуйте позже.",
   },
 });
 
@@ -146,6 +200,12 @@ export const authLimiter = rateLimit({
   max: 100,
   keyGenerator: (req) => ipKeyGenerator(req),
   validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:auth:",
+    windowMs: 15 * 60 * 1000,
+    maxEntries: 10000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много запросов. Попробуйте снова через 15 минут.",
@@ -155,12 +215,12 @@ export const authLimiter = rateLimit({
 // Публичные эндпоинты
 router.post("/register", authLimiter, register);
 router.post("/login", loginLimiter, login);
-router.post("/send-otp", sendOtpLimiter, optionalAuth, sendOtp);
+router.post("/send-otp", sendOtpIpLimiter, sendOtpLimiter, optionalAuth, sendOtp);
 router.post("/verify-otp", rateLimitVerify, optionalAuth, verifyOtp);
-router.post("/forgot-password", sendOtpLimiter, forgotPassword);
+router.post("/forgot-password", sendOtpIpLimiter, sendOtpLimiter, forgotPassword);
 router.post("/verify-reset-code", rateLimitVerify, verifyResetCode);
 router.post("/reset-password", authLimiter, resetPassword);
-router.get("/users/:id", getUserPublicProfile);
+router.get("/users/:id", publicProfileLimiter, getUserPublicProfile);
 
 // Защищенные эндпоинты
 router.get("/me", authenticateToken, getMe);

@@ -1,7 +1,15 @@
 import crypto from "crypto";
 import { nikitaConfig, assertNikitaConfigured } from "../config/nikita.js";
 import { phoneOtpStore, maskPhoneNikita } from "../utils/phoneOtpStore.js";
+import { Semaphore } from "../utils/semaphore.js";
 import logger from "../utils/logger.js";
+
+export const smsSemaphore = new Semaphore({
+  maxConcurrent: 10,
+  maxQueue: 100,
+  acquireTimeoutMs: 12000,
+  name: "nikita_sms",
+});
 
 // =======================================================
 // Клиент SMS-сервиса Nikita OTP API (https://smspro.nikita.kg).
@@ -13,12 +21,9 @@ import logger from "../utils/logger.js";
 // - Генерацию уникальных 32-символьных transaction_id
 // - Маппинг status (число/строка) в понятные пользовательские ошибки
 // - Защиту от злоупотреблений (rate limit, ограничение попыток, одноразовость)
-// - Безопасный 1-кратный ретрай при сетевых сбоях с НОВЫМ transaction_id
+// - Межпроцессную синхронизацию сессий и счётчиков SMS через phoneOtpStore
 // =======================================================
 
-/**
- * Коды ответов Nikita OTP API
- */
 export const NIKITA_STATUS = {
   SUCCESS: 0,
   BAD_FORMAT: 1,
@@ -33,9 +38,6 @@ export const NIKITA_STATUS = {
   INVALID_CODE: 14,
 };
 
-/**
- * Пользовательские сообщения для статусов ошибок
- */
 export const NIKITA_USER_MESSAGES = {
   [NIKITA_STATUS.SUCCESS]: "Успешно",
   [NIKITA_STATUS.INVALID_CODE]: "Неверный код",
@@ -45,13 +47,6 @@ export const NIKITA_USER_MESSAGES = {
   DEFAULT_ERROR: "Не удалось отправить код, попробуйте позже",
 };
 
-/**
- * Нормализация и валидация номера телефона под формат Nikita OTP API:
- * - Убирает +, пробелы, скобки, дефисы.
- * - 0XXXXXXXXX (10 цифр) превращает в 996XXXXXXXXX.
- * - 9 цифр (XXXXXXXXX) превращает в 996XXXXXXXXX.
- * - Проверяет международный формат без "+".
- */
 export function normalizeNikitaPhone(rawPhone) {
   if (!rawPhone || typeof rawPhone !== "string") {
     return {
@@ -61,18 +56,14 @@ export function normalizeNikitaPhone(rawPhone) {
     };
   }
 
-  // Очистка от всех нецифровых символов (пробелы, +, скобки, тире)
   let cleaned = rawPhone.replace(/\D/g, "");
 
-  // Локальный формат Кыргызстана: 0XXXXXXXXX (10 цифр) -> 996XXXXXXXXX (12 цифр)
   if (cleaned.startsWith("0") && cleaned.length === 10) {
     cleaned = "996" + cleaned.slice(1);
   } else if (cleaned.length === 9 && !cleaned.startsWith("996")) {
-    // 9 цифр без префикса (например, 770123456) -> 996770123456
     cleaned = "996" + cleaned;
   }
 
-  // Международный номер: от 10 до 15 цифр без плюса
   if (!/^\d{10,15}$/.test(cleaned)) {
     return {
       valid: false,
@@ -81,7 +72,6 @@ export function normalizeNikitaPhone(rawPhone) {
     };
   }
 
-  // Для номеров Кыргызстана (префикс 996) строго 12 цифр
   if (cleaned.startsWith("996") && cleaned.length !== 12) {
     return {
       valid: false,
@@ -97,58 +87,42 @@ export function normalizeNikitaPhone(rawPhone) {
   };
 }
 
-/**
- * Генерация уникального transaction_id до 32 символов (буквы и цифры).
- * Использует UUID v4 без дефисов (ровно 32 шестнадцатеричных символа).
- */
 export function generateTransactionId() {
   return crypto.randomUUID().replace(/-/g, "");
 }
 
-/**
- * Выполнение HTTP-запроса к Nikita с таймаутом.
- */
 async function postNikita(endpoint, body) {
   assertNikitaConfigured();
 
-  const url = `${nikitaConfig.baseUrl}${endpoint}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-KEY": nikitaConfig.apiKey,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(nikitaConfig.timeoutMs),
+  return smsSemaphore.run(async () => {
+    const url = `${nikitaConfig.baseUrl}${endpoint}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-KEY": nikitaConfig.apiKey,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(nikitaConfig.timeoutMs),
+    });
+
+    const text = await response.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(
+        `Nikita API вернул невалидный JSON (HTTP ${response.status}): ${text.slice(0, 200)}`
+      );
+    }
+
+    return { response, json };
   });
-
-  const text = await response.text();
-  let json;
-  try {
-    json = JSON.parse(text);
-  } catch (err) {
-    throw new Error(
-      `Nikita API вернул невалидный JSON (HTTP ${response.status}): ${text.slice(0, 200)}`
-    );
-  }
-
-  return { response, json };
 }
 
-/**
- * Отправка одноразового OTP кода через SMS.
- *
- * @param {Object} params
- * @param {string} params.phone - Номер телефона получателя
- * @param {string} [params.ip] - IP-адрес клиента для rate limiting
- * @param {string} [params.purpose="registration"] - Назначение кода (registration | phone_change | password_reset)
- * @returns {Promise<{success: boolean, token?: string, status?: number, message: string, retryAfter?: number, rateLimited?: boolean}>}
- */
 export async function sendOtp({ phone, ip, purpose = "registration" }) {
-  // 1. Проверка конфигурации API-ключа
   assertNikitaConfigured();
 
-  // 2. Нормализация и валидация номера телефона
   const normalized = normalizeNikitaPhone(phone);
   if (!normalized.valid) {
     return {
@@ -159,8 +133,6 @@ export async function sendOtp({ phone, ip, purpose = "registration" }) {
   }
   const cleanPhone = normalized.phone;
 
-  // 2.1 Строгая проверка: для отправки SMS разрешены ИСКЛЮЧИТЕЛЬНО номера Кыргызстана (+996)
-  // Защита баланса провайдера ДО обращения к внешнему шлюзу
   if (!cleanPhone.startsWith("996") || cleanPhone.length !== 12) {
     return {
       success: false,
@@ -169,8 +141,8 @@ export async function sendOtp({ phone, ip, purpose = "registration" }) {
     };
   }
 
-  // 3. Защита от злоупотреблений и гонок: синхронно резервируем слот ДО await к Nikita
-  const limitCheck = phoneOtpStore.checkSendLimits({
+  // Защита от злоупотреблений и гонок: резервируем слот (в памяти и общем хранилище БД) ДО await к Nikita
+  const limitCheck = await phoneOtpStore.checkSendLimitsShared({
     phone: cleanPhone,
     ip,
     reserve: true,
@@ -184,7 +156,6 @@ export async function sendOtp({ phone, ip, purpose = "registration" }) {
     };
   }
 
-  // 4. Отправка запроса с обработкой безопасного 1-кратного ретрая при сетевой ошибке ДО ответа
   let resultJson;
   let lastError;
 
@@ -200,7 +171,6 @@ export async function sendOtp({ phone, ip, purpose = "registration" }) {
         break;
       } catch (err) {
         lastError = err;
-        // Повтор только при сетевой ошибке до получения ответа и только 1 раз (attempt 1)
         const isAbortOrTimeout = err.name === "TimeoutError" || err.name === "AbortError";
         if (attempt === 1 && !isAbortOrTimeout) {
           logger.warn("Сетевой сбой при отправке в Nikita OTP API, повтор с новым transaction_id", {
@@ -214,7 +184,6 @@ export async function sendOtp({ phone, ip, purpose = "registration" }) {
     }
   } finally {
     if (!resultJson) {
-      // Откатываем слот только при сетевой ошибке до получения ответа от шлюза
       phoneOtpStore.rollbackSendReservation(limitCheck.reservation);
     } else {
       phoneOtpStore.completeSendReservation(limitCheck.reservation);
@@ -232,10 +201,8 @@ export async function sendOtp({ phone, ip, purpose = "registration" }) {
     };
   }
 
-  // Приведение типа статуса (Nikita может вернуть число 0 или строку "0")
   const statusCode = Number(resultJson.status);
 
-  // 5. Обработка успешного ответа
   if (statusCode === NIKITA_STATUS.SUCCESS) {
     const token = resultJson.token;
     if (!token) {
@@ -249,8 +216,7 @@ export async function sendOtp({ phone, ip, purpose = "registration" }) {
       };
     }
 
-    // Сохраняем сессию в локальном хранилище (счётчики уже зарезервированы выше)
-    phoneOtpStore.recordSend({
+    await phoneOtpStore.recordSendShared({
       phone: cleanPhone,
       ip,
       token,
@@ -273,10 +239,8 @@ export async function sendOtp({ phone, ip, purpose = "registration" }) {
     };
   }
 
-  // 6. Обработка ошибок со стороны Nikita
   const description = resultJson.description || "";
 
-  // 1, 2, 3, 4, 5, 10 — проблемы конфигурации, баланса или формата
   if (
     statusCode === NIKITA_STATUS.BAD_AUTH ||
     statusCode === NIKITA_STATUS.BAD_IP ||
@@ -307,18 +271,7 @@ export async function sendOtp({ phone, ip, purpose = "registration" }) {
   };
 }
 
-/**
- * Проверка введённого пользователем OTP кода.
- *
- * @param {Object} params
- * @param {string} [params.token] - Токен сессии, полученный при отправке
- * @param {string} [params.phone] - Номер телефона (если передан, обязан совпадать с телефоном сессии)
- * @param {string|number} params.code - Код подтверждения из SMS
- * @param {string|string[]} [params.purpose] - Ожидаемое назначение сессии
- * @returns {Promise<{success: boolean, status?: number, phone?: string, purpose?: string, message: string, attemptsLeft?: number}>}
- */
 export async function verifyOtp({ token, phone, code, purpose }) {
-  // 1. Проверка конфигурации API-ключа
   assertNikitaConfigured();
 
   const strCode = code !== null && code !== undefined ? String(code).trim() : "";
@@ -330,7 +283,6 @@ export async function verifyOtp({ token, phone, code, purpose }) {
     };
   }
 
-  // 2. Нормализация переданного телефона (если указан в запросе — обязан быть валидным и совпадать с сессией)
   let cleanPhone = "";
   if (typeof phone === "string" && phone.trim() !== "") {
     const norm = normalizeNikitaPhone(phone);
@@ -344,7 +296,7 @@ export async function verifyOtp({ token, phone, code, purpose }) {
     cleanPhone = norm.phone;
   }
 
-  const session = phoneOtpStore.findRecord({ token, phone: cleanPhone, purpose });
+  const session = await phoneOtpStore.findRecordShared({ token, phone: cleanPhone, purpose });
   if (!session) {
     return {
       success: false,
@@ -355,7 +307,6 @@ export async function verifyOtp({ token, phone, code, purpose }) {
 
   const activeToken = session.token;
 
-  // Защита от гонок при проверке кода: блокируем параллельные запросы к одной сессии
   if (!phoneOtpStore.acquireVerifyLock(activeToken)) {
     return {
       success: false,
@@ -365,8 +316,7 @@ export async function verifyOtp({ token, phone, code, purpose }) {
   }
 
   try {
-    // Повторно проверяем, что сессия не была инвалидирована параллельным запросом
-    const freshSession = phoneOtpStore.findRecord({ token: activeToken, phone: cleanPhone, purpose });
+    const freshSession = await phoneOtpStore.findRecordShared({ token: activeToken, phone: cleanPhone, purpose });
     if (!freshSession) {
       return {
         success: false,
@@ -375,8 +325,7 @@ export async function verifyOtp({ token, phone, code, purpose }) {
       };
     }
 
-    // 3. Учёт попыток ввода (максимум 5 на один токен для защиты от подбора)
-    const attemptResult = phoneOtpStore.registerAttempt(activeToken);
+    const attemptResult = await phoneOtpStore.registerAttemptShared(activeToken);
     if (!attemptResult.allowed) {
       return {
         success: false,
@@ -386,7 +335,6 @@ export async function verifyOtp({ token, phone, code, purpose }) {
       };
     }
 
-    // 4. Запрос проверки кода в Nikita OTP API
     let resultJson;
     try {
       const { json } = await postNikita("/api/otp/verify", {
@@ -404,13 +352,10 @@ export async function verifyOtp({ token, phone, code, purpose }) {
       };
     }
 
-    // Приведение типа: в verify status приходит строкой ("0")
     const statusCode = Number(resultJson.status);
 
-    // 5. Успешная валидация
     if (statusCode === NIKITA_STATUS.SUCCESS) {
-      // Токен одноразовый: немедленно инвалидируем после успешного подтверждения
-      phoneOtpStore.invalidateToken(activeToken);
+      await phoneOtpStore.invalidateTokenShared(activeToken);
 
       logger.info("SMS OTP код успешно подтвержден через Nikita", {
         purpose: freshSession.purpose,
@@ -425,8 +370,6 @@ export async function verifyOtp({ token, phone, code, purpose }) {
       };
     }
 
-    // 6. Обработка ошибок верификации
-    // 14: Неверный код
     if (statusCode === NIKITA_STATUS.INVALID_CODE) {
       return {
         success: false,
@@ -436,9 +379,8 @@ export async function verifyOtp({ token, phone, code, purpose }) {
       };
     }
 
-    // 13: Срок действия кода истек
     if (statusCode === NIKITA_STATUS.TIME_EXPIRED) {
-      phoneOtpStore.invalidateToken(activeToken);
+      await phoneOtpStore.invalidateTokenShared(activeToken);
       return {
         success: false,
         status: 13,
@@ -446,9 +388,8 @@ export async function verifyOtp({ token, phone, code, purpose }) {
       };
     }
 
-    // 12: Неверный токен
     if (statusCode === NIKITA_STATUS.INVALID_TOKEN) {
-      phoneOtpStore.invalidateToken(activeToken);
+      await phoneOtpStore.invalidateTokenShared(activeToken);
       return {
         success: false,
         status: 12,
@@ -456,7 +397,6 @@ export async function verifyOtp({ token, phone, code, purpose }) {
       };
     }
 
-    // Прочие ошибки со стороны провайдера
     logger.error("Nikita OTP verify вернул ошибку", {
       status: statusCode,
       description: resultJson.description,

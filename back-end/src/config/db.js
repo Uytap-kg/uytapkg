@@ -45,12 +45,19 @@ export function resolveDbSslConfig(databaseUrl = process.env.DATABASE_URL, env =
 
 if (process.env.DATABASE_URL) {
   try {
+    const poolMax = Math.min(50, Math.max(2, Number(process.env.DB_POOL_MAX) || 15));
+    const idleTimeoutMillis = Math.max(5000, Number(process.env.DB_IDLE_TIMEOUT_MS) || 30000);
+    const connectionTimeoutMillis = Math.max(1000, Number(process.env.DB_CONN_TIMEOUT_MS) || 5000);
+    const statementTimeoutMs = Math.max(1000, Number(process.env.DB_STATEMENT_TIMEOUT_MS) || 15000);
+
     dbPool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: resolveDbSslConfig(process.env.DATABASE_URL, process.env),
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      max: poolMax,
+      idleTimeoutMillis,
+      connectionTimeoutMillis,
+      statement_timeout: statementTimeoutMs,
+      query_timeout: statementTimeoutMs,
     });
     dbPool.on("error", (err) => {
       console.error("Unexpected error on idle pg client in dbPool:", err);

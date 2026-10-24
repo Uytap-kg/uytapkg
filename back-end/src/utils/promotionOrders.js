@@ -105,16 +105,23 @@ export async function markPromotionOrderStatus(orderId, status) {
  * Возвращает список всех заказов продвижения для админ-панели (от новых к старым).
  * При ошибке запроса к БД выбрасывает исключение (не затирает пустым массивом).
  */
-export async function listPromotionOrders() {
-  const { data, error } = await supabase
+export async function listPromotionOrders(limit = 200) {
+  const safeLimit = Math.min(200, Math.max(1, parseInt(limit, 10) || 200));
+  let query = supabase
     .from("promotion_orders")
-    .select("*")
+    .select("order_id, user_id, listing_id, service_type, days, status, created_at, applied_at")
     .order("created_at", { ascending: false });
+
+  if (typeof query?.limit === "function") {
+    query = query.limit(safeLimit);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("List promotion orders DB error:", error);
     throw error;
   }
 
-  return (data || []).map(mapPromotionOrder);
+  return (data || []).slice(0, safeLimit).map(mapPromotionOrder);
 }

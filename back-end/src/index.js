@@ -18,11 +18,14 @@ import settingsRoutes from "./routes/settingsRoutes.js";
 import bannersRoutes from "./routes/bannersRoutes.js";
 import subscriptionsRoutes from "./routes/subscriptionsRoutes.js";
 import { startCronService, stopCronService } from "./services/cronService.js";
-import { supabase } from "./config/db.js";
+import { supabase, dbPool } from "./config/db.js";
 import logger from "./utils/logger.js";
 import requestContext from "./middleware/requestContext.js";
 import resolveClientIp from "./middleware/clientIp.js";
 import { enforceProductionSecrets } from "./config/runtimeCheck.js";
+import { BoundedSharedRateLimitStore } from "./utils/sharedState.js";
+import { flushAllCounters, stopCounterBatcher } from "./utils/counterBatcher.js";
+import { ipKeyGenerator } from "./routes/authRoutes.js";
 
 dotenv.config();
 
@@ -111,13 +114,19 @@ app.get("/api/health/ready", async (req, res) => {
 
 // Глобальный базовый лимит на весь API (300 запросов/мин с IP). Более строгие
 // лимитеры на чувствительных маршрутах (auth, payments, upload, ai) — в routes/.
-// Хранилище в памяти: корректно для одного процесса (Render/VPS). При запуске
-// нескольких инстансов (pm2 cluster и т.п.) перенесите на Redis-store.
+// Хранилище ограничено в памяти (BoundedSharedRateLimitStore) для защиты от утечек при атаках с ротацией IP.
 app.use(
   "/api",
   rateLimit({
     windowMs: 60 * 1000,
     max: 300,
+    keyGenerator: (req) => ipKeyGenerator(req),
+    validate: { xForwardedForHeader: false },
+    store: new BoundedSharedRateLimitStore({
+      prefix: "rl:global_api:",
+      windowMs: 60 * 1000,
+      maxEntries: 20000,
+    }),
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => req.path.startsWith("/health"),
@@ -180,6 +189,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({
     success: false,
     message: "Внутренняя ошибка сервера",
+    requestId: req?.id,
   });
 });
 
@@ -189,21 +199,66 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   startCronService();
 });
 
-// Graceful shutdown: при деплое (Render/systemd шлют SIGTERM) дожидаемся
-// завершения текущих запросов, чтобы не оборвать выдачу оплаченной услуги.
+// Таймауты HTTP-сервера для защиты от медленных клиентов (Slowloris) и гонок Keep-Alive с Nginx
+server.requestTimeout = 30000;
+server.headersTimeout = 35000;
+server.keepAliveTimeout = 65000;
+
+// Graceful shutdown (P2-09): при деплое (PM2/Docker/systemd шлют SIGTERM)
+// 1) перестаём принимать новые соединения,
+// 2) останавливаем cron и таймер батчера счётчиков,
+// 3) дожидаемся активных HTTP-запросов,
+// 4) сбрасываем буфер просмотров/кликов в БД и закрываем пул PostgreSQL (dbPool.end()).
 let shuttingDown = false;
-function shutdown(signal) {
+export async function gracefulShutdown(signal, exitProcess = true) {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info(`${signal} получен, останавливаем сервер...`);
+
+  // Принудительное завершение, если запросы или пул не закрылись за 25 секунд
+  const forceExitTimer = setTimeout(() => {
+    logger.error("Превышен таймаут gracefulShutdown (25s), принудительный выход");
+    if (exitProcess) process.exit(1);
+  }, 25000);
+  forceExitTimer.unref();
+
   stopCronService();
-  server.close(() => {
-    logger.info("Сервер остановлен");
-    process.exit(0);
+  stopCounterBatcher();
+
+  await new Promise((resolve) => {
+    server.close(() => {
+      logger.info("HTTP-сервер перестал принимать новые соединения и завершил активные запросы");
+      resolve();
+    });
   });
-  // Принудительное завершение, если запросы не закрылись за 25 секунд
-  setTimeout(() => process.exit(1), 25000).unref();
+
+  try {
+    await flushAllCounters();
+  } catch (flushErr) {
+    logger.warn("Ошибка сброса буфера счётчиков при остановке", {
+      error: flushErr?.message || flushErr,
+    });
+  }
+
+  if (dbPool && typeof dbPool.end === "function") {
+    try {
+      await dbPool.end();
+      logger.info("Пул соединений PostgreSQL (dbPool) корректно закрыт");
+    } catch (poolErr) {
+      logger.warn("Ошибка при закрытии dbPool", { error: poolErr?.message || poolErr });
+    }
+  }
+
+  clearTimeout(forceExitTimer);
+  logger.info("Сервер корректно остановлен");
+  if (exitProcess) {
+    process.exit(0);
+  }
 }
+
+const shutdown = gracefulShutdown;
+export { app, server };
+
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 

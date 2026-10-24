@@ -1,7 +1,19 @@
 import nodemailer from "nodemailer";
+import { Semaphore } from "../utils/semaphore.js";
+import { checkAndIncrementRateLimit } from "../utils/sharedState.js";
+import logger from "../utils/logger.js";
 
 // Читаем переменные окружения лениво
 const env = () => process.env;
+
+export const EMAIL_TIMEOUT_MS = 10000;
+export const EMAIL_DAILY_LIMIT = Number(process.env.EMAIL_DAILY_LIMIT) || 1000;
+export const emailSemaphore = new Semaphore({
+  maxConcurrent: 5,
+  maxQueue: 50,
+  acquireTimeoutMs: 12000,
+  name: "email",
+});
 
 const isResendConfigured = () => Boolean(env().RESEND_API_KEY);
 const isSmtpConfigured = () => Boolean(env().SMTP_HOST && env().SMTP_USER && env().SMTP_PASS);
@@ -16,6 +28,9 @@ function getTransporter() {
       port,
       secure: port === 465,
       auth: { user: SMTP_USER, pass: SMTP_PASS },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
   }
   return transporter;
@@ -78,7 +93,7 @@ function buildOtpHtml(code, type = "registration") {
 }
 
 /**
- * Отправка через Resend HTTP API (рекомендуется для Render / Serverless, так как работает по HTTPS без блокировок портов)
+ * Отправка через Resend HTTP API с таймаутом AbortSignal.timeout(10000)
  */
 async function sendViaResend({ toEmail, subject, html, text }) {
   const apiKey = env().RESEND_API_KEY;
@@ -90,6 +105,7 @@ async function sendViaResend({ toEmail, subject, html, text }) {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
+    signal: AbortSignal.timeout(EMAIL_TIMEOUT_MS),
     body: JSON.stringify({
       from,
       to: [toEmail],
@@ -123,28 +139,46 @@ export async function sendOtpEmail(toEmail, code, type = "registration") {
     : `Ваш код подтверждения UyTap: ${code}. Никому не сообщайте этот код. Срок действия: 10 минут.`;
   const html = buildOtpHtml(code, type);
 
-  // 1. Попытка отправки через Resend
+  if (isResendConfigured() || isSmtpConfigured()) {
+    const dailyLimit = Number(env().EMAIL_DAILY_LIMIT) || EMAIL_DAILY_LIMIT;
+    const quota = await checkAndIncrementRateLimit(
+      "quota:email:daily",
+      24 * 60 * 60 * 1000,
+      dailyLimit,
+      1
+    );
+    if (!quota.allowed) {
+      logger.warn("Превышен суточный лимит отправки Email сервиса", {
+        dailyLimit,
+        count: quota.count,
+      });
+      throw new Error("Сервис отправки писем временно перегружен, попробуйте позже");
+    }
+  }
+
+  // 1. Попытка отправки через Resend (ограничена семафором параллельности)
   if (isResendConfigured()) {
     try {
-      return await sendViaResend({ toEmail, subject, html, text });
+      return await emailSemaphore.run(() => sendViaResend({ toEmail, subject, html, text }));
     } catch (err) {
       console.error("[EmailService] Ошибка отправки через Resend:", err.message);
-      // Если SMTP тоже не настроен, пробрасываем ошибку
       if (!isSmtpConfigured()) throw err;
       console.warn("[EmailService] Переключаемся на резервный SMTP...");
     }
   }
 
-  // 2. Попытка отправки через SMTP (nodemailer)
+  // 2. Попытка отправки через SMTP (nodemailer) с таймаутами и семафором
   if (isSmtpConfigured()) {
     try {
-      await getTransporter().sendMail({
-        from: env().SMTP_FROM || env().SMTP_USER,
-        to: toEmail,
-        subject,
-        text,
-        html,
-      });
+      await emailSemaphore.run(() =>
+        getTransporter().sendMail({
+          from: env().SMTP_FROM || env().SMTP_USER,
+          to: toEmail,
+          subject,
+          text,
+          html,
+        })
+      );
       return { provider: "smtp" };
     } catch (err) {
       console.error("[EmailService] Ошибка отправки через SMTP:", err.message);
@@ -163,11 +197,8 @@ export async function sendOtpEmail(toEmail, code, type = "registration") {
     return { provider: "dev_console", dev: true };
   }
 
-  // В production окружении логировать коды в консоль категорически запрещено,
-  // а отправка без реального почтового шлюза недопустима.
   console.error(
     `[EmailService] Критическая ошибка конфигурации: почтовый шлюз (Resend или SMTP) не настроен в production окружении`
   );
   throw new Error("Сервис отправки email не настроен: почтовый провайдер недоступен");
 }
-

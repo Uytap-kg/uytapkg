@@ -14,6 +14,39 @@ import {
 } from "../utils/storage.js";
 import { bannerSchema, updateBannerSchema } from "../utils/validation.js";
 import { validateImageMagicBytes } from "../middleware/upload.js";
+import { getClientIp } from "./listingsController.js";
+import { evictExpiredAndCapMap } from "../utils/boundedMap.js";
+
+// P3-04: Защита от накрутки просмотров и кликов баннеров по (IP, bannerId) с TTL и ограничением памяти
+export const BANNER_VIEW_THROTTLE_MS = 10 * 60 * 1000; // 10 минут
+export const BANNER_CLICK_THROTTLE_MS = 5 * 60 * 1000; // 5 минут
+export const BANNER_THROTTLE_MAX_SIZE = 10000;
+export const bannerViewsThrottleMap = new Map();
+export const bannerClicksThrottleMap = new Map();
+
+export function clearBannerThrottleMaps() {
+  bannerViewsThrottleMap.clear();
+  bannerClicksThrottleMap.clear();
+}
+
+export function shouldRecordBannerEvent(map, ip, bannerId, ttlMs) {
+  if (!ip || !bannerId) return true;
+  const key = `${ip}:${bannerId}`;
+  const now = Date.now();
+  const lastTime = map.get(key);
+  if (lastTime && now - lastTime < ttlMs) {
+    return false;
+  }
+  if (map.has(key)) {
+    map.delete(key);
+  }
+  map.set(key, now);
+
+  if (map.size > BANNER_THROTTLE_MAX_SIZE) {
+    evictExpiredAndCapMap(map, BANNER_THROTTLE_MAX_SIZE, (ts) => now - ts >= ttlMs);
+  }
+  return true;
+}
 
 function toPublicBanner(banner) {
   return {
@@ -91,7 +124,8 @@ export const uploadBannerImage = async (req, res) => {
     console.error("Upload Banner Image Error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Не удалось загрузить изображение",
+      message: "Не удалось загрузить изображение",
+      requestId: req?.id,
     });
   }
 };
@@ -221,6 +255,10 @@ export const deleteBanner = async (req, res) => {
 export const trackBannerView = async (req, res) => {
   try {
     const { id } = req.params;
+    const clientIp = getClientIp(req);
+    if (!shouldRecordBannerEvent(bannerViewsThrottleMap, clientIp, id, BANNER_VIEW_THROTTLE_MS)) {
+      return res.json({ success: true, deduplicated: true });
+    }
     await incrementBannerViews(id);
     return res.json({ success: true });
   } catch (error) {
@@ -238,6 +276,10 @@ export const trackBannerView = async (req, res) => {
 export const trackBannerClick = async (req, res) => {
   try {
     const { id } = req.params;
+    const clientIp = getClientIp(req);
+    if (!shouldRecordBannerEvent(bannerClicksThrottleMap, clientIp, id, BANNER_CLICK_THROTTLE_MS)) {
+      return res.json({ success: true, deduplicated: true });
+    }
     await incrementBannerClicks(id);
     return res.json({ success: true });
   } catch (error) {

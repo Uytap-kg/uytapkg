@@ -99,7 +99,8 @@ export const uploadImage = async (req, res) => {
     console.error("Upload Image Error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Ошибка сервера при загрузке файла",
+      message: "Ошибка сервера при загрузке файла",
+      requestId: req?.id,
     });
   }
 };
@@ -153,7 +154,8 @@ export const uploadListingPhoto = async (req, res) => {
     console.error("Upload Listing Photo Error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Ошибка сервера при загрузке файла",
+      message: "Ошибка сервера при загрузке файла",
+      requestId: req?.id,
     });
   }
 };
@@ -206,7 +208,8 @@ export const uploadComplexPhoto = async (req, res) => {
     console.error("Upload Complex Photo Error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Ошибка сервера при загрузке файла",
+      message: "Ошибка сервера при загрузке файла",
+      requestId: req?.id,
     });
   }
 };

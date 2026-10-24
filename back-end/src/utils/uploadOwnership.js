@@ -83,10 +83,36 @@ export async function isUploadOwnedBy(objectPath, userId) {
  */
 export async function verifyAllOwnedBy(urls, userId) {
   if (!Array.isArray(urls) || urls.length === 0) return true;
+  if (!userId) return false;
 
+  const objectPaths = [];
   for (const url of urls) {
     const objectPath = extractStoragePath(url);
-    // eslint-disable-next-line no-await-in-loop -- ранняя остановка на первом чужом файле
+    if (!objectPath || objectPath.startsWith("pending/") || objectPath.includes("/pending/")) {
+      return false;
+    }
+    objectPaths.push(objectPath);
+  }
+
+  const uniquePaths = [...new Set(objectPaths)];
+  if (uniquePaths.length === 0) return true;
+
+  // Пакетный запрос (1 SELECT .in() вместо N последовательных запросов)
+  try {
+    const selectChain = supabase.from("upload_ownership").select("user_id");
+    if (selectChain && typeof selectChain.in === "function") {
+      const { data, error } = await selectChain.in("object_path", uniquePaths);
+      if (error || !Array.isArray(data)) {
+        return false;
+      }
+      return data.length === uniquePaths.length && data.every((row) => row.user_id === userId);
+    }
+  } catch {
+    // Фолбэк ниже для простых моков в unit-тестах
+  }
+
+  for (const objectPath of uniquePaths) {
+    // eslint-disable-next-line no-await-in-loop -- фолбэк для моков без .in()
     const owned = await isUploadOwnedBy(objectPath, userId);
     if (!owned) return false;
   }

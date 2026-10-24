@@ -1,0 +1,213 @@
+# ==============================================================================
+# UyTap.kg — Production Nginx Reverse Proxy Configuration (deploy/nginx.conf.example)
+# ==============================================================================
+# Назначение:
+#   1. Терминация TLS (HTTP/2) и автоматический редирект HTTP -> HTTPS.
+#   2. Первый рубеж защиты от DDoS и ботов (limit_req_zone / limit_conn_zone).
+#   3. Доверенная передача реального IP клиента через X-Internal-Proxy-Secret
+#      (синхронизирован с переменной TRUSTED_PROXY_SECRET в back-end/.env).
+#   4. Ограничение размера тела запроса (client_max_body_size) до чтения буфера.
+#   5. Keepalive-пулы к апстримам Next.js (3000) и Express API (5000), Gzip-сжатие,
+#      кэширование иммутабельной статики /_next/static/.
+# ==============================================================================
+
+# Зоны ограничения частоты запросов по бинарному IP (память 10MB ≈ 160 000 IP)
+limit_req_zone $binary_remote_addr zone=uytap_api_general:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=uytap_api_auth:10m    rate=1r/s;
+limit_req_zone $binary_remote_addr zone=uytap_api_heavy:10m   rate=2r/s;
+limit_conn_zone $binary_remote_addr zone=uytap_conn_per_ip:10m;
+
+# Статус 429 Too Many Requests вместо дефолтного 503 при срабатывании limit_req
+limit_req_status 429;
+limit_conn_status 429;
+
+upstream uytap_frontend {
+    server 127.0.0.1:3000 max_fails=3 fail_timeout=10s;
+    keepalive 32;
+}
+
+upstream uytap_backend {
+    server 127.0.0.1:5000 max_fails=3 fail_timeout=10s;
+    keepalive 64;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name uytap.kg www.uytap.kg;
+
+    # ACME challenge для Let's Encrypt
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name uytap.kg www.uytap.kg;
+
+    # Пути к сертификатам Let's Encrypt / Certbot
+    ssl_certificate     /etc/letsencrypt/live/uytap.kg/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/uytap.kg/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # Скрываем версию Nginx
+    server_tokens off;
+
+    # Ограничение одновременных соединений с одного IP
+    limit_conn uytap_conn_per_ip 30;
+
+    # Глобальный потолок размера тела (защита до передачи в Node.js)
+    # 12 МБ достаточно для фото ЖК/объявления (до 8 МБ) и документов верификации (до 10 МБ)
+    client_max_body_size 12m;
+    client_body_buffer_size 128k;
+    client_body_timeout 15s;
+    client_header_timeout 15s;
+    keepalive_timeout 60s;
+    send_timeout 30s;
+
+    # Gzip-сжатие текстовых ответов и JSON
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types
+        application/json
+        application/javascript
+        application/xml
+        text/css
+        text/javascript
+        text/plain
+        image/svg+xml;
+
+    # Заголовки безопасности
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # --------------------------------------------------------------------------
+    # 1. Чувствительные маршруты авторизации и отправки OTP (1 req/s, burst=5)
+    # --------------------------------------------------------------------------
+    location ~ ^/api/auth/(send-otp|verify-otp|login|register|forgot-password|verify-reset-code|reset-password) {
+        limit_req zone=uytap_api_auth burst=5 nodelay;
+        client_max_body_size 256k;
+
+        proxy_pass http://uytap_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # ВАЖНО: подставьте значение TRUSTED_PROXY_SECRET из back-end/.env
+        proxy_set_header X-Internal-Proxy-Secret "REPLACE_WITH_TRUSTED_PROXY_SECRET";
+
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 15s;
+        proxy_read_timeout 20s;
+    }
+
+    # --------------------------------------------------------------------------
+    # 2. Тяжёлые и платные эндпоинты: AI-поиск и загрузка файлов (2 req/s, burst=6)
+    # --------------------------------------------------------------------------
+    location ~ ^/api/(ai|upload) {
+        limit_req zone=uytap_api_heavy burst=6 nodelay;
+        client_max_body_size 12m;
+
+        proxy_pass http://uytap_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Internal-Proxy-Secret "REPLACE_WITH_TRUSTED_PROXY_SECRET";
+
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+    }
+
+    # --------------------------------------------------------------------------
+    # 3. Остальные маршруты Express Backend API (/api/* кроме Next.js /api/speech-to-text)
+    # --------------------------------------------------------------------------
+    location /api/ {
+        limit_req zone=uytap_api_general burst=30 nodelay;
+
+        proxy_pass http://uytap_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Internal-Proxy-Secret "REPLACE_WITH_TRUSTED_PROXY_SECRET";
+
+        proxy_buffers 8 16k;
+        proxy_buffer_size 16k;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 25s;
+        proxy_read_timeout 25s;
+    }
+
+    # --------------------------------------------------------------------------
+    # 4. Голосовой поиск Next.js API Route (/api/speech-to-text)
+    # --------------------------------------------------------------------------
+    location = /api/speech-to-text {
+        limit_req zone=uytap_api_heavy burst=4 nodelay;
+        client_max_body_size 11m;
+
+        proxy_pass http://uytap_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Internal-Proxy-Secret "REPLACE_WITH_TRUSTED_PROXY_SECRET";
+
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 25s;
+        proxy_read_timeout 25s;
+    }
+
+    # --------------------------------------------------------------------------
+    # 5. Иммутабельная статика Next.js (кэш на 1 год)
+    # --------------------------------------------------------------------------
+    location /_next/static/ {
+        proxy_pass http://uytap_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        expires 365d;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        access_log off;
+    }
+
+    # --------------------------------------------------------------------------
+    # 6. Фронтенд Next.js App Router
+    # --------------------------------------------------------------------------
+    location / {
+        proxy_pass http://uytap_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_buffers 8 16k;
+        proxy_buffer_size 16k;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+    }
+}
