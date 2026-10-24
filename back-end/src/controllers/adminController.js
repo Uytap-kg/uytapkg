@@ -547,7 +547,7 @@ export const listDevelopersAdmin = async (req, res) => {
 
     const { data: profiles } = await supabase
       .from("user_profiles")
-      .select("id, user_id, first_name, last_name, company_name, avatar_url, about, phone")
+      .select("id, user_id, first_name, last_name, company_name, inn, office_address, avatar_url, about, created_at, updated_at")
       .in("user_id", userIds.length > 0 ? userIds : ["00000000-0000-0000-0000-000000000000"]);
 
     const profilesMap = new Map((profiles || []).map((p) => [p.user_id, p]));

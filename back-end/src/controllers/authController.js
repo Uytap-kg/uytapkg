@@ -2215,7 +2215,7 @@ export const logoutAll = async (req, res) => {
 const PUBLIC_PROFILE_LISTING_COLUMNS =
   "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
 const PUBLIC_PROFILE_COMPLEX_COLUMNS =
-  "id, developer_id, name, description, country, region, city, district, address, completion_status, completion_date, housing_class, cover_photo, features, created_at";
+  "id, developer_id, name, description, region, city, address, completion_status, completion_date, housing_class, registry_link, cover_photo, features, created_at";
 
 export const getUserPublicProfile = async (req, res) => {
   try {
@@ -2262,7 +2262,7 @@ export const getUserPublicProfile = async (req, res) => {
 
     const { data: profile } = await supabase
       .from("user_profiles")
-      .select("id, user_id, first_name, last_name, company_name, avatar_url, about, phone, show_phone, updated_at")
+      .select("id, user_id, first_name, last_name, company_name, inn, office_address, avatar_url, about, created_at, updated_at")
       .eq("user_id", user.id)
       .maybeSingle();
 

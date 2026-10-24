@@ -4,11 +4,22 @@ import { verifyAllOwnedBy } from "../utils/uploadOwnership.js";
 import { getOrSetPublicCache, invalidatePublicCache } from "../utils/publicCache.js";
 
 const COMPLEX_COLUMNS =
-  "id, developer_id, name, description, country, region, city, district, address, completion_status, completion_date, housing_class, cover_photo, features, created_at";
+  "id, developer_id, name, description, country, region, city, district, address, completion_status, completion_date, housing_class, registry_link, cover_photo, features, created_at";
+const COMPLEX_COLUMNS_LEGACY =
+  "id, developer_id, name, description, region, city, address, completion_status, completion_date, housing_class, registry_link, cover_photo, features, created_at";
 const COMPLEX_LAYOUT_COLUMNS =
-  "id, complex_id, rooms, area, price, layout_photo, created_at";
+  "id, complex_id, title, rooms, area, price, status, image_url, created_at";
 const COMPLEX_LISTING_COLUMNS =
-  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
+  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, microdistrict, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, promotion_expires_at, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, updated_at, expires_at";
+
+function isMissingColumnError(err) {
+  if (!err) return false;
+  return (
+    err.code === "42703" ||
+    Boolean(err.message?.includes("does not exist")) ||
+    Boolean(err.message?.includes("column"))
+  );
+}
 
 const MAX_PAGE = 1000;
 const MAX_LIMIT = 100;
@@ -118,9 +129,45 @@ export const getComplexes = async (req, res) => {
           query = query.or(`district.ilike.%${cleanDistrict}%,features->>district.ilike.%${cleanDistrict}%,address.ilike.%${cleanDistrict}%`);
         }
 
-        const { data: complexes, error, count } = await query
+        let { data: complexes, error, count } = await query
           .order("created_at", { ascending: false })
           .range(from, to);
+
+        if (error && isMissingColumnError(error)) {
+          let fallbackQuery = supabase
+            .from("residential_complexes")
+            .select(
+              `
+              ${COMPLEX_COLUMNS_LEGACY},
+              developers (id, user_id, company_name, logo_url, is_verified),
+              complex_layouts (${COMPLEX_LAYOUT_COLUMNS})
+            `,
+              { count: "exact" }
+            );
+          if (cleanCountry) {
+            const isKg = /^(kyrgyzstan|кыргызстан|kg)$/i.test(cleanCountry);
+            const isTr = /^(turkey|турция|tr|türkiye)$/i.test(cleanCountry);
+            if (isKg) {
+              fallbackQuery = fallbackQuery.or("features->>country.ilike.%kyrgyzstan%,features->>country.ilike.%кыргызстан%,region.neq.TURKEY");
+            } else if (isTr) {
+              fallbackQuery = fallbackQuery.or("features->>country.ilike.%turkey%,features->>country.ilike.%турция%,region.eq.TURKEY");
+            } else {
+              fallbackQuery = fallbackQuery.or(`features->>country.ilike.%${cleanCountry}%`);
+            }
+          }
+          if (cleanCity) {
+            fallbackQuery = fallbackQuery.or(`city.ilike.%${cleanCity}%,features->>city.ilike.%${cleanCity}%,address.ilike.%${cleanCity}%`);
+          }
+          if (cleanDistrict) {
+            fallbackQuery = fallbackQuery.or(`features->>district.ilike.%${cleanDistrict}%,address.ilike.%${cleanDistrict}%`);
+          }
+          const fallbackRes = await fallbackQuery
+            .order("created_at", { ascending: false })
+            .range(from, to);
+          complexes = fallbackRes.data;
+          error = fallbackRes.error;
+          count = fallbackRes.count;
+        }
 
         if (error) {
           const err = new Error("Ошибка загрузки жилых комплексов");
@@ -167,7 +214,7 @@ export const getComplexById = async (req, res) => {
       `byId:${id}`,
       PUBLIC_COMPLEXES_CACHE_TTL_MS,
       async () => {
-        const { data: complex, error } = await supabase
+        let { data: complex, error } = await supabase
           .from("residential_complexes")
           .select(`
             ${COMPLEX_COLUMNS},
@@ -176,6 +223,20 @@ export const getComplexById = async (req, res) => {
           `)
           .eq("id", id)
           .single();
+
+        if (error && isMissingColumnError(error)) {
+          const fallbackRes = await supabase
+            .from("residential_complexes")
+            .select(`
+              ${COMPLEX_COLUMNS_LEGACY},
+              developers (id, user_id, company_name, logo_url, description, website, is_verified, created_at),
+              complex_layouts (${COMPLEX_LAYOUT_COLUMNS})
+            `)
+            .eq("id", id)
+            .single();
+          complex = fallbackRes.data;
+          error = fallbackRes.error;
+        }
 
         if (error || !complex) {
           return null;
@@ -332,7 +393,28 @@ export const getMyComplexes = async (req, res) => {
       query = query.range(from, to);
     }
 
-    const { data: complexes, error, count } = await query;
+    let { data: complexes, error, count } = await query;
+    if (error && isMissingColumnError(error)) {
+      let fallbackQuery = supabase
+        .from("residential_complexes")
+        .select(
+          `
+          ${COMPLEX_COLUMNS_LEGACY},
+          developers (id, user_id, company_name, logo_url, is_verified),
+          complex_layouts (${COMPLEX_LAYOUT_COLUMNS})
+        `,
+          { count: "exact" }
+        )
+        .eq("developer_id", developer.id)
+        .order("created_at", { ascending: false });
+      if (typeof fallbackQuery?.range === "function") {
+        fallbackQuery = fallbackQuery.range(from, to);
+      }
+      const fallbackRes = await fallbackQuery;
+      complexes = fallbackRes.data;
+      error = fallbackRes.error;
+      count = fallbackRes.count;
+    }
 
     if (error) {
       console.error("Get My Complexes Error:", error);
@@ -579,11 +661,20 @@ export const updateComplex = async (req, res) => {
     }
 
     // Проверяем существование ЖК и его владельца
-    const { data: complex, error: fetchError } = await supabase
+    let { data: complex, error: fetchError } = await supabase
       .from("residential_complexes")
       .select(COMPLEX_COLUMNS)
       .eq("id", id)
       .single();
+    if (fetchError && isMissingColumnError(fetchError)) {
+      const fallbackFetch = await supabase
+        .from("residential_complexes")
+        .select(COMPLEX_COLUMNS_LEGACY)
+        .eq("id", id)
+        .single();
+      complex = fallbackFetch.data;
+      fetchError = fallbackFetch.error;
+    }
 
     if (fetchError || !complex) {
       return res.status(404).json({
