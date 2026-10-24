@@ -60,7 +60,7 @@ export function sanitizeFeatures(features) {
 // каждый read-путь маскирует уже истёкшее продвижение прямо в ответе (см.
 // resolvePromotionExpiry). Возвращает тот же объект, если ничего не
 // изменилось — лишний спред не нужен.
-function maskExpiredPromotion(listing) {
+export function maskExpiredPromotion(listing) {
   const resolved = resolvePromotionExpiry(listing);
   if (!resolved.changed) return listing;
 
@@ -766,6 +766,36 @@ export async function resolveCurrentUser(req) {
 // - phone отдаётся только для бизнес-аккаунтов (agency, developer, realtor)
 //   либо если у автора включен флаг показа телефона (show_phone).
 //   Для personal-продавцов отдаётся phone: null.
+export function sanitizePublicProfileAbout(aboutValue) {
+  if (typeof aboutValue !== "string") return aboutValue;
+  const trimmed = aboutValue.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        delete parsed.verificationDocs;
+        delete parsed.verificationStatus;
+        delete parsed.rejectionReason;
+        return JSON.stringify(parsed);
+      }
+    } catch {}
+  }
+  return aboutValue;
+}
+
+function sanitizeAuthorProfileEntry(profileEntry) {
+  if (!profileEntry || typeof profileEntry !== "object") return profileEntry;
+  const cleanProfile = { ...profileEntry };
+  delete cleanProfile.inn;
+  delete cleanProfile.verificationDocs;
+  delete cleanProfile.verificationStatus;
+  delete cleanProfile.rejectionReason;
+  if (typeof cleanProfile.about === "string") {
+    cleanProfile.about = sanitizePublicProfileAbout(cleanProfile.about);
+  }
+  return cleanProfile;
+}
+
 export function sanitizeAuthorPII(author) {
   if (!author || typeof author !== "object") return author;
 
@@ -784,6 +814,12 @@ export function sanitizeAuthorPII(author) {
     ...author,
     phone: showPhone ? (author.phone || null) : null,
   };
+
+  if (sanitized.user_profiles) {
+    sanitized.user_profiles = Array.isArray(sanitized.user_profiles)
+      ? sanitized.user_profiles.map(sanitizeAuthorProfileEntry)
+      : sanitizeAuthorProfileEntry(sanitized.user_profiles);
+  }
 
   delete sanitized.email;
   return sanitized;

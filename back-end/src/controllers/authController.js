@@ -7,6 +7,7 @@ import { generateSecureOtp, safeCompare } from "../utils/otp.js";
 import { sendOtpEmail } from "../services/emailService.js";
 import nikitaService from "../services/nikitaService.js";
 import { generateToken, invalidateUserAuthCache } from "../middleware/auth.js";
+import { resolvePromotionExpiry } from "../services/promotionsService.js";
 import { validateImageMagicBytes } from "../middleware/upload.js";
 import {
   uploadAvatarToStorage,
@@ -2203,7 +2204,7 @@ export const getUserPublicProfile = async (req, res) => {
     let user = null;
     const { data: userRow } = await supabase
       .from("users")
-      .select("id, account_type, email, phone, is_verified, created_at")
+      .select("id, account_type, phone, show_phone, is_verified, created_at")
       .eq("id", id)
       .maybeSingle();
 
@@ -2220,7 +2221,7 @@ export const getUserPublicProfile = async (req, res) => {
       if (devRow && devRow.user_id) {
         const { data: userByDev } = await supabase
           .from("users")
-          .select("id, account_type, email, phone, is_verified, created_at")
+          .select("id, account_type, phone, show_phone, is_verified, created_at")
           .eq("id", devRow.user_id)
           .maybeSingle();
         user = userByDev;
@@ -2272,18 +2273,43 @@ export const getUserPublicProfile = async (req, res) => {
     }
 
     const isBusinessAccount = ["agency", "developer", "realtor"].includes(user.account_type);
+    const explicitlyHidden =
+      user.show_phone === false ||
+      profile?.show_phone === false ||
+      profile?.showPhone === false;
+    const explicitlyShown =
+      user.show_phone === true ||
+      profile?.show_phone === true ||
+      profile?.showPhone === true;
+    const canShowPhone = !explicitlyHidden && (isBusinessAccount || explicitlyShown);
+
+    const sanitizedProfile = formatProfileWithMetadata(profile);
+    delete sanitizedProfile.inn;
+    delete sanitizedProfile.verificationDocs;
+    delete sanitizedProfile.verificationStatus;
+    delete sanitizedProfile.rejectionReason;
+
+    const maskedAds = (listings || []).map((ad) => {
+      const resolved = resolvePromotionExpiry(ad);
+      if (!resolved.changed) return ad;
+      return {
+        ...ad,
+        promotion_status: resolved.promotionStatus,
+        is_urgent: resolved.isUrgent,
+      };
+    });
 
     return res.json({
       success: true,
       user: {
         id: user.id,
         type: user.account_type,
-        email: isBusinessAccount ? user.email : null,
-        phone: isBusinessAccount ? user.phone : null,
+        email: null,
+        phone: canShowPhone ? (user.phone || null) : null,
         isVerified: user.is_verified,
         createdAt: user.created_at,
-        profile: formatProfileWithMetadata(profile),
-        ads: listings || [],
+        profile: sanitizedProfile,
+        ads: maskedAds,
         complexes: complexes || []
       }
     });

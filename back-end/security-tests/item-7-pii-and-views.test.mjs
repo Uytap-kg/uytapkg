@@ -252,3 +252,319 @@ test("Migration & Schema: наличие миграции 007_pii_and_views.sql 
     "schema.sql должен содержать колонку show_phone в таблице users"
   );
 });
+
+
+// =======================================================
+// 6. Тестирование P1-07, P1-08, P1-09 (Stage 4 Release Blockers)
+// =======================================================
+test("P1-08: sanitizeAuthorPII вырезает verificationDocs, verificationStatus, rejectionReason и inn из user_profiles", () => {
+  const authorWithVerificationDocs = {
+    id: "user-realtor-1",
+    account_type: "realtor",
+    email: "realtor@secret.kg",
+    phone: "+996555999888",
+    user_profiles: [
+      {
+        company_name: "Best Realty",
+        inn: "12345678901234",
+        verificationDocs: ["https://storage.example/private-doc-1.pdf"],
+        verificationStatus: "rejected",
+        rejectionReason: "Нечитаемый скан паспорта",
+        about: JSON.stringify({
+          bio: "Опытный риэлтор в Бишкеке",
+          experienceYears: 7,
+          verificationDocs: ["https://storage.example/passport-scan.jpg"],
+          verificationStatus: "rejected",
+          rejectionReason: "Паспорт просрочен",
+        }),
+      },
+    ],
+  };
+
+  const sanitized = sanitizeAuthorPII(authorWithVerificationDocs);
+  assert.equal(sanitized.email, undefined);
+  const profile = sanitized.user_profiles[0];
+  assert.equal(profile.inn, undefined, "ИНН должен быть удалён из публичного профиля");
+  assert.equal(profile.verificationDocs, undefined, "verificationDocs должен быть удалён");
+  assert.equal(profile.verificationStatus, undefined, "verificationStatus должен быть удалён");
+  assert.equal(profile.rejectionReason, undefined, "rejectionReason должен быть удалён");
+
+  const parsedAbout = JSON.parse(profile.about);
+  assert.equal(parsedAbout.bio, "Опытный риэлтор в Бишкеке");
+  assert.equal(parsedAbout.experienceYears, 7);
+  assert.equal(parsedAbout.verificationDocs, undefined, "verificationDocs внутри JSON about должен быть вырезан");
+  assert.equal(parsedAbout.verificationStatus, undefined, "verificationStatus внутри JSON about должен быть вырезан");
+  assert.equal(parsedAbout.rejectionReason, undefined, "rejectionReason внутри JSON about должен быть вырезан");
+});
+
+test("P1-08: getUserPublicProfile учитывает show_phone, скрывает email и inn, вырезает verificationDocs и маскирует истёкшие промо", async () => {
+  const { supabase } = await import("../src/config/db.js");
+  const { getUserPublicProfile } = await import("../src/controllers/authController.js");
+
+  const origFrom = supabase.from;
+  try {
+    const pastIso = new Date(Date.now() - 86400000).toISOString();
+    const futureIso = new Date(Date.now() + 86400000).toISOString();
+
+    supabase.from = (table) => {
+      if (table === "users") {
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          maybeSingle: async () => ({
+            data: {
+              id: "pub-user-1",
+              phone: "+996700112233",
+              email: "private-owner@mail.kg",
+              role: "user",
+              account_type: "realtor",
+              show_phone: false,
+              is_verified: true,
+              created_at: "2025-01-01T00:00:00.000Z",
+            },
+            error: null,
+          }),
+        };
+        return chain;
+      }
+      if (table === "user_profiles") {
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          maybeSingle: async () => ({
+            data: {
+              first_name: "Азамат",
+              last_name: "Касымов",
+              company_name: "Azamat Realty",
+              inn: "999888777666",
+              show_phone: false,
+              about: JSON.stringify({
+                bio: "Риэлтор",
+                verificationDocs: ["https://secret/doc.png"],
+                verificationStatus: "pending",
+                rejectionReason: "Secret reason",
+              }),
+            },
+            error: null,
+          }),
+        };
+        return chain;
+      }
+      if (table === "listings") {
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          gt: () => chain,
+          or: () => chain,
+          order: async () => ({
+            data: [
+              {
+                id: "ad-expired-vip",
+                title: "Квартира в центре",
+                status: "active",
+                expires_at: futureIso,
+                promotion_status: "vip",
+                is_urgent: true,
+                features: {
+                  promotionExpiresAt: pastIso,
+                  urgentExpiresAt: pastIso,
+                },
+              },
+            ],
+            error: null,
+          }),
+        };
+        return chain;
+      }
+      throw new Error("Unexpected table: " + table);
+    };
+
+    let statusCode = 200;
+    let body = null;
+    const req = { params: { id: "pub-user-1" } };
+    const res = {
+      status(code) {
+        statusCode = code;
+        return this;
+      },
+      json(payload) {
+        body = payload;
+        return this;
+      },
+    };
+
+    await getUserPublicProfile(req, res, () => {});
+    assert.equal(statusCode, 200);
+    assert.ok(body?.user);
+    assert.equal(body.user.email, null, "Email не должен отдаваться в getUserPublicProfile");
+    assert.equal(body.user.phone, null, "Телефон должен быть скрыт при show_phone === false");
+    assert.equal(body.user.profile.inn, undefined, "ИНН не должен присутствовать в ответе");
+    assert.equal(body.user.profile.verificationDocs, undefined);
+    assert.equal(body.user.profile.verificationStatus, undefined);
+    assert.equal(body.user.profile.rejectionReason, undefined);
+    assert.equal(body.user.profile.about, "Риэлтор");
+
+    assert.equal(body.user.ads.length, 1);
+    assert.equal(body.user.ads[0].promotion_status, "regular", "Истёкший VIP должен маскироваться в getUserPublicProfile");
+    assert.equal(body.user.ads[0].is_urgent, false, "Истёкший urgent должен маскироваться в getUserPublicProfile");
+  } finally {
+    supabase.from = origFrom;
+  }
+});
+
+test("P1-07: addFavorite отклоняет неактивные объявления, а getFavorites фильтрует закрытые объявления, очищает PII и маскирует промо", async () => {
+  const { supabase } = await import("../src/config/db.js");
+  const { addFavorite, getFavorites } = await import("../src/controllers/favoritesController.js");
+
+  const origFrom = supabase.from;
+  try {
+    // 1. Попытка добавить draft/moderation объявление в избранное -> 404
+    let eqCalls = [];
+    supabase.from = (table) => {
+      if (table === "listings") {
+        const chain = {
+          select: () => chain,
+          eq: (col, val) => {
+            eqCalls.push([col, val]);
+            return chain;
+          },
+          maybeSingle: async () => ({ data: null, error: null }),
+          single: async () => ({ data: null, error: { code: "PGRST116" } }),
+        };
+        return chain;
+      }
+      throw new Error("Unexpected table in addFavorite: " + table);
+    };
+
+    let addStatus = 200;
+    let addBody = null;
+    await addFavorite(
+      { user: { id: "user-1" }, body: { listingId: "draft-listing-id" } },
+      {
+        status(c) {
+          addStatus = c;
+          return this;
+        },
+        json(p) {
+          addBody = p;
+          return this;
+        },
+      },
+      (err) => {
+        if (err) {
+          addStatus = err.statusCode || 500;
+          addBody = { message: err.message };
+        }
+      }
+    );
+
+    assert.equal(addStatus, 404, "Неактивное или черновик-объявление должно отклоняться с 404");
+    assert.ok(
+      eqCalls.some(([col, val]) => col === "status" && val === "active"),
+      "addFavorite обязан проверять .eq('status', 'active')"
+    );
+
+    // 2. getFavorites: фильтрация draft/expired, очистка PII автора и маскирование промо
+    const pastIso = new Date(Date.now() - 86400000).toISOString();
+    const futureIso = new Date(Date.now() + 86400000).toISOString();
+
+    supabase.from = (table) => {
+      if (table === "favorites") {
+        const rows = [
+          {
+            user_id: "user-1",
+            listing_id: "listing-draft",
+            listings: {
+              id: "listing-draft",
+              title: "Секретный черновик",
+              status: "draft",
+              expires_at: futureIso,
+              users: {
+                id: "seller-1",
+                account_type: "personal",
+                email: "draft@secret.kg",
+                phone: "+996555000111",
+              },
+            },
+          },
+          {
+            user_id: "user-1",
+            listing_id: "listing-active",
+            listings: {
+              id: "listing-active",
+              title: "Активная квартира",
+              status: "active",
+              expires_at: futureIso,
+              promotion_status: "vip",
+              is_urgent: true,
+              features: {
+                promotionExpiresAt: pastIso,
+                urgentExpiresAt: pastIso,
+              },
+              users: {
+                id: "seller-2",
+                account_type: "personal",
+                email: "seller2@secret.kg",
+                phone: "+996555000222",
+                show_phone: false,
+              },
+            },
+          },
+        ];
+        const chain = {
+          select: () => chain,
+          eq: () => Promise.resolve({ data: rows, error: null }),
+        };
+        return chain;
+      }
+      throw new Error("Unexpected table in getFavorites: " + table);
+    };
+
+    let favStatus = 200;
+    let favBody = null;
+    await getFavorites(
+      { user: { id: "user-1" } },
+      {
+        status(c) {
+          favStatus = c;
+          return this;
+        },
+        json(p) {
+          favBody = p;
+          return this;
+        },
+      },
+      () => {}
+    );
+
+    assert.equal(favStatus, 200);
+    assert.ok(Array.isArray(favBody?.data));
+    assert.equal(favBody.data.length, 1, "Черновик должен быть отфильтрован из выдачи избранного");
+    assert.equal(favBody.data[0].id, "listing-active");
+    assert.equal(favBody.data[0].users.email, undefined, "Email автора в избранном должен быть удалён");
+    assert.equal(favBody.data[0].users.phone, null, "Телефон personal-автора без show_phone должен быть скрыт");
+    assert.equal(favBody.data[0].promotion_status, "regular", "Истёкшее продвижение в избранном должно быть замаскировано");
+    assert.equal(favBody.data[0].is_urgent, false);
+  } finally {
+    supabase.from = origFrom;
+  }
+});
+
+test("P1-09: speech-to-text API ограничивает частоту запросов по IP (429) и размер аудио до 2.5 МБ до чтения formData (413)", async () => {
+  const sttRoutePath = path.resolve(__dirname, "../../front-end/src/app/api/speech-to-text/route.js");
+  assert.ok(fs.existsSync(sttRoutePath), "Файл route.js для speech-to-text должен существовать");
+
+  const sttCode = fs.readFileSync(sttRoutePath, "utf8");
+  assert.ok(
+    sttCode.includes("2.5 * 1024 * 1024"),
+    "Лимит аудио должен быть снижен до 2.5 МБ"
+  );
+  assert.ok(
+    sttCode.includes("content-length") && sttCode.indexOf("content-length") < sttCode.indexOf("request.formData()"),
+    "Проверка content-length должна выполняться ДО вызова request.formData()"
+  );
+  assert.ok(
+    sttCode.includes("status: 429") && sttCode.includes("STT_RATE_LIMIT_MAX = 5"),
+    "Должен быть настроен IP rate-limit (5 запросов в минуту -> 429)"
+  );
+});
