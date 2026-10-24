@@ -62,6 +62,7 @@ export const supabaseAdmin = initTestSupabaseClient();
 const LOG_PATH = path.join(__dirname, "SECURITY_LOG.md");
 
 export function logDbOp(entry) {
+  if (process.env.WRITE_SECURITY_LOG !== "true") return;
   try {
     const line = `- ${new Date().toISOString()} ${entry}\n`;
     fs.appendFileSync(LOG_PATH, line, "utf-8");

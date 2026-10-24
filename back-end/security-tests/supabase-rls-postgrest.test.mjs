@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { isTestDbConfigured, SKIP_NO_TEST_DB_REASON } from "./helpers.mjs";
 
 const POSTGREST_URL = process.env.TEST_SUPABASE_URL || "http://127.0.0.1:54321";
 const ANON_KEY =
   process.env.TEST_SUPABASE_ANON_KEY ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
 
-test("Supabase PostgREST RLS Audit: Anonymous client cannot read sensitive tables directly", async () => {
+test("Supabase PostgREST RLS Audit: Anonymous client cannot read sensitive tables directly", { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false }, async () => {
   const sensitiveTables = [
     "users",
     "user_profiles",
@@ -40,7 +41,7 @@ test("Supabase PostgREST RLS Audit: Anonymous client cannot read sensitive table
   }
 });
 
-test("Supabase PostgREST RLS Audit: Anonymous client cannot insert or mutate database records directly", async () => {
+test("Supabase PostgREST RLS Audit: Anonymous client cannot insert or mutate database records directly", { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false }, async () => {
   const res = await fetch(`${POSTGREST_URL}/rest/v1/users`, {
     method: "POST",
     headers: {
@@ -70,7 +71,7 @@ test("Supabase PostgREST RLS Audit: Anonymous client cannot insert or mutate dat
   );
 });
 
-test("Supabase PostgREST RPC Audit: Anonymous client cannot execute sensitive RPC functions directly", async () => {
+test("Supabase PostgREST RPC Audit: Anonymous client cannot execute sensitive RPC functions directly", { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false }, async () => {
   const sensitiveRpcs = [
     { name: "register_user", payload: {} },
     { name: "activate_subscription_atomic", payload: {} },
@@ -111,7 +112,7 @@ test("Supabase PostgREST RPC Audit: Anonymous client cannot execute sensitive RP
   }
 });
 
-test("Supabase Storage Audit: Anonymous client cannot list objects or delete files directly", async () => {
+test("Supabase Storage Audit: Anonymous client cannot list objects or delete files directly", { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false }, async () => {
   const SERVICE_KEY =
     process.env.SUPABASE_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU";

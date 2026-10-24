@@ -280,3 +280,193 @@ test("P1-5: Модалки профиля не вызывают fileFromUrl и �
     );
   }
 });
+
+
+// =======================================================
+// Stage 2: P0-03 (X-Real-IP spoofing, timingSafeEqual proxy secret) & P2-02 (Fail-Fast production secrets)
+// =======================================================
+test("P0-03: getTrustedClientIp игнорирует клиентский X-Real-IP по умолчанию и доверяет ему только при TRUST_NGINX_REAL_IP='true'", async () => {
+  const { getTrustedClientIp, applyTrustedForwardedFor } = await import(
+    "../../front-end/src/app/api/_lib/forwardedFor.js"
+  );
+
+  const origTrustNginx = process.env.TRUST_NGINX_REAL_IP;
+  const origProxySecret = process.env.INTERNAL_PROXY_SECRET;
+
+  try {
+    delete process.env.TRUST_NGINX_REAL_IP;
+    process.env.INTERNAL_PROXY_SECRET = "test-internal-proxy-secret-123456";
+
+    // Злоумышленник шлёт поддельный X-Real-IP: 198.51.100.77, реальный прокси добавил свой IP в конец X-Forwarded-For
+    const spoofedReq = {
+      headers: new Map([
+        ["x-real-ip", "198.51.100.77"],
+        ["x-forwarded-for", "203.0.113.50"],
+      ]),
+    };
+
+    const resolvedDefault = getTrustedClientIp(spoofedReq);
+    assert.equal(
+      resolvedDefault,
+      "203.0.113.50",
+      "Без TRUST_NGINX_REAL_IP='true' заголовок X-Real-IP не должен переопределять реальный IP"
+    );
+
+    const outHeaders = applyTrustedForwardedFor(new Headers(), spoofedReq);
+    assert.equal(outHeaders.get("x-forwarded-for"), "203.0.113.50");
+    assert.equal(outHeaders.get("x-real-ip"), null);
+
+    // При явном TRUST_NGINX_REAL_IP="true" заголовок X-Real-IP от Nginx принимается
+    process.env.TRUST_NGINX_REAL_IP = "true";
+    assert.equal(getTrustedClientIp(spoofedReq), "198.51.100.77");
+  } finally {
+    if (origTrustNginx === undefined) delete process.env.TRUST_NGINX_REAL_IP;
+    else process.env.TRUST_NGINX_REAL_IP = origTrustNginx;
+    if (origProxySecret === undefined) delete process.env.INTERNAL_PROXY_SECRET;
+    else process.env.INTERNAL_PROXY_SECRET = origProxySecret;
+  }
+});
+
+test("P0-03 & P2-02: isValidProxySecret использует timingSafeEqual, а checkProductionSecrets требует JWT_SECRET>=32, отдельный OTP_SECRET>=32 и INTERNAL_PROXY_SECRET>=16", async () => {
+  const { isValidProxySecret, resolveClientIp } = await import("../src/middleware/clientIp.js");
+  const { checkProductionSecrets } = await import("../src/config/runtimeCheck.js");
+
+  assert.equal(isValidProxySecret("secret-1234567890", "secret-1234567890"), true);
+  assert.equal(isValidProxySecret("secret-1234567890", "secret-1234567899"), false);
+  assert.equal(isValidProxySecret("short", "secret-1234567890"), false);
+  assert.equal(isValidProxySecret("", "secret-1234567890"), false);
+
+  // Проверка resolveClientIp при неверном секрете: сбрасывает X-Forwarded-For на socket IP
+  const origProxySecret = process.env.INTERNAL_PROXY_SECRET;
+  process.env.INTERNAL_PROXY_SECRET = "valid-proxy-secret-123456";
+  try {
+    const reqSpoof = {
+      headers: {
+        "x-internal-proxy-secret": "wrong-secret",
+        "x-forwarded-for": "1.2.3.4",
+      },
+      socket: { remoteAddress: "::ffff:10.0.0.99" },
+    };
+    resolveClientIp(reqSpoof, {}, () => {});
+    assert.equal(reqSpoof.ip, "10.0.0.99");
+  } finally {
+    process.env.INTERNAL_PROXY_SECRET = origProxySecret;
+  }
+
+  // Проверка checkProductionSecrets
+  const badEnvSameSecrets = {
+    JWT_SECRET: "a".repeat(32),
+    OTP_SECRET: "a".repeat(32),
+    INTERNAL_PROXY_SECRET: "p".repeat(16),
+  };
+  const sameErrors = checkProductionSecrets(badEnvSameSecrets);
+  assert.ok(
+    sameErrors.some((e) => e.includes("не должен совпадать с JWT_SECRET")),
+    "Совпадающие OTP_SECRET и JWT_SECRET должны вызывать ошибку конфигурации в production"
+  );
+
+  const badEnvShort = {
+    JWT_SECRET: "short-jwt",
+    OTP_SECRET: "",
+    INTERNAL_PROXY_SECRET: "short",
+  };
+  const shortErrors = checkProductionSecrets(badEnvShort);
+  assert.equal(shortErrors.length, 3, "Короткие/пустые секреты должны возвращать 3 ошибки");
+
+  const validEnv = {
+    JWT_SECRET: "j".repeat(32),
+    OTP_SECRET: "o".repeat(32),
+    INTERNAL_PROXY_SECRET: "p".repeat(16),
+  };
+  assert.deepEqual(checkProductionSecrets(validEnv), []);
+});
+
+
+// =======================================================
+// Stage 5: P1-10 (FK indexes, RPC search_path, _schema_migrations RLS), P1-11 (CI/CD fixes), P1-12 (dbPool SSL)
+// =======================================================
+test("P1-10: Миграция 20261025000000_fk_indexes_and_rpc_search_path.sql создает индексы на FK, фиксирует search_path и защищает _schema_migrations", () => {
+  const migPath = path.resolve(
+    __dirname,
+    "../../supabase/migrations/20261025000000_fk_indexes_and_rpc_search_path.sql"
+  );
+  assert.ok(fs.existsSync(migPath), "Миграция 20261025000000_fk_indexes_and_rpc_search_path.sql должна существовать");
+
+  const sql = fs.readFileSync(migPath, "utf8");
+  const expectedIndexes = [
+    "idx_listings_user_id",
+    "idx_listing_photos_listing_id",
+    "idx_favorites_listing_id",
+    "idx_complex_layouts_complex_id",
+    "idx_listings_complex_id",
+    "idx_residential_complexes_developer_id",
+    "idx_verification_requests_user_id",
+  ];
+  for (const idxName of expectedIndexes) {
+    assert.ok(sql.includes(idxName), `Миграция должна содержать индекс ${idxName}`);
+  }
+
+  const expectedRpcs = [
+    "consume_otp_attempt",
+    "increment_views",
+    "create_listing_with_limit",
+    "register_user",
+    "reclaim_unverified_user",
+    "create_promotion_payment",
+    "sync_listing_priority_rank",
+    "set_instagram_requests_updated_at",
+  ];
+  for (const fnName of expectedRpcs) {
+    assert.ok(
+      sql.includes(fnName) && sql.includes("SET search_path = public"),
+      `Миграция должна фиксировать search_path = public для функции ${fnName}`
+    );
+  }
+
+  const migrateScript = fs.readFileSync(
+    path.resolve(__dirname, "../scripts/migrate.js"),
+    "utf8"
+  );
+  assert.ok(
+    migrateScript.includes("ALTER TABLE public._schema_migrations ENABLE ROW LEVEL SECURITY"),
+    "migrate.js должен включать RLS на public._schema_migrations"
+  );
+  assert.ok(
+    migrateScript.includes("REVOKE ALL ON TABLE public._schema_migrations FROM PUBLIC, anon, authenticated"),
+    "migrate.js должен отзывать права на public._schema_migrations у PUBLIC, anon, authenticated"
+  );
+});
+
+test("P1-10 & P1-11 & P1-12: DEPLOY.md, CI workflow и SSL-конфигурация dbPool", async () => {
+  const { resolveDbSslConfig } = await import("../src/config/db.js");
+
+  // P1-12: SSL для облачных БД и продакшна
+  assert.deepEqual(
+    resolveDbSslConfig("postgres://user:pass@dpg-xxx.frankfurt-postgres.render.com:5432/db", { NODE_ENV: "development" }),
+    { rejectUnauthorized: false }
+  );
+  assert.deepEqual(
+    resolveDbSslConfig("postgres://user:pass@db.project.supabase.co:5432/postgres", { NODE_ENV: "development" }),
+    { rejectUnauthorized: false }
+  );
+  assert.deepEqual(
+    resolveDbSslConfig("postgres://user:pass@localhost:5432/db", { NODE_ENV: "production" }),
+    { rejectUnauthorized: false }
+  );
+  assert.equal(
+    resolveDbSslConfig("postgres://user:pass@localhost:5432/db", { NODE_ENV: "test" }),
+    undefined
+  );
+
+  // P1-10: DEPLOY.md описывает avatars и banners как public, а verification-docs как private
+  const deployMd = fs.readFileSync(path.resolve(__dirname, "../../DEPLOY.md"), "utf8");
+  assert.ok(deployMd.includes("verification-docs") && deployMd.includes("Private Bucket"));
+  assert.ok(!deployMd.includes("- `listings` — фотографии"));
+
+  // P1-11: CI workflow содержит job-level env для Render hooks и блокирующий Trivy scan
+  const ciYml = fs.readFileSync(path.resolve(__dirname, "../../.github/workflows/ci.yml"), "utf8");
+  assert.ok(
+    ciYml.includes('exit-code: "1"') && ciYml.includes("build-and-scan-docker"),
+    "Trivy должен завершаться с кодом 1 при CRITICAL и входить в needs для deploy-to-render"
+  );
+});

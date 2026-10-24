@@ -441,3 +441,89 @@ test("completeInstagramRequestAdmin: обновляет заявку в publishe
     supabase.from = origFrom;
   }
 });
+
+
+test("P1-06: createListing с listingType='instagram' создаёт черновик с needsPayment=true и НЕ создаёт бесплатную заявку в instagram_requests", async () => {
+  const { createListing } = await import("../src/controllers/listingsController.js");
+  const { supabase } = await import("../src/config/db.js");
+  const origFrom = supabase.from;
+
+  let instagramInsertCalled = false;
+  let insertedListingStatus = null;
+
+  supabase.from = (table) => {
+    if (table === "listings") {
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: async () => ({ count: 0, error: null }),
+          }),
+        }),
+        insert: (rows) => {
+          insertedListingStatus = rows[0]?.status;
+          return {
+            select: () => ({
+              single: async () => ({
+                data: {
+                  id: "0e5b9f7a-8b1a-4d2c-9a1b-123456789abc",
+                  ...rows[0],
+                },
+                error: null,
+              }),
+            }),
+          };
+        },
+      };
+    }
+    if (table === "instagram_requests") {
+      return {
+        insert: () => {
+          instagramInsertCalled = true;
+          throw new Error("instagram_requests не должен создаваться бесплатно в createListing!");
+        },
+      };
+    }
+    return origFrom(table);
+  };
+
+  try {
+    let statusCode = 200;
+    let body = null;
+    const req = {
+      user: { id: "1f2e3d4c-5b6a-4890-a1cd-ef0123456789", account_type: "personal" },
+      body: {
+        title: "Тестовая квартира для Instagram",
+        description: "Описание тестовой квартиры",
+        propertyType: "apartment",
+        dealType: "sale",
+        region: "Бишкек",
+        city: "Бишкек",
+        price: 75000,
+        currency: "USD",
+        area: 65,
+        rooms: 2,
+        listingType: "instagram",
+      },
+    };
+    const res = {
+      status(code) {
+        statusCode = code;
+        return this;
+      },
+      json(data) {
+        body = data;
+        return this;
+      },
+    };
+
+    await createListing(req, res);
+
+    assert.equal(statusCode, 201);
+    assert.equal(insertedListingStatus, "draft", "Объявление с listingType='instagram' обязано создаваться со статусом draft до оплаты");
+    assert.equal(body.needsPayment, true, "needsPayment обязан быть true");
+    assert.deepEqual(body.promotion, { serviceType: "instagram", days: 1 });
+    assert.equal(instagramInsertCalled, false, "Бесплатная заявка в instagram_requests не должна создаваться при создании объявления");
+  } finally {
+    supabase.from = origFrom;
+  }
+});

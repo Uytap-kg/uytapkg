@@ -2,6 +2,7 @@ import { supabase } from "../config/db.js";
 import alerts from "../utils/alerts.js";
 import { refundTariffListing } from "./subscriptionsService.js";
 import { cleanupOrphanedPendingAvatars } from "../utils/storage.js";
+import { reconcilePaymentStatus } from "./payments/paymentsService.js";
 
 // Интервал запуска очистки — раз в 15 минут (Дефект 3.1)
 export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
@@ -24,6 +25,7 @@ export async function runMaintenanceJob() {
     resetPromotionsCount: 0,
     resetUrgentCount: 0,
     stuckPaymentsCount: 0,
+    reconciledProcessingCount: 0,
     cleanedPendingAvatarsCount: 0,
   };
 
@@ -47,6 +49,33 @@ export async function runMaintenanceJob() {
           paymentIds: stuckPayments.map((p) => p.id),
           orderIds: stuckPayments.map((p) => p.order_id),
         });
+      }
+
+      // 0b. Сверка зависших платежей в статусе processing за последние 24 часа (P1-04)
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const procQuery = supabase
+        .from("payments")
+        .select("*")
+        .eq("status", "processing");
+
+      if (typeof procQuery.gte === "function") {
+        const { data: processingPayments, error: procError } = await procQuery
+          .gte("created_at", twentyFourHoursAgo)
+          .limit(50);
+
+        if (!procError && Array.isArray(processingPayments)) {
+          for (const procPayment of processingPayments) {
+            try {
+              await reconcilePaymentStatus(procPayment, { force: true });
+              summary.reconciledProcessingCount += 1;
+            } catch (recErr) {
+              console.warn(
+                "Cron Maintenance: reconcile processing payment error:",
+                recErr?.message || recErr
+              );
+            }
+          }
+        }
       }
     } catch (paymentCheckErr) {
       console.error("Cron Maintenance: payment check error (isolated):", paymentCheckErr?.message || paymentCheckErr);

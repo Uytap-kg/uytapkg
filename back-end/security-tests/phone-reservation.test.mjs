@@ -41,7 +41,7 @@ test(
           email: attackerEmail,
           phone,
           password: "StrongPassword123!",
-          firstName: "Attacker",
+          firstName: "Тестовый",
           lastName: "User",
         },
       });
@@ -90,7 +90,7 @@ test(
           email: secondUserEmail,
           phone,
           password: "StrongPassword123!",
-          firstName: "Second",
+          firstName: "Тестовый",
           lastName: "User",
         },
       });
@@ -141,7 +141,7 @@ test(
           email: legitimateEmail,
           phone,
           password: "StrongPassword123!",
-          firstName: "Legitimate",
+          firstName: "Тестовый",
           lastName: "Owner",
         },
       });
@@ -205,7 +205,7 @@ test(
           email: attackerEmail,
           phone,
           password: "StrongPassword123!",
-          firstName: "Attacker",
+          firstName: "Тестовый",
           lastName: "D",
         },
       });
@@ -252,7 +252,7 @@ test(
           email: attackerEmail,
           phone,
           password: "StrongPassword123!",
-          firstName: "Attacker",
+          firstName: "Тестовый",
           lastName: "E",
         },
       });
@@ -319,7 +319,7 @@ test(
           email: attackerEmail,
           phone,
           password: "StrongPassword123!",
-          firstName: "Attacker",
+          firstName: "Тестовый",
           lastName: "F",
         },
       });
@@ -383,7 +383,7 @@ test(
           email: attackerEmail,
           phone,
           password: "StrongPassword123!",
-          firstName: "Attacker",
+          firstName: "Тестовый",
           lastName: "G",
         },
       });
@@ -398,15 +398,16 @@ test(
 );
 
 test(
-  "Phone Reservation H: нельзя забрать номер, если у аккаунта есть профиль (user_profiles > 0)",
+  "Phone Reservation H: базовая строка в user_profiles НЕ блокирует освобождение просроченного неподтверждённого номера (P1-02)",
   { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false },
   async () => {
     const emailA = `has-profile-${Date.now()}@example.local`;
-    const attackerEmail = `attacker-h-${Date.now()}@example.local`;
+    const legitimateEmail = `legit-h-${Date.now()}@example.local`;
     const phone = `+996555${Math.floor(100000 + Math.random() * 900000)}`;
     const twentyMinsAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
 
     let userAId = null;
+    let newUserId = null;
     try {
       const { data: userA } = await supabaseAdmin
         .from("users")
@@ -423,33 +424,50 @@ test(
         .single();
       userAId = userA.id;
 
-      // Создаём запись профиля
+      // Создаём базовую запись профиля (как при обычной регистрации через register_user RPC)
       await supabaseAdmin.from("user_profiles").insert({
         user_id: userAId,
-        first_name: "Original",
-        last_name: "User",
+        first_name: "Тестовый",
+        last_name: "Squatter",
       });
 
       const res = await api("/api/auth/register", {
         method: "POST",
         body: {
           accountType: "personal",
-          email: attackerEmail,
+          email: legitimateEmail,
           phone,
           password: "StrongPassword123!",
-          firstName: "Attacker",
-          lastName: "H",
+          firstName: "Тестовый",
+          lastName: "Owner",
         },
       });
 
-      assert.equal(res.status, 409, "Аккаунт с профилем (user_profiles > 0) нельзя удалить");
-      assert.match(res.body.message, /номер.*телефон|уже существует/i);
+      assert.equal(
+        res.status,
+        201,
+        `Базовый профиль брошенной регистрации не должен блокировать освобождение номера (получен ${res.status})`
+      );
+      assert.equal(res.body.success, true);
+
+      const { data: usersWithPhone } = await supabaseAdmin
+        .from("users")
+        .select("id, email")
+        .eq("phone", phone);
+      assert.equal(usersWithPhone.length, 1);
+      assert.equal(usersWithPhone[0].email, legitimateEmail);
+      newUserId = usersWithPhone[0].id;
     } finally {
       if (userAId) {
         await supabaseAdmin.from("user_profiles").delete().eq("user_id", userAId);
         await supabaseAdmin.from("users").delete().eq("id", userAId);
       }
+      if (newUserId) {
+        await supabaseAdmin.from("user_profiles").delete().eq("user_id", newUserId);
+        await supabaseAdmin.from("users").delete().eq("id", newUserId);
+      }
+      await supabaseAdmin.from("email_verifications").delete().eq("email", legitimateEmail);
+      await supabaseAdmin.from("email_verifications").delete().eq("email", emailA);
     }
   }
 );
-

@@ -22,18 +22,11 @@ import { supabase } from "./config/db.js";
 import logger from "./utils/logger.js";
 import requestContext from "./middleware/requestContext.js";
 import resolveClientIp from "./middleware/clientIp.js";
+import { enforceProductionSecrets } from "./config/runtimeCheck.js";
 
 dotenv.config();
 
-if (process.env.NODE_ENV === "production") {
-  const proxySecret = process.env.INTERNAL_PROXY_SECRET;
-  if (!proxySecret || typeof proxySecret !== "string" || proxySecret.trim().length < 16) {
-    logger.error(
-      "КРИТИЧЕСКАЯ ОШИБКА КОНФИГУРАЦИИ: Переменная окружения INTERNAL_PROXY_SECRET обязательна в production (минимум 16 символов) для защиты от подмены IP-адресов."
-    );
-    process.exit(1);
-  }
-}
+enforceProductionSecrets(process.env);
 
 const app = express();
 // Отключаем слепое доверие к заголовкам X-Forwarded-* со стороны Express.

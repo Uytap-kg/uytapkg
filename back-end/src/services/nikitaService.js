@@ -141,9 +141,10 @@ async function postNikita(endpoint, body) {
  * @param {Object} params
  * @param {string} params.phone - Номер телефона получателя
  * @param {string} [params.ip] - IP-адрес клиента для rate limiting
+ * @param {string} [params.purpose="registration"] - Назначение кода (registration | phone_change | password_reset)
  * @returns {Promise<{success: boolean, token?: string, status?: number, message: string, retryAfter?: number, rateLimited?: boolean}>}
  */
-export async function sendOtp({ phone, ip }) {
+export async function sendOtp({ phone, ip, purpose = "registration" }) {
   // 1. Проверка конфигурации API-ключа
   assertNikitaConfigured();
 
@@ -168,8 +169,12 @@ export async function sendOtp({ phone, ip }) {
     };
   }
 
-  // 3. Защита от злоупотреблений и rate limit (кулдаун и лимиты в час)
-  const limitCheck = phoneOtpStore.checkSendLimits({ phone: cleanPhone, ip });
+  // 3. Защита от злоупотреблений и гонок: синхронно резервируем слот ДО await к Nikita
+  const limitCheck = phoneOtpStore.checkSendLimits({
+    phone: cleanPhone,
+    ip,
+    reserve: true,
+  });
   if (!limitCheck.allowed) {
     return {
       success: false,
@@ -183,27 +188,36 @@ export async function sendOtp({ phone, ip }) {
   let resultJson;
   let lastError;
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const transactionId = generateTransactionId();
-    try {
-      const { json } = await postNikita("/api/otp/send", {
-        transaction_id: transactionId,
-        phone: cleanPhone,
-      });
-      resultJson = json;
-      break;
-    } catch (err) {
-      lastError = err;
-      // Повтор только при сетевой ошибке до получения ответа и только 1 раз (attempt 1)
-      const isAbortOrTimeout = err.name === "TimeoutError" || err.name === "AbortError";
-      if (attempt === 1 && !isAbortOrTimeout) {
-        logger.warn("Сетевой сбой при отправке в Nikita OTP API, повтор с новым transaction_id", {
-          phone: maskPhoneNikita(cleanPhone),
-          error: err.message,
+  try {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const transactionId = generateTransactionId();
+      try {
+        const { json } = await postNikita("/api/otp/send", {
+          transaction_id: transactionId,
+          phone: cleanPhone,
         });
-        continue;
+        resultJson = json;
+        break;
+      } catch (err) {
+        lastError = err;
+        // Повтор только при сетевой ошибке до получения ответа и только 1 раз (attempt 1)
+        const isAbortOrTimeout = err.name === "TimeoutError" || err.name === "AbortError";
+        if (attempt === 1 && !isAbortOrTimeout) {
+          logger.warn("Сетевой сбой при отправке в Nikita OTP API, повтор с новым transaction_id", {
+            phone: maskPhoneNikita(cleanPhone),
+            error: err.message,
+          });
+          continue;
+        }
+        break;
       }
-      break;
+    }
+  } finally {
+    if (!resultJson) {
+      // Откатываем слот только при сетевой ошибке до получения ответа от шлюза
+      phoneOtpStore.rollbackSendReservation(limitCheck.reservation);
+    } else {
+      phoneOtpStore.completeSendReservation(limitCheck.reservation);
     }
   }
 
@@ -235,22 +249,26 @@ export async function sendOtp({ phone, ip }) {
       };
     }
 
-    // Сохраняем сессию в локальном хранилище для последующей проверки
+    // Сохраняем сессию в локальном хранилище (счётчики уже зарезервированы выше)
     phoneOtpStore.recordSend({
       phone: cleanPhone,
       ip,
       token,
       ttlMs: nikitaConfig.tokenTtlMs,
+      purpose,
+      skipCounters: true,
     });
 
     logger.info("SMS OTP успешно отправлен через Nikita", {
       phone: maskPhoneNikita(cleanPhone),
+      purpose,
     });
 
     return {
       success: true,
       token,
       phone: cleanPhone,
+      purpose,
       message: "Код подтверждения отправлен по SMS",
     };
   }
@@ -294,11 +312,12 @@ export async function sendOtp({ phone, ip }) {
  *
  * @param {Object} params
  * @param {string} [params.token] - Токен сессии, полученный при отправке
- * @param {string} [params.phone] - Номер телефона (если токен не передан напрямую)
+ * @param {string} [params.phone] - Номер телефона (если передан, обязан совпадать с телефоном сессии)
  * @param {string|number} params.code - Код подтверждения из SMS
- * @returns {Promise<{success: boolean, status?: number, message: string, attemptsLeft?: number}>}
+ * @param {string|string[]} [params.purpose] - Ожидаемое назначение сессии
+ * @returns {Promise<{success: boolean, status?: number, phone?: string, purpose?: string, message: string, attemptsLeft?: number}>}
  */
-export async function verifyOtp({ token, phone, code }) {
+export async function verifyOtp({ token, phone, code, purpose }) {
   // 1. Проверка конфигурации API-ключа
   assertNikitaConfigured();
 
@@ -311,14 +330,21 @@ export async function verifyOtp({ token, phone, code }) {
     };
   }
 
-  // 2. Поиск активной сессии токена
+  // 2. Нормализация переданного телефона (если указан в запросе — обязан быть валидным и совпадать с сессией)
   let cleanPhone = "";
-  if (phone) {
+  if (typeof phone === "string" && phone.trim() !== "") {
     const norm = normalizeNikitaPhone(phone);
-    if (norm.valid) cleanPhone = norm.phone;
+    if (!norm.valid) {
+      return {
+        success: false,
+        status: NIKITA_STATUS.INVALID_PHONE,
+        message: norm.error,
+      };
+    }
+    cleanPhone = norm.phone;
   }
 
-  const session = phoneOtpStore.findRecord({ token, phone: cleanPhone });
+  const session = phoneOtpStore.findRecord({ token, phone: cleanPhone, purpose });
   if (!session) {
     return {
       success: false,
@@ -329,107 +355,122 @@ export async function verifyOtp({ token, phone, code }) {
 
   const activeToken = session.token;
 
-  // 3. Учёт попыток ввода (максимум 5 на один токен для защиты от подбора)
-  const attemptResult = phoneOtpStore.registerAttempt(activeToken);
-  if (!attemptResult.allowed) {
+  // Защита от гонок при проверке кода: блокируем параллельные запросы к одной сессии
+  if (!phoneOtpStore.acquireVerifyLock(activeToken)) {
     return {
       success: false,
       status: NIKITA_STATUS.INVALID_TOKEN,
-      message: "Превышено максимальное число попыток ввода кода (5). Запросите новый код",
-      attemptsLeft: 0,
+      message: "Проверка кода уже выполняется, подождите",
     };
   }
 
-  // 4. Запрос проверки кода в Nikita OTP API
-  let resultJson;
   try {
-    const { json } = await postNikita("/api/otp/verify", {
-      token: activeToken,
-      code: strCode,
+    // Повторно проверяем, что сессия не была инвалидирована параллельным запросом
+    const freshSession = phoneOtpStore.findRecord({ token: activeToken, phone: cleanPhone, purpose });
+    if (!freshSession) {
+      return {
+        success: false,
+        status: NIKITA_STATUS.INVALID_TOKEN,
+        message: NIKITA_USER_MESSAGES[NIKITA_STATUS.INVALID_TOKEN],
+      };
+    }
+
+    // 3. Учёт попыток ввода (максимум 5 на один токен для защиты от подбора)
+    const attemptResult = phoneOtpStore.registerAttempt(activeToken);
+    if (!attemptResult.allowed) {
+      return {
+        success: false,
+        status: NIKITA_STATUS.INVALID_TOKEN,
+        message: "Превышено максимальное число попыток ввода кода (5). Запросите новый код",
+        attemptsLeft: 0,
+      };
+    }
+
+    // 4. Запрос проверки кода в Nikita OTP API
+    let resultJson;
+    try {
+      const { json } = await postNikita("/api/otp/verify", {
+        token: activeToken,
+        code: strCode,
+      });
+      resultJson = json;
+    } catch (err) {
+      logger.error("Ошибка при обращении к Nikita OTP verify API", {
+        error: err.message,
+      });
+      return {
+        success: false,
+        message: "Не удалось проверить код. Попробуйте снова.",
+      };
+    }
+
+    // Приведение типа: в verify status приходит строкой ("0")
+    const statusCode = Number(resultJson.status);
+
+    // 5. Успешная валидация
+    if (statusCode === NIKITA_STATUS.SUCCESS) {
+      // Токен одноразовый: немедленно инвалидируем после успешного подтверждения
+      phoneOtpStore.invalidateToken(activeToken);
+
+      logger.info("SMS OTP код успешно подтвержден через Nikita", {
+        purpose: freshSession.purpose,
+      });
+
+      return {
+        success: true,
+        status: 0,
+        phone: freshSession.phone,
+        purpose: freshSession.purpose,
+        message: "Код подтвержден",
+      };
+    }
+
+    // 6. Обработка ошибок верификации
+    // 14: Неверный код
+    if (statusCode === NIKITA_STATUS.INVALID_CODE) {
+      return {
+        success: false,
+        status: 14,
+        message: NIKITA_USER_MESSAGES[NIKITA_STATUS.INVALID_CODE],
+        attemptsLeft: attemptResult.attemptsLeft,
+      };
+    }
+
+    // 13: Срок действия кода истек
+    if (statusCode === NIKITA_STATUS.TIME_EXPIRED) {
+      phoneOtpStore.invalidateToken(activeToken);
+      return {
+        success: false,
+        status: 13,
+        message: NIKITA_USER_MESSAGES[NIKITA_STATUS.TIME_EXPIRED],
+      };
+    }
+
+    // 12: Неверный токен
+    if (statusCode === NIKITA_STATUS.INVALID_TOKEN) {
+      phoneOtpStore.invalidateToken(activeToken);
+      return {
+        success: false,
+        status: 12,
+        message: NIKITA_USER_MESSAGES[NIKITA_STATUS.INVALID_TOKEN],
+      };
+    }
+
+    // Прочие ошибки со стороны провайдера
+    logger.error("Nikita OTP verify вернул ошибку", {
+      status: statusCode,
+      description: resultJson.description,
     });
-    resultJson = json;
-  } catch (err) {
-    logger.error("Ошибка при обращении к Nikita OTP verify API", {
-      error: err.message,
-    });
+
     return {
       success: false,
-      message: "Не удалось проверить код. Попробуйте снова.",
+      status: statusCode,
+      message: NIKITA_USER_MESSAGES.DEFAULT_ERROR,
     };
+  } finally {
+    phoneOtpStore.releaseVerifyLock(activeToken);
   }
-
-  // Приведение типа: в verify status приходит строкой ("0")
-  const statusCode = Number(resultJson.status);
-
-  // 5. Успешная валидация
-  if (statusCode === NIKITA_STATUS.SUCCESS) {
-    // Токен одноразовый: немедленно инвалидируем после успешного подтверждения
-    phoneOtpStore.invalidateToken(activeToken);
-
-    logger.info("SMS OTP код успешно подтвержден через Nikita");
-
-    return {
-      success: true,
-      status: 0,
-      phone: session.phone,
-      message: "Код подтвержден",
-    };
-  }
-
-  // 6. Обработка ошибок верификации
-  // 14: Неверный код
-  if (statusCode === NIKITA_STATUS.INVALID_CODE) {
-    return {
-      success: false,
-      status: 14,
-      message: NIKITA_USER_MESSAGES[NIKITA_STATUS.INVALID_CODE],
-      attemptsLeft: attemptResult.attemptsLeft,
-    };
-  }
-
-  // 13: Срок действия кода истек
-  if (statusCode === NIKITA_STATUS.TIME_EXPIRED) {
-    phoneOtpStore.invalidateToken(activeToken);
-    return {
-      success: false,
-      status: 13,
-      message: NIKITA_USER_MESSAGES[NIKITA_STATUS.TIME_EXPIRED],
-    };
-  }
-
-  // 12: Неверный токен
-  if (statusCode === NIKITA_STATUS.INVALID_TOKEN) {
-    phoneOtpStore.invalidateToken(activeToken);
-    return {
-      success: false,
-      status: 12,
-      message: NIKITA_USER_MESSAGES[NIKITA_STATUS.INVALID_TOKEN],
-    };
-  }
-
-  // Прочие ошибки со стороны провайдера
-  logger.error("Nikita OTP verify вернул ошибку", {
-    status: statusCode,
-    description: resultJson.description,
-  });
-
-  return {
-    success: false,
-    status: statusCode,
-    message: NIKITA_USER_MESSAGES.DEFAULT_ERROR,
-  };
 }
-
-// =======================================================
-// TODO: Подключение отчётов о доставке SMS (Delivery Reports / DR).
-//
-// При необходимости получения детальных статусов доставки:
-// 1. Зарегистрировать callback URL на бэкенде: например, POST /api/otp/dr
-// 2. В кабинете Nikita указать URL callback или периодически опрашивать:
-//    POST https://smspro.nikita.kg/api/dr
-//    Body: { "transaction_id": "...", "message_id": "..." }
-// 3. Сохранять статусы (DELIVRD, EXPIRED, UNDELIV) в таблицу логов сообщений.
-// =======================================================
 
 export const nikitaService = {
   sendOtp,

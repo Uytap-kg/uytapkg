@@ -1,11 +1,8 @@
 // Единая безопасная обработка X-Forwarded-For для всех Next.js-прокси к бэкенду.
 //
-// Бэкенд настроен на `trust proxy: 1` и берёт IP клиента из X-Forwarded-For
-// для express-rate-limit.
+// Бэкенд принимает X-Forwarded-For ТОЛЬКО при наличии X-Internal-Proxy-Secret.
 // В продакшене перед Next.js могут стоять Cloudflare (cf-connecting-ip),
-// Nginx (x-real-ip) или Vercel (x-vercel-forwarded-for). Если они присутствуют,
-// мы отдаём приоритет проверенным заголовкам провайдеров. В противном случае
-// берём проверенный IP из X-Forwarded-For. Все значения валидируются по формату IP.
+// Nginx (x-real-ip, при явном TRUST_NGINX_REAL_IP=true) или Vercel (x-vercel-forwarded-for).
 
 const IPV4_REGEX = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const IPV6_REGEX = /^(?:[a-fA-F0-9]{1,4}:){1,7}[a-fA-F0-9]{1,4}$|^::1$|^::$/;
@@ -43,10 +40,13 @@ export function getTrustedClientIp(request) {
     return request.ip.trim();
   }
 
-  // 4. Nginx X-Real-IP (устанавливается директивой proxy_set_header X-Real-IP $remote_addr)
-  const realIp = request.headers?.get?.("x-real-ip");
-  if (realIp && isValidIp(realIp)) {
-    return realIp.trim();
+  // 4. Nginx X-Real-IP: доверяем ТОЛЬКО при явном включении TRUST_NGINX_REAL_IP=true
+  // (защита P0-03: без явного флага внешний клиент может подделать X-Real-IP и обойти rate limit)
+  if (process.env.TRUST_NGINX_REAL_IP === "true") {
+    const realIp = request.headers?.get?.("x-real-ip");
+    if (realIp && isValidIp(realIp)) {
+      return realIp.trim();
+    }
   }
 
   // 5. X-Forwarded-For: для локальной разработки без Vercel/Cloudflare

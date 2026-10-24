@@ -7,11 +7,19 @@ import logger from "./logger.js";
 // SMS стоят денег и требуют строгой защиты:
 // 1. Кулдаун между отправками на один номер (по умолчанию 60с).
 // 2. Лимит отправок на один номер в час (по умолчанию 5).
-// 3. Лимит отправок с одного IP в час (по умолчанию 20).
+// 3. Лимит отправок с одного IP в час (по умолчанию 120) и в минуту (30).
 // 4. Ограничение попыток ввода кода (максимум 5 на token).
 // 5. Одноразовость token: удаление сразу после успешной проверки.
-// 6. Маскирование номера в логах: 99677****56.
+// 6. Привязка сессии к номеру (phone) и назначению (purpose).
+// 7. Синхронное резервирование слота ДО сетевого запроса в Nikita (защита от гонок TOCTOU).
+// 8. Маскирование номера в логах: 99677****56.
 // =======================================================
+
+export const VALID_OTP_PURPOSES = new Set([
+  "registration",
+  "phone_change",
+  "password_reset",
+]);
 
 /**
  * Безопасное маскирование номера телефона для логов.
@@ -26,7 +34,7 @@ export function maskPhoneNikita(phone) {
 
 class PhoneOtpStore {
   constructor() {
-    // token -> { phone, attempts, createdAt, expiresAt }
+    // token -> { phone, purpose, attempts, createdAt, expiresAt }
     this.tokens = new Map();
     // normalizedPhone -> latest token
     this.phoneToToken = new Map();
@@ -42,6 +50,10 @@ class PhoneOtpStore {
     this.ipHourlyHistory = new Map();
     // [timestamp, timestamp, ...] (24 часа на весь сервис)
     this.serviceDailyHistory = [];
+    // Блокировки активных (in-flight) отправок по номеру для защиты от гонки TOCTOU
+    this.inFlightSends = new Set();
+    // Блокировки активных (in-flight) сетевых проверок кода по токену
+    this.verifyingTokens = new Set();
 
     // Запуск сборщика мусора раз в 5 минут
     this.cleanupInterval = setInterval(() => {
@@ -62,17 +74,27 @@ class PhoneOtpStore {
   }
 
   /**
-   * Проверка лимитов на отправку OTP.
-   * Возвращает { allowed: true } или { allowed: false, message, retryAfter, reason }
+   * Проверка лимитов на отправку OTP (и опциональное синхронное резервирование слота до await).
+   * Возвращает { allowed: true, reservation? } или { allowed: false, message, retryAfter, reason }
    */
-  checkSendLimits({ phone, ip }) {
+  checkSendLimits({ phone, ip, reserve = false }) {
     const now = Date.now();
     const cooldownMs = nikitaConfig.resendCooldownSec * 1000;
     const oneMinuteMs = 60 * 1000;
     const oneHourMs = 60 * 60 * 1000;
     const oneDayMs = 24 * 60 * 60 * 1000;
 
-    // 0. Общий суточный потолок SMS на весь сервис (защита от разорения баланса провайдера)
+    // 0. Проверка параллельной отправки (in-flight) на тот же номер
+    if (this.inFlightSends.has(phone)) {
+      return {
+        allowed: false,
+        retryAfter: nikitaConfig.resendCooldownSec,
+        reason: "cooldown",
+        message: `Повторная отправка возможна через ${nikitaConfig.resendCooldownSec} секунд`,
+      };
+    }
+
+    // 0.1 Общий суточный потолок SMS на весь сервис (защита от разорения баланса провайдера)
     const freshServiceSms = this.serviceDailyHistory.filter(
       (ts) => now - ts < oneDayMs
     );
@@ -135,7 +157,7 @@ class PhoneOtpStore {
       };
     }
 
-    // 4. Лимит в минуту на IP (10/мин, защита от скриптов/флуда)
+    // 4. Лимит в минуту на IP (защита от скриптов/флуда)
     if (ip) {
       const ipMinute = (this.ipMinuteHistory.get(ip) || []).filter(
         (ts) => now - ts < oneMinuteMs
@@ -150,7 +172,7 @@ class PhoneOtpStore {
         };
       }
 
-      // 5. Лимит в час на IP (60/час с учётом CGNAT мобильных сетей)
+      // 5. Лимит в час на IP (с учётом CGNAT мобильных сетей)
       const ipHistory = (this.ipHourlyHistory.get(ip) || []).filter(
         (ts) => now - ts < oneHourMs
       );
@@ -165,13 +187,104 @@ class PhoneOtpStore {
       }
     }
 
+    if (reserve) {
+      const previousLastSent = this.phoneLastSent.get(phone) ?? null;
+      this.inFlightSends.add(phone);
+      this.phoneLastSent.set(phone, now);
+
+      phoneHistory.push(now);
+      this.phoneHourlyHistory.set(phone, phoneHistory);
+
+      phoneDaily.push(now);
+      this.phoneDailyHistory.set(phone, phoneDaily);
+
+      if (ip) {
+        const ipMin = this.ipMinuteHistory.get(ip) || [];
+        ipMin.push(now);
+        this.ipMinuteHistory.set(ip, ipMin);
+
+        const ipHr = this.ipHourlyHistory.get(ip) || [];
+        ipHr.push(now);
+        this.ipHourlyHistory.set(ip, ipHr);
+      }
+
+      this.recordServiceSms(now);
+
+      return {
+        allowed: true,
+        reservation: {
+          phone,
+          ip,
+          timestamp: now,
+          previousLastSent,
+        },
+      };
+    }
+
     return { allowed: true };
+  }
+
+  /**
+   * Снятие in-flight флага после успешной отправки.
+   */
+  completeSendReservation(reservation) {
+    if (!reservation?.phone) return;
+    this.inFlightSends.delete(reservation.phone);
+  }
+
+  /**
+   * Откат зарезервированного слота (при сетевой ошибке ДО отправки SMS).
+   */
+  rollbackSendReservation(reservation) {
+    if (!reservation) return;
+    const { phone, ip, timestamp, previousLastSent } = reservation;
+    this.inFlightSends.delete(phone);
+
+    if (this.phoneLastSent.get(phone) === timestamp) {
+      if (previousLastSent !== null && previousLastSent !== undefined) {
+        this.phoneLastSent.set(phone, previousLastSent);
+      } else {
+        this.phoneLastSent.delete(phone);
+      }
+    }
+
+    const removeTs = (arr) => {
+      if (!Array.isArray(arr)) return [];
+      const idx = arr.lastIndexOf(timestamp);
+      if (idx !== -1) arr.splice(idx, 1);
+      return arr;
+    };
+
+    if (this.phoneHourlyHistory.has(phone)) {
+      this.phoneHourlyHistory.set(phone, removeTs(this.phoneHourlyHistory.get(phone)));
+    }
+    if (this.phoneDailyHistory.has(phone)) {
+      this.phoneDailyHistory.set(phone, removeTs(this.phoneDailyHistory.get(phone)));
+    }
+    if (ip) {
+      if (this.ipMinuteHistory.has(ip)) {
+        this.ipMinuteHistory.set(ip, removeTs(this.ipMinuteHistory.get(ip)));
+      }
+      if (this.ipHourlyHistory.has(ip)) {
+        this.ipHourlyHistory.set(ip, removeTs(this.ipHourlyHistory.get(ip)));
+      }
+    }
+    removeTs(this.serviceDailyHistory);
   }
 
   /**
    * Фиксация успешной отправки OTP и сохранение сессии токена.
    */
-  recordSend({ phone, ip, token, ttlMs, sentAt }) {
+  recordSend({
+    phone,
+    ip,
+    token,
+    ttlMs,
+    sentAt,
+    purpose = "registration",
+    skipCounters = false,
+  }) {
+    const normalizedPurpose = VALID_OTP_PURPOSES.has(purpose) ? purpose : "registration";
     const now = sentAt || Date.now();
     const expiresAt = now + (ttlMs || nikitaConfig.tokenTtlMs);
 
@@ -179,51 +292,57 @@ class PhoneOtpStore {
     const previousToken = this.phoneToToken.get(phone);
     if (previousToken && previousToken !== token) {
       this.tokens.delete(previousToken);
+      this.verifyingTokens.delete(previousToken);
     }
 
-    // Сохраняем сессию токена
+    // Сохраняем сессию токена со строгой привязкой к phone и purpose
     this.tokens.set(token, {
       phone,
+      purpose: normalizedPurpose,
       attempts: 0,
       createdAt: now,
       expiresAt,
     });
     this.phoneToToken.set(phone, token);
 
-    // Обновляем метки времени лимитов
-    this.phoneLastSent.set(phone, now);
+    if (!skipCounters) {
+      // Обновляем метки времени лимитов
+      this.phoneLastSent.set(phone, now);
 
-    const phoneHistory = this.phoneHourlyHistory.get(phone) || [];
-    phoneHistory.push(now);
-    this.phoneHourlyHistory.set(phone, phoneHistory);
+      const phoneHistory = this.phoneHourlyHistory.get(phone) || [];
+      phoneHistory.push(now);
+      this.phoneHourlyHistory.set(phone, phoneHistory);
 
-    const phoneDaily = this.phoneDailyHistory.get(phone) || [];
-    phoneDaily.push(now);
-    this.phoneDailyHistory.set(phone, phoneDaily);
+      const phoneDaily = this.phoneDailyHistory.get(phone) || [];
+      phoneDaily.push(now);
+      this.phoneDailyHistory.set(phone, phoneDaily);
 
-    if (ip) {
-      const ipMinute = this.ipMinuteHistory.get(ip) || [];
-      ipMinute.push(now);
-      this.ipMinuteHistory.set(ip, ipMinute);
+      if (ip) {
+        const ipMinute = this.ipMinuteHistory.get(ip) || [];
+        ipMinute.push(now);
+        this.ipMinuteHistory.set(ip, ipMinute);
 
-      const ipHistory = this.ipHourlyHistory.get(ip) || [];
-      ipHistory.push(now);
-      this.ipHourlyHistory.set(ip, ipHistory);
+        const ipHistory = this.ipHourlyHistory.get(ip) || [];
+        ipHistory.push(now);
+        this.ipHourlyHistory.set(ip, ipHistory);
+      }
+
+      // Фиксируем в суточной истории сервиса
+      this.recordServiceSms(now);
     }
-
-    // Фиксируем в суточной истории сервиса
-    this.recordServiceSms(now);
   }
 
   /**
-   * Поиск токена по token или по phone.
+   * Поиск токена по token или по phone с обязательной сверкой phone и purpose.
    */
-  findRecord({ token, phone }) {
+  findRecord({ token, phone, purpose }) {
     const now = Date.now();
+    const cleanToken = typeof token === "string" ? token.trim() : "";
+    const cleanPhone = typeof phone === "string" ? phone.trim() : "";
 
-    let targetToken = token;
-    if (!targetToken && phone) {
-      targetToken = this.phoneToToken.get(phone);
+    let targetToken = cleanToken;
+    if (!targetToken && cleanPhone) {
+      targetToken = this.phoneToToken.get(cleanPhone) || "";
     }
 
     if (!targetToken) {
@@ -241,7 +360,36 @@ class PhoneOtpStore {
       return null;
     }
 
+    // P0-01: Если переданы и token, и phone, номер в сессии ОБЯЗАН совпадать с переданным номером
+    if (cleanPhone && record.phone !== cleanPhone) {
+      return null;
+    }
+
+    // P0-02: Проверка назначения сессии (purpose), если указано вызывающим кодом
+    if (purpose !== undefined && purpose !== null) {
+      const allowedPurposes = Array.isArray(purpose) ? purpose : [purpose];
+      if (!allowedPurposes.includes(record.purpose)) {
+        return null;
+      }
+    }
+
     return { token: targetToken, ...record };
+  }
+
+  /**
+   * Блокировка сессии на время сетевого запроса проверки кода (защита от параллельных запросов).
+   */
+  acquireVerifyLock(token) {
+    if (!token || this.verifyingTokens.has(token)) {
+      return false;
+    }
+    this.verifyingTokens.add(token);
+    return true;
+  }
+
+  releaseVerifyLock(token) {
+    if (!token) return;
+    this.verifyingTokens.delete(token);
   }
 
   /**
@@ -289,6 +437,7 @@ class PhoneOtpStore {
       }
     }
     this.tokens.delete(token);
+    this.verifyingTokens.delete(token);
   }
 
   /**
@@ -307,6 +456,7 @@ class PhoneOtpStore {
           this.phoneToToken.delete(record.phone);
         }
         this.tokens.delete(token);
+        this.verifyingTokens.delete(token);
       }
     }
 
@@ -368,6 +518,8 @@ class PhoneOtpStore {
     this.ipMinuteHistory.clear();
     this.ipHourlyHistory.clear();
     this.serviceDailyHistory = [];
+    this.inFlightSends.clear();
+    this.verifyingTokens.clear();
   }
 }
 
