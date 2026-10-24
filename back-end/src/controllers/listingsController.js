@@ -38,6 +38,11 @@ import {
 } from "../services/subscriptionsService.js";
 import { verifyAllOwnedBy } from "../utils/uploadOwnership.js";
 import { evictExpiredAndCapMap } from "../utils/boundedMap.js";
+import { isBatchCountersEnabled, bufferListingView } from "../utils/counterBatcher.js";
+
+const PUBLIC_LISTING_COLUMNS =
+  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
+const MAX_CATALOG_PAGE = 1000;
 
 // Удаляет из пользовательского объекта features системные ключи:
 // promotionExpiresAt, urgentExpiresAt, residentialComplexId,
@@ -303,7 +308,10 @@ export function applyListingFilters(query, filters = {}) {
     const patterns = REGION_SEARCH_PATTERNS[regionCode];
     query = query.or(patterns.map((p) => `region.ilike.%${p}%`).join(","));
   } else if (effectiveRegion && typeof query.ilike === "function") {
-    query = query.ilike("region", `%${effectiveRegion}%`);
+    const safeRegion = String(effectiveRegion).replace(/[%_\\]/g, " ").trim();
+    if (safeRegion) {
+      query = query.ilike("region", `%${safeRegion}%`);
+    }
   } else if ((cLower === "kyrgyzstan" || cLower === "кыргызстан") && typeof query.neq === "function") {
     query = query.neq("region", "TURKEY");
   }
@@ -318,7 +326,10 @@ export function applyListingFilters(query, filters = {}) {
   }
 
   if (district && district !== "Все" && district !== "all") {
-    query = query.ilike("district", `%${String(district).trim()}%`);
+    const safeDistrict = String(district).replace(/[%_\\]/g, " ").trim();
+    if (safeDistrict) {
+      query = query.ilike("district", `%${safeDistrict}%`);
+    }
   }
 
   // 3. Фильтрация по типу недвижимости (с поддержкой cottage и parking через единые константы)
@@ -513,7 +524,7 @@ export const getListings = async (req, res) => {
     let query = supabase
       .from("listings")
       .select(`
-        *,
+        ${PUBLIC_LISTING_COLUMNS},
         listing_photos (id, url, is_main, display_order),
         users!inner (id, is_verified, account_type)
       `, { count: "exact" })
@@ -522,8 +533,8 @@ export const getListings = async (req, res) => {
 
     query = applyListingFilters(query, req.query);
 
-    // Пагинация и сортировка на уровне БД
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    // Пагинация и сортировка на уровне БД (с потолком page <= 1000 и limit <= 100)
+    const pageNum = Math.min(MAX_CATALOG_PAGE, Math.max(1, parseInt(page, 10) || 1));
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const from = (pageNum - 1) * limitNum;
     const to = from + limitNum - 1;
@@ -872,8 +883,12 @@ export function shouldIncrementView(ip, listingId) {
   return true;
 }
 
-// Атомарный инкремент просмотров в базе данных через RPC increment_views с фолбэком
+// Атомарный инкремент просмотров в базе данных через пакетный буфер (или RPC increment_views с фолбэком)
 export async function incrementListingViews(listingId, currentViewsCount) {
+  if (isBatchCountersEnabled()) {
+    return bufferListingView(listingId, currentViewsCount);
+  }
+
   let newViewsCount = (currentViewsCount || 0) + 1;
   try {
     const { data: rpcViews, error: rpcError } = await supabase.rpc("increment_views", {
@@ -920,8 +935,8 @@ export const getListingById = async (req, res) => {
     const { data: listing, error } = await supabase
       .from("listings")
       .select(`
-        *,
-        listing_photos (*),
+        ${PUBLIC_LISTING_COLUMNS},
+        listing_photos (id, listing_id, url, is_main, display_order),
         users (id, phone, show_phone, is_verified, account_type, user_profiles (first_name, last_name, company_name, avatar_url, about))
       `)
       .eq("id", id)

@@ -6,6 +6,7 @@ import { getVerificationDocumentSignedUrl } from "../utils/storage.js";
 import { getPricingSettings, savePricingSettings } from "../utils/pricingSettings.js";
 import { listAllBanners } from "../utils/bannersStore.js";
 import { listPromotionOrders } from "../utils/promotionOrders.js";
+import { invalidatePublicCache } from "../utils/publicCache.js";
 import {
   listInstagramRequests,
   getInstagramRequestById,
@@ -13,6 +14,9 @@ import {
   createInstagramRequest,
   fetchInstagramRequestsWithDetails,
 } from "../utils/instagramRequests.js";
+
+const MAX_ADMIN_PAGE = 1000;
+const MAX_ADMIN_LIMIT = 100;
 
 const PROMOTION_TARIFF_PREFIX = "promo_";
 const SERVICE_TITLES = {
@@ -93,11 +97,24 @@ export const getDashboardStats = async (req, res) => {
 // =======================================================
 export const listPayments = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { page = 1, limit = 100 } = req.query || {};
+    const pageNum = Math.min(MAX_ADMIN_PAGE, Math.max(1, parseInt(page, 10) || 1));
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 100));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
+    let paymentsQuery = supabase
       .from("payments")
-      .select("*, users(email, phone)")
-      .order("created_at", { ascending: false })
-      .limit(200);
+      .select("id, user_id, order_id, invoice_id, tariff_id, months, amount, status, paid_at, fulfilled_at, fulfill_attempts, fulfill_error, created_at, users(email, phone)")
+      .order("created_at", { ascending: false });
+
+    if (typeof paymentsQuery?.range === "function") {
+      paymentsQuery = paymentsQuery.range(from, to);
+    } else if (typeof paymentsQuery?.limit === "function") {
+      paymentsQuery = paymentsQuery.limit(limitNum);
+    }
+
+    const { data, error } = await paymentsQuery;
 
     if (error) {
       console.error("Admin List Payments Error:", error);
@@ -302,28 +319,43 @@ function toLawyerRow(payload) {
 // 1. Список ВСЕХ юристов, включая выключенных (GET /api/admin/lawyers)
 export const listLawyers = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { page = 1, limit = 100 } = req.query || {};
+    const pageNum = Math.min(MAX_ADMIN_PAGE, Math.max(1, parseInt(page, 10) || 1));
+    const limitNum = Math.min(MAX_ADMIN_LIMIT, Math.max(1, parseInt(limit, 10) || 100));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
+    let query = supabase
       .from("lawyers")
-      .select("*")
+      .select("id, last_name, first_name, middle_name, specialization, experience, phone, whatsapp, description, is_active, created_at")
       .order("created_at", { ascending: false });
+
+    if (typeof query?.range === "function") {
+      query = query.range(from, to);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Admin List Lawyers Error:", error);
       return res.status(500).json({
         success: false,
         message: "Ошибка при получении списка юристов",
+        requestId: req?.id,
       });
     }
 
     return res.json({
       success: true,
-      data: (data || []).map(toPublicLawyer),
+      data: (data || []).slice(0, limitNum).map(toPublicLawyer),
+      pagination: { page: pageNum, limit: limitNum },
     });
   } catch (error) {
     console.error("Admin List Lawyers Controller Error:", error);
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при получении списка юристов",
+      requestId: req?.id,
     });
   }
 };
@@ -354,9 +386,11 @@ export const createLawyer = async (req, res) => {
       return res.status(500).json({
         success: false,
         message: "Не удалось добавить юриста",
+        requestId: req?.id,
       });
     }
 
+    invalidatePublicCache("lawyers");
     return res.status(201).json({
       success: true,
       data: toPublicLawyer(data),
@@ -366,6 +400,7 @@ export const createLawyer = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при добавлении юриста",
+      requestId: req?.id,
     });
   }
 };
@@ -408,6 +443,7 @@ export const updateLawyer = async (req, res) => {
       return res.status(500).json({
         success: false,
         message: "Не удалось обновить юриста",
+        requestId: req?.id,
       });
     }
 
@@ -418,6 +454,7 @@ export const updateLawyer = async (req, res) => {
       });
     }
 
+    invalidatePublicCache("lawyers");
     return res.json({
       success: true,
       data: toPublicLawyer(data),
@@ -427,6 +464,7 @@ export const updateLawyer = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при обновлении юриста",
+      requestId: req?.id,
     });
   }
 };
@@ -447,6 +485,7 @@ export const deleteLawyer = async (req, res) => {
       return res.status(500).json({
         success: false,
         message: "Не удалось удалить юриста",
+        requestId: req?.id,
       });
     }
 
@@ -457,12 +496,14 @@ export const deleteLawyer = async (req, res) => {
       });
     }
 
+    invalidatePublicCache("lawyers");
     return res.json({ success: true });
   } catch (error) {
     console.error("Delete Lawyer Controller Error:", error);
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при удалении юриста",
+      requestId: req?.id,
     });
   }
 };
@@ -474,31 +515,45 @@ export const deleteLawyer = async (req, res) => {
 // 1. Получить список всех застройщиков с их документами (GET /api/admin/developers)
 export const listDevelopersAdmin = async (req, res) => {
   try {
-    const { data: users, error: usersError } = await supabase
+    const { page = 1, limit = 100 } = req.query || {};
+    const pageNum = Math.min(MAX_ADMIN_PAGE, Math.max(1, parseInt(page, 10) || 1));
+    const limitNum = Math.min(MAX_ADMIN_LIMIT, Math.max(1, parseInt(limit, 10) || 100));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
+
+    let usersQuery = supabase
       .from("users")
       .select("id, email, phone, account_type, is_verified, created_at")
       .eq("account_type", "developer")
       .order("created_at", { ascending: false });
+
+    if (typeof usersQuery?.range === "function") {
+      usersQuery = usersQuery.range(from, to);
+    }
+
+    const { data: users, error: usersError } = await usersQuery;
 
     if (usersError) {
       console.error("Admin List Developers Error:", usersError);
       return res.status(500).json({
         success: false,
         message: "Ошибка при получении списка застройщиков",
+        requestId: req?.id,
       });
     }
 
-    const userIds = (users || []).map((u) => u.id);
+    const boundedUsers = (users || []).slice(0, limitNum);
+    const userIds = boundedUsers.map((u) => u.id);
 
     const { data: profiles } = await supabase
       .from("user_profiles")
-      .select("*")
+      .select("id, user_id, first_name, last_name, company_name, avatar_url, about, phone")
       .in("user_id", userIds.length > 0 ? userIds : ["00000000-0000-0000-0000-000000000000"]);
 
     const profilesMap = new Map((profiles || []).map((p) => [p.user_id, p]));
 
     const developersList = await Promise.all(
-      (users || []).map(async (user) => {
+      boundedUsers.map(async (user) => {
         const profile = profilesMap.get(user.id) || {};
         let aboutMeta = {};
         if (profile.about && profile.about.startsWith("{") && profile.about.endsWith("}")) {
@@ -510,16 +565,18 @@ export const listDevelopersAdmin = async (req, res) => {
         const name = profile.company_name || profile.first_name || user.email;
 
         // Документы лежат в приватном бакете как пути — для админки отдаём
-        // временные подписанные ссылки, по которым можно их открыть.
+        // временные подписанные ссылки параллельно (Promise.all вместо последовательного цикла).
         let documents = null;
         if (aboutMeta.verificationDocs && typeof aboutMeta.verificationDocs === "object") {
-          documents = {};
-          for (const key of VERIFICATION_DOC_KEYS) {
-            const path = aboutMeta.verificationDocs[key];
-            if (path) {
-              documents[key] = await getVerificationDocumentSignedUrl(path, 900);
-            }
-          }
+          const entries = await Promise.all(
+            VERIFICATION_DOC_KEYS.map(async (key) => {
+              const docPath = aboutMeta.verificationDocs[key];
+              if (!docPath) return null;
+              const signedUrl = await getVerificationDocumentSignedUrl(docPath, 900);
+              return [key, signedUrl];
+            })
+          );
+          documents = Object.fromEntries(entries.filter(Boolean));
         }
 
         return {
@@ -542,12 +599,14 @@ export const listDevelopersAdmin = async (req, res) => {
     return res.json({
       success: true,
       data: developersList,
+      pagination: { page: pageNum, limit: limitNum },
     });
   } catch (error) {
     console.error("Admin List Developers Controller Error:", error);
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при получении застройщиков",
+      requestId: req?.id,
     });
   }
 };
@@ -630,6 +689,9 @@ export const verifyDeveloperAdmin = async (req, res) => {
         .update({ about: JSON.stringify(aboutMeta) })
         .eq("id", profile.id);
     }
+
+    invalidatePublicCache("developers");
+    invalidatePublicCache("complexes");
 
     return res.json({
       success: true,

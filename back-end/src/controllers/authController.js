@@ -2209,10 +2209,21 @@ export const logoutAll = async (req, res) => {
 
 // =======================================================
 // 7. Получение публичного профиля пользователя по ID
+//    P2-06: Потолок пагинации (limit <= 100, page <= 1000) и отказ от select('*').
 // =======================================================
+const PUBLIC_PROFILE_LISTING_COLUMNS =
+  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
+const PUBLIC_PROFILE_COMPLEX_COLUMNS =
+  "id, developer_id, name, description, country, region, city, district, address, completion_status, completion_date, housing_class, cover_photo, features, created_at";
+
 export const getUserPublicProfile = async (req, res) => {
   try {
     const { id } = req.params;
+    const { page = 1, limit = 100 } = req.query || {};
+    const pageNum = Math.min(1000, Math.max(1, parseInt(page, 10) || 1));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
 
     let user = null;
     const { data: userRow } = await supabase
@@ -2250,15 +2261,15 @@ export const getUserPublicProfile = async (req, res) => {
 
     const { data: profile } = await supabase
       .from("user_profiles")
-      .select("*")
+      .select("id, user_id, first_name, last_name, company_name, avatar_url, about, phone, show_phone, updated_at")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    // Fetch active listings for this user
-    const { data: listings } = await supabase
+    // Fetch active listings for this user (с пагинацией до 100 записей)
+    let listingsQuery = supabase
       .from("listings")
       .select(`
-        *,
+        ${PUBLIC_PROFILE_LISTING_COLUMNS},
         listing_photos (id, url, is_main, display_order)
       `)
       .eq("user_id", user.id)
@@ -2266,7 +2277,13 @@ export const getUserPublicProfile = async (req, res) => {
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false });
 
-    // If developer, fetch complexes!
+    if (typeof listingsQuery?.range === "function") {
+      listingsQuery = listingsQuery.range(from, to);
+    }
+
+    const { data: listings } = await listingsQuery;
+
+    // If developer, fetch complexes (с пагинацией до 100 записей)
     let complexes = [];
     if (user.account_type === "developer") {
       const { data: devRow } = await supabase
@@ -2276,12 +2293,18 @@ export const getUserPublicProfile = async (req, res) => {
         .maybeSingle();
 
       if (devRow) {
-        const { data: devComplexes } = await supabase
+        let devComplexesQuery = supabase
           .from("residential_complexes")
-          .select("*")
+          .select(PUBLIC_PROFILE_COMPLEX_COLUMNS)
           .eq("developer_id", devRow.id)
           .order("created_at", { ascending: false });
-        complexes = devComplexes || [];
+
+        if (typeof devComplexesQuery?.range === "function") {
+          devComplexesQuery = devComplexesQuery.range(0, limitNum - 1);
+        }
+
+        const { data: devComplexes } = await devComplexesQuery;
+        complexes = (devComplexes || []).slice(0, limitNum);
       }
     }
 
@@ -2302,7 +2325,7 @@ export const getUserPublicProfile = async (req, res) => {
     delete sanitizedProfile.verificationStatus;
     delete sanitizedProfile.rejectionReason;
 
-    const maskedAds = (listings || []).map((ad) => {
+    const maskedAds = (listings || []).slice(0, limitNum).map((ad) => {
       const resolved = resolvePromotionExpiry(ad);
       if (!resolved.changed) return ad;
       return {
@@ -2323,14 +2346,19 @@ export const getUserPublicProfile = async (req, res) => {
         createdAt: user.created_at,
         profile: sanitizedProfile,
         ads: maskedAds,
-        complexes: complexes || []
-      }
+        complexes: complexes || [],
+      },
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+      },
     });
   } catch (error) {
     console.error("GetUserPublicProfile Error:", error);
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при получении публичного профиля",
+      requestId: req?.id,
     });
   }
 };

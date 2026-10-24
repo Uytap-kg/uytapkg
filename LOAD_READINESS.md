@@ -125,3 +125,37 @@
   - `publicCatalogLimiter`: `120 req/min` на IP (каталог объявлений, ЖК, застройщиков, активных баннеров) — комфортно для активной фильтрации и пагинации человеком.
   - `publicMapLimiter`: `60 req/min` на IP (`/api/listings/map`) — достаточно для панорамирования карты с debounce.
   - `publicProfileLimiter`: `60 req/min` на IP (`/api/auth/users/:id`) — предотвращает парсинг базы продавцов.
+
+---
+
+## 7. Отчёт по Этапу 3: База данных и запросы
+
+### 7.1. Потолок пагинации и белые списки сортировки (P2-06)
+- Введён потолок пагинации (`limit <= 100`, `page <= 1000`) и белый список полей сортировки (`created_at`, `price`, `area`, `rooms`) во всех эндпоинтах:
+  - `getComplexListings` (`GET /api/complexes/:id/listings`), `getMyComplexes` (`GET /api/complexes/my`), `getComplexes` (`GET /api/complexes`) в `complexesController.js`.
+  - `getFavorites` (`GET /api/favorites`) в `favoritesController.js`.
+  - `getUserPublicProfile` (`GET /api/auth/users/:id`) в `authController.js` (потолок 100 записей на `ads` и `complexes`).
+  - `getDevelopers` и `getDeveloperById` в `developersController.js`.
+  - `getListings` (`GET /api/listings`) и `getMapListings` (`GET /api/listings/map`) в `listingsController.js`.
+  - Все админ-списки: `listPayments`, `listLawyers`, `listDevelopersAdmin` (`adminController.js`), `listDefaultTariffs`, `listIndividualTariffs` (`tariffsController.js`), `listAllBanners` (`bannersStore.js`), `listPromotionOrders` (`promotionOrders.js`), `listInstagramRequests` и `fetchInstagramRequestsWithDetails` (`instagramRequests.js`).
+
+### 7.2. Отказ от `select('*')` и устранение N+1 запросов (P2-06)
+- Во всех публичных и админских эндпоинтах `select('*')` заменён на явные перечни колонок, используемых фронтенд-мапперами (`mapListingData.js`, `mapComplexData.js`, `PublicProfile.jsx`): `PUBLIC_LISTING_COLUMNS`, `COMPLEX_COLUMNS`, `COMPLEX_LAYOUT_COLUMNS`, `DEVELOPER_COLUMNS`, `LAWYER_COLUMNS`, `BANNER_COLUMNS`.
+- **N+1 в `cleanupOrphanedPendingAvatars` (`back-end/src/utils/storage.js`)**: вместо цикла из до 200 последовательных запросов (`100 × user_profiles` + `100 × developers`) выполняется `Promise.all` из 2 пакетных запросов `.or(avatarClauses)` / `.or(logoClauses)` и 1 пакетный вызов `storage.remove(toDelete)`.
+- **N+1 в `verifyAllOwnedBy` (`back-end/src/utils/uploadOwnership.js`)**: вместо последовательного цикла по каждому фото выполняется 1 пакетный запрос `.in("object_path", uniquePaths)`.
+- **N+1 в `listDevelopersAdmin` (`back-end/src/controllers/adminController.js`)**: генерация подписанных URL для документов верификации переведена на параллельный `Promise.all` с пагинацией списка застройщиков.
+
+### 7.3. Экранирование `ilike` и новые индексы (миграция `20261025020000_load_indexes_and_batch_counters.sql`)
+- Экранированы спецсимволы подстановки `%`, `_`, `\` в `applyListingFilters` (`listingsController.js`) и `sanitizeIlikeInput` (`complexesController.js`).
+- Анализ планов выполнения `EXPLAIN` показал, что в `applyListingFilters` условие `OR (title.ilike..., description.ilike..., city.ilike..., district.ilike..., features->>residentialComplexName.ilike...)` вызывало `Seq Scan` по таблице `listings` из-за отсутствия триграммных индексов на `description` и `features->>'residentialComplexName'`.
+- Добавлена новая миграция `supabase/migrations/20261025020000_load_indexes_and_batch_counters.sql`:
+  - GIN `pg_trgm` индексы: `idx_listings_description_trgm`, `idx_listings_complex_name_trgm`, `idx_users_phone_trgm` (позволяет PostgreSQL выполнять `BitmapOr Index Scan`).
+  - Составные и частичные B-Tree индексы: `idx_listings_active_priority_created`, `idx_listings_user_status_created`, `idx_listings_map_bbox`, `idx_payments_user_status_created`, `idx_subscriptions_user_active`, `idx_favorites_user_created`.
+
+### 7.4. Горячие строки (пакетный сброс счётчиков), `pg.Pool` и короткий кэш чтения
+- **Горячие строки (`back-end/src/utils/counterBatcher.js`)**:
+  - Счётчики просмотров объявлений (`listingViewsBuffer`, до 10 000 ключей) и просмотров/кликов баннеров (`bannerStatsBuffer`, до 5 000 ключей) после IP-дедупликации накапливают дельту в памяти и сбрасываются в БД раз в `5 секунд` (и при `gracefulShutdown`) одним пакетным RPC-вызовом `increment_views_batch` / `increment_banner_stats_batch`. Это полностью снимает блокировки строк (row lock contention) при вирусном трафике на одно объявление или баннер.
+- **Пул соединений (`back-end/src/config/db.js`)**:
+  - Настраивается через переменные окружения: `DB_POOL_MAX` (по умолчанию 15; при 4 воркерах PM2 рекомендуется `DB_POOL_MAX=10`, суммарно 40 коннектов < лимита PostgreSQL), `DB_IDLE_TIMEOUT_MS=30000`, `DB_CONN_TIMEOUT_MS=5000`, `DB_STATEMENT_TIMEOUT_MS=15000`.
+- **Короткий кэш публичного чтения (`back-end/src/utils/publicCache.js`)**:
+  - Кэшируются на 45–60 секунд ответы `GET /api/banners`, `GET /api/complexes`, `GET /api/complexes/:id`, `GET /api/developers`, `GET /api/developers/:id`, `GET /api/lawyers` (плюс 60 с кэш `getPricingSettings`), с мгновенным сбросом (`invalidatePublicCache`) при создании/обновлении/удалении через админку или кабинет застройщика.
