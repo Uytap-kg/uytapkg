@@ -33,10 +33,21 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 // Пул TCP-соединений через pg (Дефект 2.2)
 export let dbPool = null;
 
+export function resolveDbSslConfig(databaseUrl = process.env.DATABASE_URL, env = process.env) {
+  if (!databaseUrl) return undefined;
+  const useSsl =
+    databaseUrl.includes("render.com") ||
+    databaseUrl.includes("supabase.co") ||
+    env.DB_SSL === "true" ||
+    env.NODE_ENV === "production";
+  return useSsl ? { rejectUnauthorized: false } : undefined;
+}
+
 if (process.env.DATABASE_URL) {
   try {
     dbPool = new Pool({
       connectionString: process.env.DATABASE_URL,
+      ssl: resolveDbSslConfig(process.env.DATABASE_URL, process.env),
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,

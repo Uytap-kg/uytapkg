@@ -566,3 +566,392 @@ test("Forgot Password Integration: запрос сброса пароля и п�
     process.env.NIKITA_API_KEY = origKey;
   }
 });
+
+
+// ==============================================================================
+// 14. P0-01: Защита от подмены номера телефона (phone substitution) в verifyOtp и verifyResetCode
+// ==============================================================================
+test("P0-01: подмена phone на номер жертвы при валидном token атакующего отклоняется в verifyOtp и verifyResetCode", async () => {
+  phoneOtpStore.reset();
+  const origFetch = globalThis.fetch;
+  const origKey = process.env.NIKITA_API_KEY;
+  process.env.NIKITA_API_KEY = "dummy-test-key";
+
+  const attackerPhone = "996770111111";
+  const victimPhone = "+996555999999";
+
+  phoneOtpStore.recordSend({
+    phone: attackerPhone,
+    ip: "127.0.0.1",
+    token: "tok_attacker_reg",
+    purpose: "registration",
+  });
+  phoneOtpStore.recordSend({
+    phone: attackerPhone,
+    ip: "127.0.0.1",
+    token: "tok_attacker_reset",
+    purpose: "password_reset",
+  });
+
+  let nikitaVerifyCalled = false;
+  globalThis.fetch = async () => {
+    nikitaVerifyCalled = true;
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ status: "0", description: "Code Valid" }),
+    };
+  };
+
+  try {
+    // 1. Попытка подмены номера в verifyOtp
+    const reqVerify = {
+      body: {
+        token: "tok_attacker_reg",
+        phone: victimPhone,
+        code: "123456",
+      },
+    };
+    const resVerify = createMockRes();
+    await verifyOtp(reqVerify, resVerify);
+
+    assert.equal(resVerify.statusCode, 400, "Подмена номера в verifyOtp обязана возвращать 400");
+    assert.equal(resVerify.body.success, false);
+    assert.equal(resVerify.body.token, undefined, "JWT не должен выдаваться при подмене номера");
+
+    // 2. Попытка подмены номера в verifyResetCode
+    const reqReset = {
+      body: {
+        token: "tok_attacker_reset",
+        phone: victimPhone,
+        code: "123456",
+      },
+    };
+    const resReset = createMockRes();
+    await verifyResetCode(reqReset, resReset);
+
+    assert.equal(resReset.statusCode, 400, "Подмена номера в verifyResetCode обязана возвращать 400");
+    assert.equal(resReset.body.success, false);
+    assert.equal(resReset.body.resetToken, undefined, "resetToken не должен выдаваться при подмене номера");
+    assert.equal(nikitaVerifyCalled, false, "Запрос с несовпадающим номером должен блокироваться до обращения к Nikita");
+  } finally {
+    globalThis.fetch = origFetch;
+    process.env.NIKITA_API_KEY = origKey;
+  }
+});
+
+// ==============================================================================
+// 15. P0-02: Изоляция purpose между сценариями и запрет входа без пароля по SMS для подтверждённых аккаунтов
+// ==============================================================================
+test("P0-02: токен регистрации не подходит для сброса пароля, а подтверждённый аккаунт не получает JWT через неавторизованный verifyOtp", async () => {
+  phoneOtpStore.reset();
+  const origFetch = globalThis.fetch;
+  const origKey = process.env.NIKITA_API_KEY;
+  process.env.NIKITA_API_KEY = "dummy-test-key";
+
+  const { supabase } = await import("../src/config/db.js");
+  const origFrom = supabase.from;
+
+  const targetPhone = "996770222333";
+  phoneOtpStore.recordSend({
+    phone: targetPhone,
+    ip: "127.0.0.1",
+    token: "tok_reg_only",
+    purpose: "registration",
+  });
+
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify({ status: "0", description: "Code Valid" }),
+  });
+
+  try {
+    // 1. Токен с purpose="registration" отклоняется в verifyResetCode
+    const resetReq = {
+      body: {
+        token: "tok_reg_only",
+        phone: "+996770222333",
+        code: "123456",
+      },
+    };
+    const resetRes = createMockRes();
+    await verifyResetCode(resetReq, resetRes);
+    assert.equal(resetRes.statusCode, 400, "Токен регистрации не должен приниматься в verifyResetCode");
+    assert.equal(resetRes.body.resetToken, undefined);
+
+    // 2. Неавторизованный verifyOtp для УЖЕ подтверждённого пользователя (is_verified: true) возвращает 403 без JWT
+    supabase.from = (table) => {
+      if (table === "users") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: "verified-user-1",
+                  account_type: "personal",
+                  email: "verified@example.com",
+                  phone: "+996770222333",
+                  is_verified: true,
+                  is_email_verified: true,
+                  token_version: 0,
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return origFrom(table);
+    };
+
+    const verifyReq = {
+      body: {
+        token: "tok_reg_only",
+        phone: "+996770222333",
+        code: "123456",
+      },
+    };
+    const verifyRes = createMockRes();
+    await verifyOtp(verifyReq, verifyRes);
+
+    assert.equal(verifyRes.statusCode, 403, "Подтверждённый аккаунт не должен получать JWT без пароля (403)");
+    assert.equal(verifyRes.body.success, false);
+    assert.equal(verifyRes.body.token, undefined);
+  } finally {
+    supabase.from = origFrom;
+    globalThis.fetch = origFetch;
+    process.env.NIKITA_API_KEY = origKey;
+  }
+});
+
+// ==============================================================================
+// 16. P1-01: Запрет верификации аккаунта чужим email и проверка token_version в optionalAuth
+// ==============================================================================
+test("P1-01: авторизованный пользователь не может подтвердить чужой email в verifyOtp, а optionalAuth сбрасывает отозванный токен", async () => {
+  const { supabase } = await import("../src/config/db.js");
+  const { optionalAuth, generateToken, clearUserAuthCache } = await import("../src/middleware/auth.js");
+  const origFrom = supabase.from;
+  clearUserAuthCache();
+
+  try {
+    // 1. Попытка подтвердить attacker@example.com будучи авторизованным как victim@example.com
+    const req = {
+      user: {
+        id: "user-victim-1",
+        email: "victim@example.com",
+      },
+      body: {
+        email: "attacker@example.com",
+        code: "123456",
+      },
+    };
+    const res = createMockRes();
+    await verifyOtp(req, res);
+
+    assert.equal(res.statusCode, 403, "Несовпадение email авторизованного пользователя должно возвращать 403");
+    assert.equal(res.body.success, false);
+
+    // 2. optionalAuth с отозванным token_version (tv: 0 в токене, token_version: 2 в БД)
+    supabase.from = (table) => {
+      if (table === "users") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: {
+                  role: "user",
+                  account_type: "personal",
+                  token_version: 2,
+                  email: "victim@example.com",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return origFrom(table);
+    };
+
+    const staleToken = generateToken({ id: "user-victim-1", email: "victim@example.com", tokenVersion: 0 });
+    const optReq = {
+      headers: { authorization: `Bearer ${staleToken}` },
+    };
+    await new Promise((resolve) => optionalAuth(optReq, createMockRes(), resolve));
+    assert.equal(optReq.user, null, "optionalAuth обязан сбросить req.user в null при несовпадении token_version");
+  } finally {
+    supabase.from = origFrom;
+    clearUserAuthCache();
+  }
+});
+
+// ==============================================================================
+// 17. P1-03: Защита от гонок (race condition) при параллельной отправке и проверке SMS OTP
+// ==============================================================================
+test("P1-03: 10 параллельных вызовов sendOtp делают ровно 1 HTTP-запрос к Nikita", async () => {
+  phoneOtpStore.reset();
+  const origFetch = globalThis.fetch;
+  const origKey = process.env.NIKITA_API_KEY;
+  process.env.NIKITA_API_KEY = "dummy-test-key";
+
+  let nikitaSendCalls = 0;
+  globalThis.fetch = async () => {
+    nikitaSendCalls++;
+    await new Promise((r) => setTimeout(r, 30));
+    return {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          token: `tok_race_${nikitaSendCalls}`,
+          status: 0,
+          description: "Code Sent",
+        }),
+    };
+  };
+
+  try {
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        nikitaService.sendOtp({
+          phone: "+996770888999",
+          ip: "10.20.30.40",
+          purpose: "registration",
+        })
+      )
+    );
+
+    const succeeded = results.filter((r) => r.success);
+    const rateLimited = results.filter((r) => !r.success && r.rateLimited);
+
+    assert.equal(succeeded.length, 1, "Ровно 1 из 10 параллельных запросов должен отправить SMS");
+    assert.equal(rateLimited.length, 9, "Остальные 9 параллельных запросов должны быть заблокированы синхронным резервом слота");
+    assert.equal(nikitaSendCalls, 1, "К внешнему API Nikita должен уйти строго 1 HTTP-запрос");
+  } finally {
+    globalThis.fetch = origFetch;
+    process.env.NIKITA_API_KEY = origKey;
+  }
+});
+
+
+// ==============================================================================
+// 18. P1-02 & P0-01 (unit): освобождение номера при наличии базовой строки user_profiles и привязка result.phone для авторизованного verifyOtp
+// ==============================================================================
+test("P1-02: register освобождает просроченный неподтверждённый номер даже при наличии базовой строки в user_profiles", async () => {
+  phoneOtpStore.reset();
+  const { supabase } = await import("../src/config/db.js");
+  const { register } = await import("../src/controllers/authController.js");
+  const origFrom = supabase.from;
+  const origRpc = supabase.rpc;
+  const origFetch = globalThis.fetch;
+  const origKey = process.env.NIKITA_API_KEY;
+  process.env.NIKITA_API_KEY = "dummy-test-key";
+
+  const deletedTables = [];
+  const twentyMinsAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () =>
+      JSON.stringify({ token: "tok_reclaim_phone", status: 0, description: "Code Sent" }),
+  });
+
+  try {
+    supabase.from = (table) => {
+      if (table === "users") {
+        return {
+          select: () => ({
+            eq: (col) => ({
+              maybeSingle: async () => {
+                if (col === "email") return { data: null, error: null };
+                if (col === "phone") {
+                  return {
+                    data: {
+                      id: "squatter-user-id",
+                      is_verified: false,
+                      is_email_verified: false,
+                      token_version: 0,
+                      created_at: twentyMinsAgo,
+                    },
+                    error: null,
+                  };
+                }
+                return { data: null, error: null };
+              },
+            }),
+          }),
+          delete: () => ({
+            eq: async (col, val) => {
+              deletedTables.push({ table: "users", col, val });
+              return { error: null };
+            },
+          }),
+        };
+      }
+      if (
+        table === "listings" ||
+        table === "payments" ||
+        table === "subscriptions" ||
+        table === "favorites" ||
+        table === "verification_requests"
+      ) {
+        return {
+          select: () => ({
+            eq: async () => ({ count: 0, error: null }),
+          }),
+        };
+      }
+      if (table === "user_profiles" || table === "developers") {
+        return {
+          delete: () => ({
+            eq: async (col, val) => {
+              deletedTables.push({ table, col, val });
+              return { error: null };
+            },
+          }),
+        };
+      }
+      return origFrom(table);
+    };
+
+    supabase.rpc = async (fnName) => {
+      if (fnName === "register_user") {
+        return { data: "new-legit-user-id", error: null };
+      }
+      return origRpc(fnName);
+    };
+
+    const req = {
+      ip: "127.0.0.1",
+      body: {
+        accountType: "personal",
+        email: "legit-owner@example.com",
+        phone: "+996770445566",
+        password: "StrongPassword123!",
+        firstName: "Тестовый",
+        lastName: "Владелец",
+        verificationMethod: "phone",
+      },
+    };
+    const res = createMockRes();
+    await register(req, res);
+
+    assert.equal(res.statusCode, 201, "Регистрация должна завершиться со статусом 201 Created");
+    assert.equal(res.body.success, true);
+    assert.ok(
+      deletedTables.some((d) => d.table === "user_profiles" && d.val === "squatter-user-id"),
+      "user_profiles брошенного аккаунта должен быть удалён"
+    );
+    assert.ok(
+      deletedTables.some((d) => d.table === "users" && d.val === "squatter-user-id"),
+      "Запись users брошенного аккаунта должна быть удалена"
+    );
+  } finally {
+    supabase.from = origFrom;
+    supabase.rpc = origRpc;
+    globalThis.fetch = origFetch;
+    process.env.NIKITA_API_KEY = origKey;
+  }
+});

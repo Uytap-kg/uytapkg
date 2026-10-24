@@ -343,11 +343,10 @@ sequenceDiagram
 ### Шаг 1: Создание базы данных и бакетов Supabase Storage
 1. Создайте базу данных в Render или проект в Supabase.
 2. Скопируйте строку подключения `DATABASE_URL` (с флагом `sslmode=require`).
-3. В панели Supabase Storage создайте 3 публичных бакета (Public Buckets):
-   - `avatars` — аватары пользователей;
-   - `listings` — фотографии объявлений недвижимости;
-   - `banners` — баннеры главной страницы.
-   Включите в бакетах публичный доступ на чтение (`SELECT: true for public`).
+3. В панели Supabase Storage создайте бакеты с правильными правами доступа:
+   - `avatars` (**Public Bucket**, `SELECT: true for public`) — аватары пользователей и фотографии объявлений недвижимости;
+   - `banners` (**Public Bucket**, `SELECT: true for public`) — баннеры главной страницы;
+   - `verification-docs` (**Private Bucket**, `public: false`) — приватные документы верификации застройщиков и риэлторов (доступ строго через временные Signed URL).
 
 ### Шаг 2: Заполнение секретов бэкенда в Render Dashboard
 Перейдите в `uytap-backend` -> **Environment** и заполните значения для переменных с `sync: false`:
@@ -492,7 +491,7 @@ curl -s https://uytap-backend.onrender.com/api/listings | head -n 20
 | `ODENGI_SID` | Да | Render Secret | Идентификатор сервиса (SID) O!Dengi | `<ODENGI_SID>` |
 | `ODENGI_PASSWORD` | Да | Render Secret | Пароль кассы мерчанта O!Dengi | `<ODENGI_PASSWORD>` |
 | `ODENGI_TEST` | Да | Render Env | Режим тестирования O!Dengi (`0` — боевой, `1` — тест) | `0` |
-| `ODENGI_RESULT_URL` | Да | Render Secret | URL для webhook обратного вызова при оплате | `https://api.uytap.kg/api/payments/odengi/callback` |
+| `ODENGI_RESULT_URL` | Да | Render Secret | URL для webhook обратного вызова при оплате | `https://api.uytap.kg/api/payments/webhook` |
 | `RESEND_API_KEY` | Да | Render Secret | Ключ сервиса отправки email Resend | `re_...` |
 | `RESEND_FROM` | Нет | Render Env | Имя и адрес отправителя email | `UyTap <no-reply@uytap.kg>` |
 | `ALERT_TELEGRAM_BOT_TOKEN` | Нет | Render Secret | Токен Telegram-бота для критических системных алертов | `<TELEGRAM_BOT_TOKEN>` |

@@ -1,4 +1,5 @@
 import { supabase } from "../config/db.js";
+import { sanitizeAuthorPII, maskExpiredPromotion } from "./listingsController.js";
 
 // =======================================================
 // 1. Добавить объявление в избранное (POST /api/favorites)
@@ -15,14 +16,15 @@ export const addFavorite = async (req, res) => {
       });
     }
 
-    // Проверяем, существует ли такое объявление вообще
+    // Разрешаем добавлять в избранное ТОЛЬКО опубликованные активные объявления (status === 'active')
     const { data: listing, error: listingError } = await supabase
       .from("listings")
-      .select("id")
+      .select("id, status")
       .eq("id", listingId)
+      .eq("status", "active")
       .maybeSingle();
 
-    if (listingError || !listing) {
+    if (listingError || !listing || listing.status !== "active") {
       return res.status(404).json({
         success: false,
         message: "Объявление не найдено",
@@ -133,7 +135,7 @@ export const getFavorites = async (req, res) => {
         listings (
           *,
           listing_photos (id, url, is_main, display_order),
-          users (id, is_verified, account_type)
+          users (id, phone, show_phone, is_verified, account_type)
         )
       `)
       .eq("user_id", userId);
@@ -146,10 +148,24 @@ export const getFavorites = async (req, res) => {
       });
     }
 
-    // Форматируем список, чтобы возвращать массив объектов listings напрямую
+    // Отдаём только активные неистёкшие объявления, применяя sanitizeAuthorPII и maskExpiredPromotion (P1-07)
+    const nowMs = Date.now();
     const listings = (data || [])
       .map((fav) => fav.listings)
-      .filter(Boolean);
+      .filter((item) => {
+        if (!item || item.status !== "active") return false;
+        if (item.expires_at && new Date(item.expires_at).getTime() <= nowMs) return false;
+        return true;
+      })
+      .map((item) => {
+        const copy = { ...item };
+        if (copy.users) {
+          copy.users = Array.isArray(copy.users)
+            ? copy.users.map(sanitizeAuthorPII)
+            : sanitizeAuthorPII(copy.users);
+        }
+        return maskExpiredPromotion(copy);
+      });
 
     return res.json({
       success: true,

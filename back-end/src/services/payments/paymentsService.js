@@ -372,7 +372,7 @@ export async function fulfillPayment(payment) {
 /**
  * 4. Сверка статуса платежа с O!Dengi и инициирование выдачи услуги при подтверждении.
  */
-export async function reconcilePaymentStatus(payment) {
+export async function reconcilePaymentStatus(payment, { force = false } = {}) {
   if (payment.status === "approved") {
     if (!payment.fulfilled_at) {
       return await fulfillPayment(payment);
@@ -384,10 +384,11 @@ export async function reconcilePaymentStatus(payment) {
     return payment;
   }
 
-  // Троттлинг синхронного обращения к O!Dengi
+  // Троттлинг синхронного обращения к O!Dengi (клиентский поллинг ограничен 10 сек;
+  // серверный webhook и фоновый cron обходят троттлинг через force: true)
   const now = Date.now();
   const lastCheck = providerCheckThrottleMap.get(payment.order_id);
-  if (lastCheck && now - lastCheck < ODENGI_THROTTLE_MS) {
+  if (!force && lastCheck && now - lastCheck < ODENGI_THROTTLE_MS) {
     return payment;
   }
 
@@ -413,6 +414,31 @@ export async function reconcilePaymentStatus(payment) {
   const providerStatus = paymentAttempt?.status || statusData?.status;
 
   if (providerStatus === "approved") {
+    // Сверка оплаченной суммы из ответа провайдера с payment.amount в БД (если провайдер вернул сумму в тыйынах/копейках)
+    const rawProviderAmount = paymentAttempt?.amount ?? statusData?.amount;
+    if (
+      rawProviderAmount !== undefined &&
+      rawProviderAmount !== null &&
+      payment.amount !== undefined &&
+      payment.amount !== null
+    ) {
+      const paidAmountKopecks = Number(rawProviderAmount);
+      const expectedAmountKopecks = Number(payment.amount);
+      if (
+        Number.isFinite(paidAmountKopecks) &&
+        Number.isFinite(expectedAmountKopecks) &&
+        paidAmountKopecks < expectedAmountKopecks
+      ) {
+        logger.error("O!Dengi Payment Amount Mismatch — blocking approval", {
+          paymentId: payment.id,
+          orderId: payment.order_id,
+          expectedAmountKopecks,
+          paidAmountKopecks,
+        });
+        return payment;
+      }
+    }
+
     const { data: claimed } = await repo.claimPaymentApproved(payment.id, {
       transId: paymentAttempt?.trans_id || null,
       paidAt: paymentAttempt?.date_pay
@@ -481,7 +507,7 @@ export async function cancelPaymentService({ orderId, userId }) {
 
   let current = payment;
   try {
-    current = await reconcilePaymentStatus(payment);
+    current = await reconcilePaymentStatus(payment, { force: true });
   } catch (providerError) {
     logger.error("Cancel Payment Reconcile Error", { error: providerError?.message });
   }
@@ -543,7 +569,7 @@ export async function handleWebhookService(orderId) {
 
   if (payment) {
     try {
-      await reconcilePaymentStatus(payment);
+      await reconcilePaymentStatus(payment, { force: true });
     } catch (providerError) {
       logger.error("Result URL Reconcile Error", { error: providerError?.message });
     }
