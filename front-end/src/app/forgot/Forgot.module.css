@@ -1,34 +1,64 @@
 /* =========================================================
-   FORGOT PASSWORD
+   FORGOT PASSWORD — UYTAP
 ========================================================= */
 
 .page {
   position: relative;
-
+  isolation: isolate;
   width: 100%;
-  min-width: 0;
   min-height: 100vh;
-
-  padding: 30px 20px;
-
+  min-height: 100dvh;
+  padding: 36px 20px 60px;
   box-sizing: border-box;
-
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-
   overflow: hidden;
-
   background:
-    radial-gradient(circle at 15% 10%, rgba(72, 61, 246, 0.1), transparent 32%),
     radial-gradient(
-      circle at 90% 85%,
-      rgba(72, 61, 246, 0.07),
+      circle at 10% 12%,
+      rgba(72, 61, 246, 0.09),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 90% 88%,
+      rgba(111, 91, 255, 0.09),
       transparent 30%
     ),
-    #f8f9fc;
-
+    #f7f8fc;
   color: #171923;
+  font-family: inherit;
+}
+
+.page *,
+.page *::before,
+.page *::after {
+  box-sizing: border-box;
+}
+
+.glowOne,
+.glowTwo {
+  position: absolute;
+  z-index: -1;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+.glowOne {
+  top: -250px;
+  left: -200px;
+  background: #483df6;
+}
+
+.glowTwo {
+  right: -220px;
+  bottom: -260px;
+  background: #7669ff;
 }
 
 /* =========================================================
@@ -37,26 +67,18 @@
 
 .card {
   position: relative;
-  z-index: 2;
-
-  width: min(460px, 100%);
+  z-index: 1;
+  width: min(100%, 470px);
   min-width: 0;
-
-  padding: 45px 40px;
-
-  box-sizing: border-box;
-
-  border: 1px solid #e7e9f0;
+  padding: 34px 36px 30px;
+  border: 1px solid rgba(225, 228, 239, 0.95);
   border-radius: 28px;
-
-  background: rgba(255, 255, 255, 0.96);
-
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
-
+  background: rgba(255, 255, 255, 0.97);
   box-shadow:
-    0 30px 80px rgba(23, 25, 35, 0.08),
-    0 0 60px rgba(72, 61, 246, 0.06);
+    0 28px 80px rgba(30, 33, 56, 0.075),
+    0 4px 16px rgba(30, 33, 56, 0.025);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
 /* =========================================================
@@ -64,39 +86,36 @@
 ========================================================= */
 
 .back {
-  width: fit-content;
-  max-width: 100%;
-
   display: inline-flex;
   align-items: center;
-
-  gap: 8px;
-
-  margin-bottom: 28px;
-
-  color: #737789;
-
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.3;
-
-  text-decoration: none;
-
+  gap: 9px;
+  max-width: 100%;
+  margin: 0 0 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #777b8d;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
   transition:
     color 0.2s ease,
     transform 0.2s ease;
 }
 
-.back svg {
-  width: 18px;
-  height: 18px;
-
-  flex: 0 0 auto;
+.back:hover:not(:disabled) {
+  color: #483df6;
+  transform: translateX(-3px);
 }
 
-.back:hover {
-  color: #483df6;
-  transform: translateX(-4px);
+.back:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.back svg {
+  flex-shrink: 0;
 }
 
 /* =========================================================
@@ -104,55 +123,209 @@
 ========================================================= */
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: #483df6;
-
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 900;
-  line-height: 1;
+  letter-spacing: 2.5px;
+}
 
-  letter-spacing: 3px;
-  text-transform: uppercase;
+.brandMark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 10px;
+  background: #483df6;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  box-shadow: 0 5px 14px rgba(72, 61, 246, 0.2);
 }
 
 /* =========================================================
-   TITLE
+   HEADING
 ========================================================= */
+
+.heading {
+  margin-top: 27px;
+}
+
+.headingIcon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 18px;
+  place-items: center;
+  border: 1px solid rgba(72, 61, 246, 0.12);
+  border-radius: 15px;
+  background: #f0efff;
+  color: #483df6;
+}
+
+.headingIcon svg {
+  width: 22px;
+  height: 22px;
+}
 
 .title {
-  width: 100%;
-  min-width: 0;
-
-  margin: 14px 0 10px;
-
+  margin: 0;
   color: #171923;
-
-  font-size: clamp(32px, 4vw, 40px);
-  font-weight: 900;
-  line-height: 1.1;
-
-  letter-spacing: -1.2px;
-
+  font-size: clamp(26px, 4vw, 32px);
+  font-weight: 850;
+  line-height: 1.2;
+  letter-spacing: -1.1px;
   overflow-wrap: anywhere;
-  word-break: break-word;
+}
+
+.subtitle {
+  margin: 11px 0 0;
+  color: #777b8d;
+  font-size: 13.5px;
+  font-weight: 450;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 /* =========================================================
-   SUBTITLE
+   THREE-STEP PROGRESS
 ========================================================= */
 
-.subtitle {
-  width: 100%;
+.progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 27px 0 25px;
+}
+
+.progressStep {
   min-width: 0;
+}
 
-  margin: 0 0 30px;
+.progressTop {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 9px;
+}
 
-  color: #737789;
+.progressNumber {
+  display: grid;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid #e1e3ed;
+  border-radius: 50%;
+  background: #fff;
+  color: #989cad;
+  font-size: 11px;
+  font-weight: 800;
+  transition:
+    background 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease;
+}
 
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1.6;
+.progressActive {
+  border-color: #483df6;
+  background: #483df6;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(72, 61, 246, 0.2);
+}
 
+.progressCompleted {
+  border-color: #483df6;
+  background: #eeedff;
+  color: #483df6;
+}
+
+.progressLine {
+  width: 100%;
+  height: 2px;
+  margin: 0 7px;
+  border-radius: 99px;
+  background: #e7e8f0;
+  transition: background 0.25s ease;
+}
+
+.progressLineActive {
+  background: #483df6;
+}
+
+.progressLabel {
+  display: block;
+  color: #9296a7;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.progressLabelActive {
+  color: #483df6;
+}
+
+/* =========================================================
+   EMAIL / PHONE SWITCH
+========================================================= */
+
+.methodSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  width: 100%;
+  margin-bottom: 23px;
+  padding: 5px;
+  border: 1px solid #eeeff5;
+  border-radius: 14px;
+  background: #f5f6fa;
+}
+
+.methodButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #777b8d;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.22s ease,
+    color 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.methodButton svg {
+  flex-shrink: 0;
+}
+
+.methodButton:hover:not(:disabled) {
+  color: #483df6;
+}
+
+.methodButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.methodActive {
+  border-color: #e8e6ff;
+  background: #fff;
+  color: #483df6;
+  box-shadow: 0 2px 8px rgba(26, 29, 50, 0.055);
 }
 
 /* =========================================================
@@ -160,384 +333,613 @@
 ========================================================= */
 
 .form {
-  width: 100%;
-  min-width: 0;
-
   display: flex;
   flex-direction: column;
+  gap: 17px;
+  width: 100%;
+  min-width: 0;
+}
 
-  gap: 16px;
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+}
+
+.field label {
+  color: #333648;
+  font-size: 12.5px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.hint {
+  margin: 0;
+  color: #9296a6;
+  font-size: 11.5px;
+  line-height: 1.6;
 }
 
 /* =========================================================
-   INPUT BOX
+   INPUT
 ========================================================= */
 
 .inputBox {
-  width: 100%;
-  min-width: 0;
-  height: 62px;
-
-  padding: 0 18px;
-
-  box-sizing: border-box;
-
   display: flex;
   align-items: center;
-
-  gap: 14px;
-
-  border: 1px solid #dfe2eb;
-  border-radius: 16px;
-
-  background: #f8f9fc;
-
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  height: 56px;
+  padding: 0 15px;
+  border: 1px solid #e1e3ed;
+  border-radius: 13px;
+  background: #fafbfe;
   transition:
     border-color 0.2s ease,
     background 0.2s ease,
     box-shadow 0.2s ease;
 }
 
+.inputBox > svg {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+  color: #777b91;
+  transition: color 0.2s ease;
+}
+
 .inputBox:hover {
-  border-color: rgba(72, 61, 246, 0.35);
+  border-color: #c9c6fa;
   background: #fff;
 }
 
 .inputBox:focus-within {
-  border-color: rgba(72, 61, 246, 0.65);
-
+  border-color: #7167fa;
   background: #fff;
-
-  box-shadow:
-    0 0 0 3px rgba(72, 61, 246, 0.08),
-    0 10px 30px rgba(72, 61, 246, 0.06);
+  box-shadow: 0 0 0 3px rgba(72, 61, 246, 0.085);
 }
 
-.inputBox > svg {
-  width: 21px;
-  height: 21px;
-
-  min-width: 21px;
-
-  flex: 0 0 auto;
-
+.inputBox:focus-within > svg {
   color: #483df6;
 }
 
 .inputBox input {
-  min-width: 0;
   flex: 1;
-
   width: 100%;
+  min-width: 0;
   height: 100%;
-
   padding: 0;
-
-  border: none;
+  border: 0;
   outline: none;
-
   background: transparent;
-
   color: #171923;
-
   font-family: inherit;
-  font-size: 16px;
-  line-height: 1.3;
+  font-size: 14px;
+  font-weight: 550;
 }
 
 .inputBox input::placeholder {
-  color: #9a9eac;
+  color: #a0a3b1;
+  font-weight: 450;
   opacity: 1;
 }
 
+.inputBox input:focus-visible {
+  outline: none;
+}
+
+.inputInvalid {
+  border-color: #e5485d;
+  background: #fffafa;
+}
+
+.inputInvalid:focus-within {
+  border-color: #e5485d;
+  box-shadow: 0 0 0 3px rgba(229, 72, 93, 0.08);
+}
+
 /* =========================================================
-   EYE
+   PHONE INPUT
+========================================================= */
+
+.phoneBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  height: 56px;
+  padding: 0 12px;
+  border: 1px solid #e1e3ed;
+  border-radius: 13px;
+  background: #fafbfe;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.phoneBox:focus-within {
+  border-color: #7167fa;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(72, 61, 246, 0.085);
+}
+
+.countryCode {
+  flex-shrink: 0;
+  width: 95px;
+  max-width: 43%;
+  height: 36px;
+  padding: 0 3px;
+  border: 0;
+  border-right: 1px solid #e2e4ed;
+  outline: none;
+  background: transparent;
+  color: #333648;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.phoneBox input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #171923;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.phoneBox input::placeholder {
+  color: #a0a3b1;
+}
+
+.phoneBox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.phoneBox > svg {
+  width: 18px;
+  height: 20px;
+  flex-shrink: 0;
+  color: #9ca3af;
+  stroke-width: 1.8;
+  transition: color 0.2s ease;
+  margin-left: 4px;
+  margin-right: 3px;
+}
+
+.phoneBox:focus-within > svg {
+  color: #392edc;
+}
+
+/* =========================================================
+   CODE
+========================================================= */
+
+.codeBox input {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.codeCount {
+  flex-shrink: 0;
+  color: #9296a6;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   PASSWORD VISIBILITY
 ========================================================= */
 
 .eye {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-
+  display: grid;
+  flex: 0 0 auto;
+  width: 33px;
+  height: 33px;
   padding: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border: none;
-  border-radius: 8px;
-
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
   background: transparent;
-
-  color: #8b8f9e;
-
+  color: #9296a6;
   cursor: pointer;
-
   transition:
-    color 0.2s ease,
     background 0.2s ease,
-    transform 0.2s ease;
+    color 0.2s ease;
 }
 
 .eye svg {
-  width: 19px;
-  height: 19px;
-
-  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
 }
 
 .eye:hover {
+  background: #f0efff;
   color: #483df6;
-  background: rgba(72, 61, 246, 0.06);
-  transform: scale(1.04);
 }
 
 /* =========================================================
-   SUBMIT
+   PRIMARY BUTTON
 ========================================================= */
 
 .submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: 100%;
   min-width: 0;
-  height: 62px;
-
-  padding: 0 16px;
-
-  box-sizing: border-box;
-
+  min-height: 54px;
+  padding: 13px 18px;
   border: 1px solid #483df6;
-  border-radius: 16px;
-
+  border-radius: 13px;
   background: #483df6;
-
   color: #fff;
-
   font-family: inherit;
-  font-size: 16px;
-  font-weight: 850;
-  line-height: 1.2;
-
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: center;
   cursor: pointer;
-
-  box-shadow: 0 12px 30px rgba(72, 61, 246, 0.2);
-
+  box-shadow: 0 8px 20px rgba(72, 61, 246, 0.16);
   transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
     transform 0.2s ease,
     box-shadow 0.2s ease,
-    background 0.2s ease;
+    opacity 0.2s ease;
 }
 
-.submit:hover {
+.submit svg {
+  flex-shrink: 0;
+}
+
+.submit:hover:not(:disabled) {
   transform: translateY(-2px);
-
-  background: #3d32e8;
-
-  box-shadow: 0 18px 40px rgba(72, 61, 246, 0.27);
+  border-color: #392edc;
+  background: #392edc;
+  box-shadow: 0 12px 25px rgba(72, 61, 246, 0.23);
 }
 
-.submit:active {
+.submit:active:not(:disabled) {
   transform: translateY(0);
 }
 
 .submit:disabled {
-  opacity: 0.45;
-
+  opacity: 0.48;
   cursor: not-allowed;
-
-  transform: none;
-
   box-shadow: none;
 }
 
 /* =========================================================
-   ERROR
+   LOADING SPINNER
+========================================================= */
+
+.spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: forgotSpin 0.7s linear infinite;
+}
+
+@keyframes forgotSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   CONTACT SUMMARY
+========================================================= */
+
+.contactSummary {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #e9e8fa;
+  border-radius: 13px;
+  background: #f8f7ff;
+}
+
+.contactIcon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 37px;
+  height: 37px;
+  place-items: center;
+  border-radius: 11px;
+  background: #eeedff;
+  color: #483df6;
+}
+
+.contactIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.contactText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.contactText span {
+  color: #85899a;
+  font-size: 10.5px;
+}
+
+.contactText strong {
+  color: #292b3a;
+  font-size: 12px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.editContact {
+  flex-shrink: 0;
+  padding: 6px 0 6px 6px;
+  border: 0;
+  background: transparent;
+  color: #483df6;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.editContact:hover {
+  color: #3024d7;
+  text-decoration: underline;
+}
+
+/* =========================================================
+   MESSAGES
 ========================================================= */
 
 .error {
   width: 100%;
-
-  margin: -5px 0;
-
-  color: #e5485d;
-
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.4;
-
+  margin: -3px 0;
+  color: #d93650;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
-/* =========================================================
-   NOTICES & HELPERS
-========================================================= */
-
 .infoNotice {
   width: 100%;
-  padding: 12px 16px;
-  box-sizing: border-box;
-  background: rgba(72, 61, 246, 0.08);
-  border: 1px solid rgba(72, 61, 246, 0.2);
-  border-radius: 14px;
-  color: #3b30d8;
-  font-size: 13px;
+  padding: 12px 14px;
+  border: 1px solid #dedbff;
+  border-radius: 12px;
+  background: #f5f4ff;
+  color: #4539d5;
+  font-size: 11.5px;
   font-weight: 600;
-  line-height: 1.4;
-  text-align: center;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.passwordHint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #85899a;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.passwordHint svg {
+  flex-shrink: 0;
+  color: #483df6;
 }
 
 .successNotice {
-  width: 100%;
-  padding: 12px 16px;
-  box-sizing: border-box;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  border-radius: 14px;
-  color: #065f46;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 25px 15px;
+  border: 1px solid #b8efd5;
+  border-radius: 16px;
+  background: #f0fdf6;
+  color: #086747;
   text-align: center;
 }
 
-.emailTarget {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 14px;
-  background: #f4f5f8;
-  border: 1px solid #dfe2eb;
-  border-radius: 12px;
-  font-size: 13px;
-  color: #55596e;
+.successIcon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 50%;
+  background: #d7f8e8;
+  color: #078355;
 }
 
-.emailTarget strong {
-  color: #171923;
-  word-break: break-all;
+.successNotice strong {
+  font-size: 15px;
+  line-height: 1.5;
 }
 
-.changeEmailBtn {
-  background: none;
-  border: none;
-  color: #483df6;
+.successNotice p {
+  margin: 0;
+  color: #4d9277;
   font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-  transition: color 0.2s ease;
-  white-space: nowrap;
+  line-height: 1.5;
 }
 
-.changeEmailBtn:hover {
-  color: #3529d9;
-}
+/* =========================================================
+   RESEND
+========================================================= */
 
 .resendBox {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.resendBtn {
-  background: none;
-  border: none;
-  color: #483df6;
-  font-size: 13.5px;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 6px 12px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.resendBtn:hover:not(:disabled) {
-  background: rgba(72, 61, 246, 0.08);
-  color: #3529d9;
-}
-
-.resendBtn:disabled {
-  color: #9a9eac;
-  cursor: not-allowed;
-}
-
-.countdownText {
-  color: #737789;
-  font-size: 13px;
-  font-weight: 500;
+  min-width: 0;
+  padding-top: 1px;
   text-align: center;
 }
 
+.countdownText {
+  color: #85899a;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.countdownText strong {
+  color: #483df6;
+  font-variant-numeric: tabular-nums;
+}
+
+.resendBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #483df6;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.5;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.resendBtn:hover:not(:disabled) {
+  background: #f0efff;
+  color: #3024d7;
+}
+
+.resendBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* =========================================================
-   BOTTOM
+   FOOTER / DIVIDER
 ========================================================= */
 
-.bottom {
-  width: 100%;
-
-  margin-top: 28px;
-
-  color: #7b7f8f;
-
-  font-size: 14px;
-  font-weight: 500;
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 27px;
+  color: #a0a3b1;
+  font-size: 9.5px;
+  font-weight: 550;
   line-height: 1.5;
+  text-align: center;
+}
 
+.divider span:first-child,
+.divider span:last-child {
+  flex: 1;
+  height: 1px;
+  background: #eceef4;
+}
+
+.divider span:nth-child(2) {
+  flex-shrink: 0;
+}
+
+.bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 20px;
+  color: #85899a;
+  font-size: 12px;
+  line-height: 1.6;
   text-align: center;
 }
 
 .bottom a {
-  margin-left: 6px;
-
   color: #483df6;
-
   font-weight: 800;
-
   text-decoration: none;
-
   transition: color 0.2s ease;
 }
 
 .bottom a:hover {
-  color: #3529d9;
+  color: #3024d7;
+  text-decoration: underline;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 23px;
+  color: #989cad;
+  font-size: 10.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.footer svg {
+  flex-shrink: 0;
+  color: #7770e9;
 }
 
 /* =========================================================
-   GLOWS
+   ACCESSIBILITY
 ========================================================= */
 
-.glowOne,
-.glowTwo {
-  position: absolute;
-
-  width: 450px;
-  height: 450px;
-
-  border-radius: 50%;
-
-  filter: blur(150px);
-
-  pointer-events: none;
-
-  opacity: 0.16;
+.back:focus-visible,
+.methodButton:focus-visible,
+.submit:focus-visible,
+.eye:focus-visible,
+.editContact:focus-visible,
+.resendBtn:focus-visible,
+.bottom a:focus-visible {
+  outline: 3px solid rgba(72, 61, 246, 0.3);
+  outline-offset: 3px;
 }
 
-.glowOne {
-  top: -250px;
-  left: -250px;
-
-  background: #483df6;
-}
-
-.glowTwo {
-  right: -250px;
-  bottom: -250px;
-
-  background: #483df6;
+@media (prefers-reduced-motion: reduce) {
+  .page *,
+  .page *::before,
+  .page *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* =========================================================
@@ -546,226 +948,45 @@
 
 @media (max-width: 700px) {
   .page {
-    padding: 25px 16px;
+    padding: 28px 18px 50px;
   }
 
   .card {
-    max-width: 450px;
-
-    padding: 34px 25px;
-
-    border-radius: 23px;
+    width: min(100%, 450px);
+    padding: 30px 28px 26px;
+    border-radius: 24px;
   }
 
-  .back {
-    margin-bottom: 21px;
-
-    font-size: 13px;
-  }
-
-  .brand {
-    font-size: 15px;
-    letter-spacing: 2.5px;
+  .heading {
+    margin-top: 24px;
   }
 
   .title {
-    margin-top: 12px;
-    margin-bottom: 9px;
-
-    font-size: 32px;
-    line-height: 1.14;
+    font-size: 29px;
   }
 
-  .subtitle {
-    margin-bottom: 25px;
-
-    font-size: 14px;
-    line-height: 1.6;
-  }
-
-  .form {
-    gap: 13px;
-  }
-
-  .inputBox {
-    height: 58px;
-
-    padding: 0 16px;
-
-    gap: 12px;
-
-    border-radius: 14px;
-  }
-
-  .inputBox > svg {
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-  }
-
-  .inputBox input {
-    font-size: 15px;
-  }
-
-  .eye {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-  }
-
-  .submit {
-    height: 58px;
-
-    border-radius: 14px;
-
-    font-size: 15px;
-  }
-
-  .bottom {
-    margin-top: 23px;
-
-    font-size: 13px;
+  .progress {
+    margin: 24px 0;
   }
 }
 
 /* =========================================================
-   SMALL MOBILE
+   MOBILE
 ========================================================= */
 
 @media (max-width: 520px) {
   .page {
-    padding: 20px 12px;
+    padding: 22px 14px 35px;
   }
 
   .card {
-    max-width: 100%;
-
-    padding: 28px 18px;
-
-    border-radius: 19px;
+    padding: 26px 21px 23px;
+    border-radius: 21px;
   }
 
   .back {
-    gap: 6px;
-
-    margin-bottom: 18px;
-
+    margin-bottom: 23px;
     font-size: 12px;
-  }
-
-  .back svg {
-    width: 17px;
-    height: 17px;
-  }
-
-  .brand {
-    font-size: 14px;
-    letter-spacing: 2.2px;
-  }
-
-  .title {
-    margin-top: 11px;
-    margin-bottom: 8px;
-
-    font-size: 27px;
-    line-height: 1.15;
-
-    letter-spacing: -0.7px;
-  }
-
-  .subtitle {
-    margin-bottom: 21px;
-
-    font-size: 13px;
-    line-height: 1.58;
-  }
-
-  .form {
-    gap: 10px;
-  }
-
-  .inputBox {
-    height: 53px;
-
-    padding: 0 13px;
-
-    gap: 10px;
-
-    border-radius: 12px;
-  }
-
-  .inputBox > svg {
-    width: 18px;
-    height: 18px;
-    min-width: 18px;
-  }
-
-  .inputBox input {
-    font-size: 14px;
-  }
-
-  .eye {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-
-    border-radius: 7px;
-  }
-
-  .eye svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  .submit {
-    height: 53px;
-
-    padding: 0 12px;
-
-    border-radius: 12px;
-
-    font-size: 14px;
-  }
-
-  .error {
-    font-size: 11.5px;
-  }
-
-  .bottom {
-    margin-top: 19px;
-
-    font-size: 12px;
-  }
-
-  .bottom a {
-    margin-left: 5px;
-  }
-}
-
-/* =========================================================
-   400px
-========================================================= */
-
-@media (max-width: 400px) {
-  .page {
-    padding: 17px 10px;
-  }
-
-  .card {
-    padding: 24px 14px;
-
-    border-radius: 17px;
-  }
-
-  .back {
-    margin-bottom: 15px;
-
-    font-size: 11.5px;
-  }
-
-  .back svg {
-    width: 16px;
-    height: 16px;
   }
 
   .brand {
@@ -773,197 +994,439 @@
     letter-spacing: 2px;
   }
 
+  .brandMark {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    font-size: 15px;
+  }
+
+  .heading {
+    margin-top: 23px;
+  }
+
+  .headingIcon {
+    width: 42px;
+    height: 42px;
+    margin-bottom: 15px;
+    border-radius: 13px;
+  }
+
   .title {
-    margin-top: 10px;
-
-    font-size: 23px;
-    line-height: 1.17;
-
-    letter-spacing: -0.45px;
+    font-size: 26px;
+    letter-spacing: -0.8px;
   }
 
   .subtitle {
-    margin-top: 0;
-    margin-bottom: 18px;
+    margin-top: 9px;
+    font-size: 12.5px;
+  }
 
-    font-size: 11.5px;
-    line-height: 1.55;
+  .progress {
+    gap: 5px;
+    margin: 23px 0;
+  }
+
+  .progressNumber {
+    width: 24px;
+    height: 24px;
+  }
+
+  .progressLabel {
+    font-size: 9.5px;
+  }
+
+  .methodSwitch {
+    margin-bottom: 20px;
+  }
+
+  .methodButton {
+    min-height: 42px;
+    gap: 7px;
+    padding: 9px 8px;
+    font-size: 12px;
   }
 
   .form {
+    gap: 15px;
+  }
+
+  .field {
     gap: 8px;
+  }
+
+  .inputBox,
+  .phoneBox {
+    height: 53px;
+    border-radius: 12px;
   }
 
   .inputBox {
-    height: 49px;
-
-    padding: 0 11px;
-
-    gap: 8px;
-
-    border-radius: 10px;
+    padding: 0 13px;
+    gap: 10px;
   }
 
-  .inputBox > svg {
-    width: 17px;
-    height: 17px;
-    min-width: 17px;
-  }
-
-  .inputBox input {
+  .inputBox input,
+  .phoneBox input {
     font-size: 13px;
-  }
-
-  .eye {
-    width: 26px;
-    height: 26px;
-    min-width: 26px;
-  }
-
-  .eye svg {
-    width: 17px;
-    height: 17px;
   }
 
   .submit {
-    height: 49px;
-
-    padding: 0 10px;
-
-    border-radius: 10px;
-
-    font-size: 13px;
+    min-height: 51px;
+    border-radius: 12px;
+    font-size: 12.5px;
   }
 
-  .error {
-    margin: -2px 0;
+  .contactSummary {
+    gap: 8px;
+    padding: 11px;
+  }
 
-    font-size: 10.5px;
+  .contactIcon {
+    width: 33px;
+    height: 33px;
+  }
+
+  .contactText strong {
+    font-size: 11px;
+  }
+
+  .editContact {
+    font-size: 10px;
+  }
+
+  .divider {
+    margin-top: 23px;
+    font-size: 9px;
   }
 
   .bottom {
-    margin-top: 16px;
+    margin-top: 17px;
+    font-size: 11.5px;
+  }
 
-    font-size: 11px;
-    line-height: 1.4;
+  .footer {
+    margin-top: 18px;
+    font-size: 9.5px;
   }
 }
 
 /* =========================================================
-   320px — STRICT SAFE MODE
+   SMALL MOBILE
+========================================================= */
+
+@media (max-width: 380px) {
+  .page {
+    padding: 16px 10px 28px;
+  }
+
+  .card {
+    padding: 23px 16px 20px;
+    border-radius: 18px;
+  }
+
+  .back {
+    margin-bottom: 19px;
+    font-size: 11px;
+  }
+
+  .heading {
+    margin-top: 20px;
+  }
+
+  .title {
+    font-size: 23px;
+    letter-spacing: -0.6px;
+  }
+
+  .subtitle {
+    font-size: 11.5px;
+    line-height: 1.6;
+  }
+
+  .progress {
+    gap: 4px;
+    margin: 20px 0;
+  }
+
+  .progressLine {
+    margin: 0 4px;
+  }
+
+  .progressLabel {
+    font-size: 8.5px;
+  }
+
+  .methodButton {
+    gap: 5px;
+    font-size: 11px;
+  }
+
+  .form {
+    gap: 13px;
+  }
+
+  .field label {
+    font-size: 11.5px;
+  }
+
+  .inputBox,
+  .phoneBox {
+    height: 49px;
+  }
+
+  .inputBox {
+    gap: 8px;
+    padding: 0 11px;
+  }
+
+  .inputBox > svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .countryCode {
+    width: 84px;
+    font-size: 11px;
+  }
+
+  .codeBox input {
+    font-size: 19px;
+    letter-spacing: 5px;
+  }
+
+  .codeCount {
+    font-size: 10px;
+  }
+
+  .submit {
+    min-height: 48px;
+    padding: 11px;
+    font-size: 11.5px;
+  }
+
+  .contactSummary {
+    gap: 7px;
+    padding: 9px;
+  }
+
+  .contactIcon {
+    width: 29px;
+    height: 29px;
+  }
+
+  .contactText span {
+    font-size: 9px;
+  }
+
+  .contactText strong {
+    font-size: 10px;
+  }
+
+  .editContact {
+    font-size: 9px;
+  }
+
+  .divider {
+    gap: 7px;
+    font-size: 8px;
+  }
+
+  .bottom {
+    font-size: 10.5px;
+  }
+}
+
+/* =========================================================
+   EXTRA SMALL — 320px
 ========================================================= */
 
 @media (max-width: 330px) {
   .page {
-    padding: 14px 8px;
+    padding: 12px 7px 22px;
   }
 
   .card {
-    width: 100%;
-    max-width: 100%;
-
-    padding: 20px 10px;
-
-    border-radius: 14px;
+    padding: 19px 12px 17px;
+    border-radius: 15px;
   }
 
   .back {
-    gap: 5px;
+    gap: 6px;
+    margin-bottom: 16px;
+    font-size: 10px;
+  }
 
-    margin-bottom: 13px;
+  .brand {
+    gap: 7px;
+    font-size: 11px;
+    letter-spacing: 1.7px;
+  }
 
+  .brandMark {
+    width: 25px;
+    height: 25px;
+    font-size: 13px;
+  }
+
+  .heading {
+    margin-top: 17px;
+  }
+
+  .headingIcon {
+    width: 37px;
+    height: 37px;
+    margin-bottom: 12px;
+  }
+
+  .headingIcon svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .title {
+    font-size: 21px;
+    letter-spacing: -0.5px;
+  }
+
+  .subtitle {
     font-size: 10.5px;
   }
 
-  .back svg {
+  .progress {
+    margin: 17px 0;
+  }
+
+  .progressNumber {
+    width: 21px;
+    height: 21px;
+    font-size: 10px;
+  }
+
+  .progressLabel {
+    font-size: 8px;
+  }
+
+  .methodSwitch {
+    gap: 3px;
+    padding: 4px;
+    margin-bottom: 17px;
+    border-radius: 11px;
+  }
+
+  .methodButton {
+    min-height: 38px;
+    gap: 5px;
+    padding: 7px 4px;
+    font-size: 10px;
+  }
+
+  .methodButton svg {
     width: 15px;
     height: 15px;
   }
 
-  .brand {
-    font-size: 12px;
-    letter-spacing: 1.7px;
-  }
-
-  .title {
-    margin-top: 9px;
-    margin-bottom: 7px;
-
-    font-size: 19px;
-    line-height: 1.18;
-
-    letter-spacing: -0.3px;
-  }
-
-  .subtitle {
-    max-width: 285px;
-
-    margin-bottom: 15px;
-
-    font-size: 10px;
-    line-height: 1.5;
-  }
-
   .form {
-    gap: 7px;
+    gap: 11px;
+  }
+
+  .inputBox,
+  .phoneBox {
+    height: 45px;
+    border-radius: 10px;
   }
 
   .inputBox {
-    height: 45px;
-
-    padding: 0 9px;
-
     gap: 7px;
-
-    border-radius: 9px;
+    padding: 0 9px;
   }
 
   .inputBox > svg {
     width: 15px;
     height: 15px;
-    min-width: 15px;
   }
 
-  .inputBox input {
-    font-size: 12px;
+  .inputBox input,
+  .phoneBox input {
+    font-size: 11.5px;
   }
 
-  .eye {
-    width: 24px;
-    height: 24px;
-    min-width: 24px;
-
-    border-radius: 6px;
+  .countryCode {
+    width: 76px;
+    font-size: 10px;
   }
 
-  .eye svg {
-    width: 16px;
-    height: 16px;
+  .phoneBox {
+    gap: 7px;
+    padding: 0 8px;
+  }
+
+  .codeBox input {
+    font-size: 17px;
+    letter-spacing: 4px;
+  }
+
+  .codeCount {
+    font-size: 9px;
   }
 
   .submit {
-    height: 45px;
-
-    padding: 0 8px;
-
-    border-radius: 9px;
-
-    font-size: 12px;
+    min-height: 44px;
+    gap: 6px;
+    padding: 9px 7px;
+    font-size: 10.5px;
   }
 
-  .error {
-    font-size: 9.5px;
-    line-height: 1.4;
+  .submit svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .contactSummary {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .contactIcon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .contactIcon svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .contactText span {
+    font-size: 8px;
+  }
+
+  .contactText strong {
+    font-size: 9px;
+  }
+
+  .editContact {
+    font-size: 8px;
+  }
+
+  .error,
+  .infoNotice {
+    font-size: 10px;
+  }
+
+  .divider {
+    margin-top: 18px;
+    font-size: 7px;
   }
 
   .bottom {
-    margin-top: 13px;
-
-    font-size: 10px;
-    line-height: 1.35;
+    margin-top: 14px;
+    font-size: 9.5px;
   }
 
-  .bottom a {
-    margin-left: 4px;
+  .footer {
+    gap: 5px;
+    margin-top: 14px;
+    font-size: 8px;
   }
 }
