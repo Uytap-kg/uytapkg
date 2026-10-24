@@ -193,10 +193,10 @@ jobs:
         with:
           image-ref: uytap-backend:ci-${{ github.sha }}
           format: "table"
-          exit-code: "0"
+          exit-code: "1"
           ignore-unfixed: true
           vuln-type: "os,library"
-          severity: "CRITICAL,HIGH"
+          severity: "CRITICAL"
 
   test-db-migrations:
     name: Clean DB Migrations Verification
@@ -256,25 +256,23 @@ jobs:
 
   deploy-to-render:
     name: Trigger Render Production Deploy
-    needs: [lint-and-audit, backend-tests, test-db-migrations, build-frontend]
+    needs: [lint-and-audit, backend-tests, test-db-migrations, build-frontend, build-and-scan-docker]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+      RENDER_FRONTEND_DEPLOY_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
 
     steps:
       - name: Trigger Backend Deploy Hook
         if: env.RENDER_BACKEND_DEPLOY_HOOK != ''
-        env:
-          RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
         run: |
           echo "Triggering backend deploy hook..."
           curl -fsS -X POST "$RENDER_BACKEND_DEPLOY_HOOK"
 
       - name: Trigger Frontend Deploy Hook
         if: env.RENDER_FRONTEND_DEPLOY_HOOK != ''
-        env:
-          RENDER_FRONTEND_DEPLOY_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
         run: |
           echo "Triggering frontend deploy hook..."
           curl -fsS -X POST "$RENDER_FRONTEND_DEPLOY_HOOK"
-

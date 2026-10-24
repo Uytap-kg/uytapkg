@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BASE_URL } from "./helpers.mjs";
+import { BASE_URL, isTestDbConfigured, SKIP_NO_TEST_DB_REASON } from "./helpers.mjs";
 import { getTrustedClientIp, applyTrustedForwardedFor } from "../../front-end/src/app/api/_lib/forwardedFor.js";
 
 const TEST_PROXY_SECRET = "test-internal-proxy-secret-uytap-audit";
@@ -51,7 +51,7 @@ test("IP Spoofing Protection: applyTrustedForwardedFor injects proxy secret head
   assert.equal(headers.get("x-internal-proxy-secret"), TEST_PROXY_SECRET);
 });
 
-test("IP Spoofing Protection: Express rejects direct X-Forwarded-For without valid proxy secret", async () => {
+test("IP Spoofing Protection: Express rejects direct X-Forwarded-For without valid proxy secret", { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false }, async () => {
   // Злоумышленник шлёт прямой запрос к Express с поддельным X-Forwarded-For без секретного заголовка
   const spoofedIp = "198.51.100.99";
 
@@ -94,7 +94,7 @@ test("IP Spoofing Protection: Express rejects direct X-Forwarded-For without val
   );
 });
 
-test("IP Spoofing Protection: Express accepts forwarded IP when valid proxy secret is present", async () => {
+test("IP Spoofing Protection: Express accepts forwarded IP when valid proxy secret is present", { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false }, async () => {
   const forwardedClientIp = "203.0.113.77";
 
   const res = await fetch(`${BASE_URL}/api/health`, {
