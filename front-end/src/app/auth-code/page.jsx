@@ -29,7 +29,9 @@ function AuthCodeContent() {
   const initRef = useRef(false);
 
   useEffect(() => {
-    const rawPhone = (queryPhone || localStorage.getItem("register_phone") || "").trim();
+    let rawPhone = (queryPhone || localStorage.getItem("register_phone") || "").trim();
+    // "+" в query-строке декодируется как пробел: " 996..." -> "+996..."
+    if (/^\s*996\d{9}$/.test(queryPhone || "")) rawPhone = `+${rawPhone}`;
     setPhone(rawPhone || null);
     const rawEmail = (queryEmail || localStorage.getItem("register_email") || "").trim().toLowerCase();
     setEmail(rawEmail || null);
@@ -43,6 +45,8 @@ function AuthCodeContent() {
     if (isPhone) {
       if (!phone || reason !== "login" || initRef.current) return;
       initRef.current = true;
+      // Токен прошлой сессии не должен попасть в новую проверку
+      localStorage.removeItem("register_otp_token");
       resendPhoneOtp(phone).catch((err) => {
         const match = /(\d+)\s*секунд/.exec(err?.message || "");
         if (match) setTimer(Number(match[1]));
@@ -113,8 +117,9 @@ function AuthCodeContent() {
 
     try {
       if (isPhone) {
-        await verifyPhoneOtp(phone, code);
+        await verifyPhoneOtp(phone, code, localStorage.getItem("register_otp_token") || undefined);
         localStorage.removeItem("register_phone");
+        localStorage.removeItem("register_otp_token");
       } else {
         await verifyEmailOtp(email, code);
         localStorage.removeItem("register_email");

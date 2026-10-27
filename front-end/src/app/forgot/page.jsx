@@ -162,7 +162,7 @@ export default function Forgot() {
         setOtpToken(data.token);
       }
 
-      setCountdown(60);
+      setCountdown(Number(data?.retryAfter) || 60);
       setInfoMessage(
         data?.message || "Если аккаунт существует, код отправлен по SMS.",
       );
@@ -172,6 +172,13 @@ export default function Forgot() {
 
       if (match) {
         setCountdown(Number(match[1]));
+      }
+
+      if (match && error?.status === 429) {
+        // Код уже отправлен ранее (кулдаун) — не оставляем пользователя на шаге 1
+        setInfoMessage("Код уже отправлен по SMS. Введите полученный код.");
+        setStep(2);
+        return;
       }
 
       setErrorMessage(

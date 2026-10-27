@@ -4,6 +4,7 @@ import { setBoundedMap, evictExpiredAndCapMap, addBoundedSet } from "./boundedMa
 import {
   checkAndIncrementRateLimit,
   resetAllRateLimitCounters,
+  releaseRateLimit,
   saveSharedPhoneOtpSession,
   loadSharedPhoneOtpSession,
   consumeSharedPhoneOtpAttempt,
@@ -405,6 +406,24 @@ class PhoneOtpStore {
       }
     }
     removeTs(this.serviceDailyHistory);
+  }
+
+  /**
+   * Полный откат резервирования: память + общие счётчики (PostgreSQL / SHARED_STATE_FILE).
+   * Вызывается, когда SMS фактически не отправлена.
+   */
+  async rollbackSendReservationShared(reservation) {
+    if (!reservation) return;
+    this.rollbackSendReservation(reservation);
+    const { phone, ip } = reservation;
+    const keys = [
+      "sms:service_daily",
+      `sms:cooldown:${phone}`,
+      `sms:phone_hour:${phone}`,
+      `sms:phone_day:${phone}`,
+    ];
+    if (ip) keys.push(`sms:ip_min:${ip}`, `sms:ip_hour:${ip}`);
+    await Promise.all(keys.map((key) => releaseRateLimit(key, 1)));
   }
 
   /**

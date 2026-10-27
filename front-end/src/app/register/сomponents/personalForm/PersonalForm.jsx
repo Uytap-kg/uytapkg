@@ -116,6 +116,7 @@ export default function PersonalForm() {
           );
         } else {
           localStorage.setItem("register_phone", normalizedPhone);
+          if (res.token) localStorage.setItem("register_otp_token", res.token);
           router.push(
             `/auth-code?method=phone&phone=${encodeURIComponent(normalizedPhone)}`,
           );
@@ -131,6 +132,18 @@ export default function PersonalForm() {
       setSuccess(true);
       setTimeout(() => router.push("/profile"), 1200);
     } catch (err) {
+      // Код уже отправлен (кулдаун) — аккаунт создан, переходим к вводу кода
+      if (
+        verificationMethod === "phone" &&
+        err?.status === 429 &&
+        err?.retryAfter
+      ) {
+        localStorage.setItem("register_phone", normalizedPhone);
+        router.push(
+          `/auth-code?method=phone&phone=${encodeURIComponent(normalizedPhone)}`,
+        );
+        return;
+      }
       setError(err.message || "Ошибка при регистрации.");
     } finally {
       setLoading(false);

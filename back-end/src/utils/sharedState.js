@@ -591,3 +591,40 @@ export async function cleanupExpiredSharedState() {
     }
   }
 }
+
+
+/**
+ * Откат ранее зарезервированного инкремента счётчика (например, если SMS не была отправлена).
+ * Best-effort: ошибки не пробрасываются, чтобы не ломать основной поток.
+ */
+export async function releaseRateLimit(key, decrement = 1) {
+  const dec = Number.isFinite(decrement) ? Math.floor(decrement) : 1;
+  if (dec <= 0) return;
+  const now = Date.now();
+
+  const entry = localCounters.get(key);
+  if (entry && entry.resetAt > now) {
+    entry.count = Math.max(0, entry.count - dec);
+  }
+
+  if (process.env.SHARED_STATE_FILE) {
+    withSharedFileState((state) => {
+      const existing = state.counters[key];
+      if (existing && existing.resetAt > now) {
+        existing.count = Math.max(0, existing.count - dec);
+      }
+    });
+    return;
+  }
+
+  if (isLiveOrMockedRpcAvailable()) {
+    try {
+      await supabase.rpc("release_rate_limit", {
+        p_key: String(key).slice(0, 255),
+        p_decrement: dec,
+      });
+    } catch {
+      // Откат не критичен: счётчик истечёт сам по окну
+    }
+  }
+}

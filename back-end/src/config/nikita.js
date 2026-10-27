@@ -18,10 +18,10 @@ export const nikitaConfig = {
   get baseUrl() {
     return (process.env.NIKITA_BASE_URL || "https://smspro.nikita.kg").replace(/\/+$/, "");
   },
-  // Таймаут сетевого запроса в миллисекундах (по умолчанию 10 секунд)
+  // Таймаут сетевого запроса в миллисекундах (по умолчанию 15 секунд)
   get timeoutMs() {
     const val = Number(process.env.NIKITA_TIMEOUT_MS);
-    return Number.isFinite(val) && val > 0 ? val : 10000;
+    return Number.isFinite(val) && val > 0 ? val : 15000;
   },
   // Кулдаун повторной отправки на один номер (в секундах, по умолчанию 60с)
   get resendCooldownSec() {

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { applyTrustedForwardedFor, getBackendApiUrl } from "../_lib/forwardedFor";
 
+// Даём прокси время дождаться SMS-шлюза (таймаут Nikita до 15с)
+export const maxDuration = 30;
+
 async function proxyRequest(request, context) {
   try {
     const { params } = context;

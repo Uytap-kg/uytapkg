@@ -7,7 +7,7 @@ import logger from "../utils/logger.js";
 export const smsSemaphore = new Semaphore({
   maxConcurrent: 10,
   maxQueue: 100,
-  acquireTimeoutMs: 12000,
+  acquireTimeoutMs: 15000,
   name: "nikita_sms",
 });
 
@@ -183,10 +183,14 @@ export async function sendOtp({ phone, ip, purpose = "registration" }) {
       }
     }
   } finally {
-    if (!resultJson) {
-      phoneOtpStore.rollbackSendReservation(limitCheck.reservation);
-    } else {
+    // Слот остаётся занятым только при реально выданном токене; иначе откатываем
+    // и память, и общие счётчики, чтобы неудачная отправка не вызывала фантомный кулдаун
+    const delivered =
+      Number(resultJson?.status) === NIKITA_STATUS.SUCCESS && Boolean(resultJson?.token);
+    if (delivered) {
       phoneOtpStore.completeSendReservation(limitCheck.reservation);
+    } else {
+      await phoneOtpStore.rollbackSendReservationShared(limitCheck.reservation);
     }
   }
 

@@ -25,7 +25,10 @@ export async function registerUser(formData) {
       ? data.errors.join(", ")
       : data.message || "Ошибка при регистрации";
 
-    throw new Error(errorMsg);
+    const err = new Error(errorMsg);
+    err.status = response.status;
+    err.retryAfter = data.retryAfter;
+    throw err;
   }
 
   // Email ещё не подтверждён: токен не выдаётся, saveAuth не вызываем.
@@ -115,13 +118,13 @@ export async function verifyOtpCode(phone, code) {
   const response = await fetch(`${API_URL}/auth/verify-otp`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone, code }),
+    body: JSON.stringify({ phone, code, ...(token ? { token } : {}) }),
   });
   return response.json();
 }
 
 // 3b. Подтверждение телефона через SMS OTP
-export async function verifyPhoneOtp(phone, code) {
+export async function verifyPhoneOtp(phone, code, token) {
   const response = await fetch(`${API_URL}/auth/verify-otp`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -165,7 +168,12 @@ export async function resendPhoneOtp(phone) {
   if (!response.ok || !data.success) {
     const err = new Error(data.message || "Не удалось отправить код");
     err.status = response.status;
+    err.retryAfter = data.retryAfter;
     throw err;
+  }
+
+  if (data.token && typeof window !== "undefined") {
+    localStorage.setItem("register_otp_token", data.token);
   }
 
   return data;
@@ -242,6 +250,7 @@ export async function requestPasswordReset(identifier) {
   if (!response.ok || !data.success) {
     const err = new Error(data.message || "Не удалось отправить код восстановления");
     err.status = response.status;
+    err.retryAfter = data.retryAfter;
     throw err;
   }
 
