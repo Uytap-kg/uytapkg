@@ -1,47 +1,36 @@
 .page {
   min-height: 100vh;
-
-  background: #08070c;
-
-  color: #f5f3fa;
+  background: #f8fafc;
+  color: #111827;
 
   --purple: #8b5cf6;
   --purple-dark: #7c3aed;
-  --purple-light: #a78bfa;
+  --purple-light: #8b5cf6;
 
-  --purple-soft: rgba(139, 92, 246, 0.12);
-  --purple-border: rgba(139, 92, 246, 0.32);
+  --purple-soft: rgba(139, 92, 246, 0.09);
+  --purple-border: rgba(139, 92, 246, 0.25);
 
-  --border: rgba(255, 255, 255, 0.075);
-
-  --card: #101016;
+  --border: #e5e7eb;
+  --card: #ffffff;
 }
 
-/* ============================================================
-   CONTENT
-============================================================ */
+/* CONTENT */
 
 .content {
   min-height: 100vh;
-
   margin-left: 250px;
-
   padding: 0 34px 60px;
+  background: #f8fafc;
 }
 
-/* ============================================================
-   HEADER
-============================================================ */
+/* HEADER */
 
 .header {
   min-height: 165px;
-
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   gap: 35px;
-
   border-bottom: 1px solid var(--border);
 }
 
@@ -51,67 +40,45 @@
 
 .eyebrow {
   margin-bottom: 11px;
-
   font-size: 12px;
   line-height: 15px;
-
   letter-spacing: 2.4px;
-
   font-weight: 800;
-
-  color: var(--purple-light);
+  color: var(--purple-dark);
 }
 
 .title {
   margin: 0;
-
   font-size: 36px;
   line-height: 44px;
-
   font-weight: 750;
-
   letter-spacing: -1px;
-
-  color: #f8f7fb;
+  color: #111827;
 }
 
 .subtitle {
   margin: 10px 0 0;
-
-  color: #8b8895;
-
+  color: #6b7280;
   font-size: 16px;
   line-height: 23px;
 }
 
 .addButton {
   height: 52px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   gap: 10px;
-
   padding: 0 22px;
-
   border: 0;
-
   border-radius: 13px;
-
   background: linear-gradient(135deg, #7c3aed, #8b5cf6);
-
   color: #fff;
-
   font-size: 15px;
   font-weight: 700;
-
   white-space: nowrap;
-
   cursor: pointer;
-
-  box-shadow: 0 12px 30px rgba(124, 58, 237, 0.2);
-
+  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.18);
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
@@ -120,214 +87,146 @@
 
 .addButton:hover {
   transform: translateY(-2px);
-
-  filter: brightness(1.08);
-
-  box-shadow: 0 16px 36px rgba(124, 58, 237, 0.32);
+  filter: brightness(1.06);
+  box-shadow: 0 12px 28px rgba(124, 58, 237, 0.25);
 }
 
-/* ============================================================
-   SEARCH
-============================================================ */
+/* SEARCH */
 
 .searchSection {
   display: flex;
   align-items: center;
-
   gap: 18px;
-
   padding: 24px 0 4px;
 }
 
 .searchWrapper {
   position: relative;
-
   flex: 1;
-
   max-width: 650px;
-
   height: 52px;
-
   display: flex;
   align-items: center;
-
-  border: 1px solid rgba(255, 255, 255, 0.085);
-
+  border: 1px solid #e5e7eb;
   border-radius: 13px;
-
-  background: #0f0f15;
-
+  background: #ffffff;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
 }
 
 .searchWrapper:focus-within {
-  border-color: rgba(139, 92, 246, 0.55);
-
+  border-color: rgba(139, 92, 246, 0.6);
   box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.08);
 }
 
 .searchIcon {
   flex-shrink: 0;
-
   margin-left: 17px;
-
-  color: #77717f;
+  color: #9ca3af;
 }
 
 .searchInput {
   width: 100%;
-
   height: 100%;
-
   padding: 0 48px 0 13px;
-
   border: 0;
-
   outline: 0;
-
   background: transparent;
-
-  color: #f2eff7;
-
+  color: #111827;
   font-family: inherit;
-
   font-size: 15px;
 }
 
 .searchInput::placeholder {
-  color: #62606a;
+  color: #9ca3af;
 }
 
 .clearSearch {
   position: absolute;
-
   right: 12px;
-
   width: 32px;
   height: 32px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   padding: 0;
-
   border: 0;
-
   border-radius: 8px;
-
-  background: rgba(255, 255, 255, 0.05);
-
-  color: #898592;
-
+  background: #f3f4f6;
+  color: #6b7280;
   cursor: pointer;
-
   transition:
     background 0.2s ease,
     color 0.2s ease;
 }
 
 .clearSearch:hover {
-  background: rgba(139, 92, 246, 0.13);
-
-  color: #c4b5fd;
+  background: #ede9fe;
+  color: #7c3aed;
 }
 
 .searchInfo {
-  color: #77737f;
-
+  color: #6b7280;
   font-size: 14px;
-
   white-space: nowrap;
 }
 
 .searchInfo strong {
-  color: #b49af5;
-
+  color: #7c3aed;
   font-weight: 700;
 }
 
-/* ============================================================
-   STATS
-============================================================ */
+/* STATS */
 
 .stats {
   display: grid;
-
   grid-template-columns: repeat(3, 1fr);
-
   gap: 17px;
-
   padding: 25px 0 30px;
 }
 
 .statCard {
   min-height: 96px;
-
   display: flex;
   align-items: center;
-
   gap: 17px;
-
   padding: 19px 21px;
-
-  border: 1px solid var(--border);
-
+  border: 1px solid #e5e7eb;
   border-radius: 16px;
-
-  background:
-    radial-gradient(
-      circle at 100% 0%,
-      rgba(139, 92, 246, 0.07),
-      transparent 45%
-    ),
-    #0e0e14;
+  background: linear-gradient(135deg, #ffffff, #faf9ff);
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.025);
 }
 
 .statIcon {
   width: 48px;
   height: 48px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   flex-shrink: 0;
-
   border-radius: 13px;
-
-  background: var(--purple-soft);
-
-  color: var(--purple-light);
+  background: #f3eefe;
+  color: #7c3aed;
 }
 
 .statLabel {
   display: block;
-
   margin-bottom: 5px;
-
-  color: #8a8792;
-
+  color: #6b7280;
   font-size: 13px;
   line-height: 17px;
 }
 
 .statValue {
   display: block;
-
   font-size: 26px;
   line-height: 29px;
-
   font-weight: 750;
-
-  color: #f6f4f9;
+  color: #111827;
 }
 
-/* ============================================================
-   SECTION
-============================================================ */
+/* SECTION */
 
 .section {
   padding-top: 2px;
@@ -339,59 +238,43 @@
 
 .sectionHeader h2 {
   margin: 0;
-
   font-size: 24px;
   line-height: 30px;
-
   font-weight: 700;
-
-  color: #f2f0f6;
+  color: #111827;
 }
 
 .sectionHeader p {
   margin: 7px 0 0;
-
-  color: #817e89;
-
+  color: #6b7280;
   font-size: 15px;
   line-height: 21px;
 }
 
-/* ============================================================
-   GRID
-============================================================ */
+/* GRID */
 
 .grid {
   display: grid;
-
   grid-template-columns: repeat(3, minmax(0, 1fr));
-
   gap: 19px;
 }
 
-/* ============================================================
-   TARIFF CARD
-============================================================ */
+/* TARIFF CARD */
 
 .tariffCard {
   position: relative;
-
   min-width: 0;
-
   padding: 22px;
-
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
+  border: 1px solid #e5e7eb;
   border-radius: 19px;
-
   background:
     radial-gradient(
       circle at 100% 0%,
-      rgba(139, 92, 246, 0.12),
+      rgba(139, 92, 246, 0.045),
       transparent 42%
     ),
-    #0e0e14;
-
+    #ffffff;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.025);
   transition:
     border-color 0.2s ease,
     transform 0.2s ease,
@@ -400,121 +283,91 @@
 
 .tariffCard:hover {
   border-color: var(--purple-border);
-
   transform: translateY(-3px);
-
   box-shadow:
-    0 18px 45px rgba(0, 0, 0, 0.2),
-    0 0 30px rgba(139, 92, 246, 0.045);
+    0 12px 28px rgba(15, 23, 42, 0.055),
+    0 0 22px rgba(139, 92, 246, 0.035);
 }
 
 .tariffDisabled {
-  opacity: 0.58;
+  opacity: 0.65;
 }
 
 .cardTop {
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   margin-bottom: 19px;
 }
 
 .packageIcon {
   width: 47px;
   height: 47px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   border-radius: 13px;
-
-  background: var(--purple-soft);
-
-  color: var(--purple-light);
+  background: #f3eefe;
+  color: #7c3aed;
 }
 
 .statusWrapper {
   display: flex;
   align-items: center;
-
   gap: 10px;
 }
 
 .status {
   display: flex;
   align-items: center;
-
   gap: 7px;
-
   padding: 8px 11px;
-
   border-radius: 9px;
-
   font-size: 12px;
   line-height: 16px;
-
   font-weight: 650;
 }
 
 .statusActive {
-  color: #b69cff;
-
-  background: rgba(139, 92, 246, 0.12);
+  color: #15803d;
+  background: #dcfce7;
 }
 
 .statusInactive {
-  color: #8b8892;
-
-  background: rgba(255, 255, 255, 0.045);
+  color: #6b7280;
+  background: #f3f4f6;
 }
 
 .statusDot {
   width: 7px;
   height: 7px;
-
   border-radius: 50%;
-
   background: currentColor;
 }
 
-/* ============================================================
-   SWITCH
-============================================================ */
+/* SWITCH */
 
 .switch {
   position: relative;
-
   width: 42px;
   height: 24px;
-
   padding: 0;
-
   border: 0;
-
   border-radius: 20px;
-
-  background: #2c2a33;
-
+  background: #d1d5db;
   cursor: pointer;
-
   transition: background 0.2s ease;
 }
 
 .switch span {
   position: absolute;
-
   top: 3px;
   left: 3px;
-
   width: 18px;
   height: 18px;
-
   border-radius: 50%;
-
-  background: #94919b;
-
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
   transition: transform 0.2s ease;
 }
 
@@ -524,66 +377,45 @@
 
 .switchActive span {
   transform: translateX(18px);
-
-  background: #fff;
+  background: #ffffff;
 }
 
-/* ============================================================
-   TARIFF NAME
-============================================================ */
+/* TARIFF NAME */
 
 .tariffNameRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   gap: 12px;
-
   margin-bottom: 19px;
 }
 
 .tariffName {
   min-width: 0;
-
   font-size: 24px;
   line-height: 30px;
-
   font-weight: 750;
-
   letter-spacing: -0.4px;
-
-  color: #f6f4f8;
+  color: #111827;
+  overflow-wrap: anywhere;
 }
 
 .editButton {
   height: 34px;
-
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
   gap: 6px;
-
   flex-shrink: 0;
-
   padding: 0 10px;
-
-  border: 1px solid rgba(139, 92, 246, 0.2);
-
+  border: 1px solid #e9d5ff;
   border-radius: 9px;
-
-  background: rgba(139, 92, 246, 0.08);
-
-  color: #b9a2ef;
-
+  background: #faf5ff;
+  color: #7c3aed;
   font-family: inherit;
-
   font-size: 12px;
-
   font-weight: 650;
-
   cursor: pointer;
-
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
@@ -591,39 +423,29 @@
 }
 
 .editButton:hover {
-  border-color: rgba(139, 92, 246, 0.4);
-
-  background: rgba(139, 92, 246, 0.15);
-
-  color: #d1c2f6;
+  border-color: #c4b5fd;
+  background: #f3e8ff;
+  color: #6d28d9;
 }
 
-/* ============================================================
-   USER
-============================================================ */
+/* USER */
 
 .user {
   display: flex;
   align-items: center;
-
   gap: 13px;
 }
 
 .userIcon {
   width: 42px;
   height: 42px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   flex-shrink: 0;
-
   border-radius: 11px;
-
-  background: rgba(255, 255, 255, 0.055);
-
-  color: #aaa6b1;
+  background: #f3f4f6;
+  color: #6b7280;
 }
 
 .userInfo {
@@ -632,80 +454,57 @@
 
 .userLabel {
   display: block;
-
   margin-bottom: 3px;
-
   font-size: 10px;
   line-height: 14px;
-
   text-transform: uppercase;
-
   letter-spacing: 1.2px;
-
-  color: #716d79;
+  color: #9ca3af;
 }
 
 .user strong {
   display: block;
-
   margin-bottom: 4px;
-
   font-size: 15px;
   line-height: 19px;
-
-  color: #e8e5ed;
+  color: #1f2937;
+  overflow-wrap: anywhere;
 }
 
 .phone {
   display: flex;
   align-items: center;
-
   gap: 6px;
-
-  color: #8c8894;
-
+  color: #6b7280;
   font-size: 13px;
   line-height: 17px;
+  overflow-wrap: anywhere;
 }
 
-/* ============================================================
-   PERIOD
-============================================================ */
+/* PERIOD */
 
 .period {
   min-height: 58px;
-
   display: flex;
   align-items: center;
-
   gap: 11px;
-
   margin-top: 18px;
-
   padding: 11px 12px;
-
-  border: 1px solid rgba(139, 92, 246, 0.12);
-
+  border: 1px solid #ede9fe;
   border-radius: 12px;
-
-  background: rgba(139, 92, 246, 0.055);
+  background: #faf8ff;
 }
 
 .periodIcon {
   width: 35px;
   height: 35px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   flex-shrink: 0;
-
   border-radius: 9px;
-
-  background: rgba(139, 92, 246, 0.12);
-
-  color: #a78bfa;
+  background: #f0eaff;
+  color: #7c3aed;
 }
 
 .periodContent {
@@ -714,122 +513,88 @@
 
 .periodLabel {
   display: block;
-
   margin-bottom: 3px;
-
-  color: #77727f;
-
+  color: #9ca3af;
   font-size: 10px;
-
   line-height: 13px;
-
   text-transform: uppercase;
-
   letter-spacing: 0.9px;
 }
 
 .periodContent strong {
   display: block;
-
-  color: #ddd7ea;
-
+  color: #374151;
   font-size: 13px;
-
   line-height: 17px;
-
   font-weight: 650;
+  overflow-wrap: anywhere;
 }
 
-/* ============================================================
-   DIVIDER
-============================================================ */
+/* DIVIDER */
 
 .divider {
   height: 1px;
-
   margin: 19px 0;
-
-  background: rgba(255, 255, 255, 0.065);
+  background: #f0f1f4;
 }
 
-/* ============================================================
-   FEATURES
-============================================================ */
+/* FEATURES */
 
 .features {
   display: grid;
-
-  grid-template-columns: repeat(3, 1fr);
-
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 9px;
 }
 
 .feature {
   min-width: 0;
-
   display: flex;
   align-items: center;
-
   gap: 8px;
 }
 
 .featureIcon {
   width: 35px;
   height: 35px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   flex-shrink: 0;
-
   border-radius: 9px;
-
-  background: rgba(139, 92, 246, 0.1);
-
-  color: #a084e9;
+  background: #f3eefe;
+  color: #7c3aed;
 }
 
 .feature strong {
   display: block;
-
   margin-bottom: 2px;
-
   font-size: 18px;
   line-height: 20px;
-
-  color: #f3f1f6;
+  color: #111827;
 }
 
 .feature span {
   display: block;
-
   font-size: 11px;
   line-height: 14px;
-
-  color: #77737e;
+  color: #6b7280;
 }
 
-/* ============================================================
-   LOADING
-============================================================ */
+/* LOADING */
 
 .loading {
   min-height: 320px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   gap: 12px;
-
-  color: #8b8792;
-
+  color: #6b7280;
   font-size: 15px;
 }
 
 .spinner {
   animation: spin 0.8s linear infinite;
+  color: #7c3aed;
 }
 
 @keyframes spin {
@@ -838,113 +603,84 @@
   }
 }
 
-/* ============================================================
-   EMPTY
-============================================================ */
+/* EMPTY */
 
 .empty {
   min-height: 350px;
-
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-
   padding: 35px;
-
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-
+  border: 1px dashed #d1d5db;
   border-radius: 19px;
-
-  background: #0e0e14;
-
+  background: #ffffff;
   text-align: center;
 }
 
 .emptyIcon {
   width: 65px;
   height: 65px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   margin-bottom: 18px;
-
   border-radius: 17px;
-
-  background: var(--purple-soft);
-
-  color: var(--purple-light);
+  background: #f3eefe;
+  color: #7c3aed;
 }
 
 .empty h3 {
   margin: 0 0 7px;
-
   font-size: 21px;
   line-height: 26px;
-
-  color: #f1eff5;
+  color: #111827;
 }
 
 .empty p {
   max-width: 430px;
-
   margin: 0 0 20px;
-
-  color: #807c88;
-
+  color: #6b7280;
   font-size: 15px;
   line-height: 21px;
 }
 
 .emptyButton {
   height: 45px;
-
   display: flex;
   align-items: center;
-
   gap: 8px;
-
   padding: 0 18px;
-
   border: 0;
-
   border-radius: 11px;
-
   background: linear-gradient(135deg, #7c3aed, #8b5cf6);
-
-  color: #fff;
-
+  color: #ffffff;
   font-size: 14px;
-
   font-weight: 700;
-
   cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-/* ============================================================
-   EDIT OVERLAY
-============================================================ */
+.emptyButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 18px rgba(124, 58, 237, 0.2);
+}
+
+/* EDIT OVERLAY */
 
 .editOverlay {
   position: fixed;
-
   inset: 0;
-
   z-index: 100000;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   padding: 24px;
-
-  background: rgba(3, 3, 6, 0.8);
-
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-
+  background: rgba(17, 24, 39, 0.42);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   animation: editOverlayIn 0.2s ease;
 }
 
@@ -958,91 +694,70 @@
   }
 }
 
-/* ============================================================
-   EDIT MODAL
-============================================================ */
+/* EDIT MODAL */
 
 .editModal {
   width: min(720px, 100%);
-
   max-height: calc(100vh - 48px);
-
   display: flex;
   flex-direction: column;
-
   overflow: hidden;
-
-  border: 1px solid rgba(255, 255, 255, 0.09);
-
+  border: 1px solid #e5e7eb;
   border-radius: 23px;
-
   background:
-    radial-gradient(circle at 0% 0%, rgba(139, 92, 246, 0.1), transparent 35%),
-    linear-gradient(145deg, #15141c, #0c0c11);
-
+    radial-gradient(
+      circle at 0% 0%,
+      rgba(139, 92, 246, 0.055),
+      transparent 35%
+    ),
+    #ffffff;
   box-shadow:
-    0 45px 120px rgba(0, 0, 0, 0.65),
-    0 0 70px rgba(139, 92, 246, 0.07);
-
+    0 30px 90px rgba(15, 23, 42, 0.2),
+    0 0 45px rgba(139, 92, 246, 0.05);
   animation: editModalIn 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes editModalIn {
   from {
     opacity: 0;
-
     transform: translateY(15px) scale(0.985);
   }
 
   to {
     opacity: 1;
-
     transform: translateY(0) scale(1);
   }
 }
 
-/* ============================================================
-   EDIT HEADER
-============================================================ */
+/* EDIT HEADER */
 
 .editModalHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   gap: 20px;
-
   padding: 23px 25px;
-
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .editHeaderInfo {
   display: flex;
   align-items: center;
-
   gap: 14px;
-
   min-width: 0;
 }
 
 .editHeaderIcon {
   width: 46px;
   height: 46px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   flex-shrink: 0;
-
-  border: 1px solid rgba(139, 92, 246, 0.22);
-
+  border: 1px solid #e9d5ff;
   border-radius: 13px;
-
-  background: rgba(139, 92, 246, 0.1);
-
-  color: #b095f4;
+  background: #f5f0ff;
+  color: #7c3aed;
 }
 
 .editHeaderInfo > div:last-child {
@@ -1051,61 +766,41 @@
 
 .editHeaderInfo span {
   display: block;
-
   margin-bottom: 4px;
-
-  color: #77727f;
-
+  color: #7c3aed;
   font-size: 10px;
-
   font-weight: 800;
-
   letter-spacing: 1.5px;
 }
 
 .editHeaderInfo h2 {
   margin: 0;
-
   font-size: 22px;
   line-height: 27px;
-
   font-weight: 750;
-
-  color: #f5f3f8;
+  color: #111827;
 }
 
 .editHeaderInfo p {
   margin: 4px 0 0;
-
-  color: #85818d;
-
+  color: #6b7280;
   font-size: 13px;
-
   line-height: 18px;
 }
 
 .editClose {
   width: 39px;
   height: 39px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   flex-shrink: 0;
-
   padding: 0;
-
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
+  border: 1px solid #e5e7eb;
   border-radius: 10px;
-
-  background: rgba(255, 255, 255, 0.035);
-
-  color: #88848f;
-
+  background: #f9fafb;
+  color: #6b7280;
   cursor: pointer;
-
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
@@ -1113,27 +808,19 @@
 }
 
 .editClose:hover:not(:disabled) {
-  border-color: rgba(139, 92, 246, 0.35);
-
-  background: rgba(139, 92, 246, 0.1);
-
-  color: #fff;
+  border-color: #c4b5fd;
+  background: #f3e8ff;
+  color: #6d28d9;
 }
 
-/* ============================================================
-   EDIT BODY
-============================================================ */
+/* EDIT BODY */
 
 .editBody {
   flex: 1;
-
   overflow-y: auto;
-
   padding: 25px;
-
   scrollbar-width: thin;
-
-  scrollbar-color: #493468 transparent;
+  scrollbar-color: #c4b5fd transparent;
 }
 
 .editBody::-webkit-scrollbar {
@@ -1145,14 +832,11 @@
 }
 
 .editBody::-webkit-scrollbar-thumb {
-  background: #493468;
-
+  background: #c4b5fd;
   border-radius: 999px;
 }
 
-/* ============================================================
-   EDIT FIELDS
-============================================================ */
+/* EDIT FIELDS */
 
 .editField {
   min-width: 0;
@@ -1160,153 +844,103 @@
 
 .editField > label {
   display: block;
-
   margin-bottom: 8px;
-
-  color: #aaa5b2;
-
+  color: #374151;
   font-size: 13px;
   line-height: 17px;
-
   font-weight: 650;
 }
 
 .editField > input {
   width: 100%;
-
   height: 48px;
-
   padding: 0 14px;
-
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
+  border: 1px solid #d1d5db;
   border-radius: 11px;
-
   outline: 0;
-
-  background: #0b0b0f;
-
-  color: #f4f1f7;
-
+  background: #ffffff;
+  color: #111827;
   font-family: inherit;
-
   font-size: 15px;
-
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
 }
 
 .editField > input:focus {
-  border-color: rgba(139, 92, 246, 0.58);
-
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.07);
+  border-color: rgba(139, 92, 246, 0.65);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.08);
 }
 
 .editField > input::placeholder {
-  color: #55515e;
+  color: #9ca3af;
 }
 
 .editInputWrapper {
   height: 48px;
-
   display: flex;
   align-items: center;
-
   gap: 9px;
-
   padding: 0 13px;
-
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
+  border: 1px solid #d1d5db;
   border-radius: 11px;
-
-  background: #0b0b0f;
-
-  color: #9580c9;
-
+  background: #ffffff;
+  color: #7c3aed;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
 }
 
 .editInputWrapper:focus-within {
-  border-color: rgba(139, 92, 246, 0.58);
-
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.07);
+  border-color: rgba(139, 92, 246, 0.65);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.08);
 }
 
 .editInputWrapper input {
   width: 100%;
-
   height: 100%;
-
   min-width: 0;
-
   padding: 0;
-
   border: 0;
-
   outline: 0;
-
   background: transparent;
-
-  color: #f4f1f7;
-
+  color: #111827;
   font-family: inherit;
-
   font-size: 15px;
-
   font-weight: 650;
 }
 
 .editInputWrapper input::-webkit-calendar-picker-indicator {
-  filter: invert(1);
-
-  opacity: 0.55;
-
+  opacity: 0.65;
   cursor: pointer;
 }
 
 .inputError {
-  border-color: rgba(239, 68, 68, 0.55) !important;
+  border-color: rgba(220, 38, 38, 0.65) !important;
 }
 
 .editError {
   display: block;
-
   margin-top: 6px;
-
-  color: #f28a8a;
-
+  color: #dc2626;
   font-size: 11px;
-
   line-height: 15px;
 }
 
-/* ============================================================
-   EDIT SECTION
-============================================================ */
+/* EDIT SECTION */
 
 .editSectionTitle {
   margin-top: 23px;
-
   margin-bottom: 12px;
-
-  color: #e5e0eb;
-
+  color: #111827;
   font-size: 16px;
-
   line-height: 21px;
-
   font-weight: 700;
 }
 
 .editGrid {
   display: grid;
-
   grid-template-columns: repeat(3, minmax(0, 1fr));
-
   gap: 13px;
 }
 
@@ -1314,46 +948,31 @@
   min-width: 0;
 }
 
-/* ============================================================
-   EDIT FOOTER
-============================================================ */
+/* EDIT FOOTER */
 
 .editFooter {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-
   gap: 10px;
-
   padding: 17px 25px;
-
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-
-  background: rgba(255, 255, 255, 0.012);
+  border-top: 1px solid #e5e7eb;
+  background: #fafafa;
 }
 
 .editCancel,
 .editSave {
   min-height: 47px;
-
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
   gap: 8px;
-
   padding: 0 18px;
-
   border-radius: 11px;
-
   font-family: inherit;
-
   font-size: 14px;
-
   font-weight: 700;
-
   cursor: pointer;
-
   transition:
     transform 0.2s ease,
     background 0.2s ease,
@@ -1362,46 +981,36 @@
 }
 
 .editCancel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
-  background: rgba(255, 255, 255, 0.035);
-
-  color: #9995a0;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #4b5563;
 }
 
 .editCancel:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.055);
-
-  color: #fff;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .editSave {
-  border: 1px solid rgba(139, 92, 246, 0.45);
-
-  background: linear-gradient(135deg, #6d28d9, #8b5cf6);
-
-  color: #fff;
-
-  box-shadow: 0 10px 26px rgba(124, 58, 237, 0.22);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.18);
 }
 
 .editSave:hover:not(:disabled) {
   transform: translateY(-2px);
-
-  box-shadow: 0 14px 32px rgba(124, 58, 237, 0.32);
+  box-shadow: 0 10px 25px rgba(124, 58, 237, 0.25);
 }
 
 .editCancel:disabled,
 .editSave:disabled,
 .editClose:disabled {
   opacity: 0.55;
-
   cursor: not-allowed;
 }
 
-/* ============================================================
-   FOCUS
-============================================================ */
+/* FOCUS */
 
 .addButton:focus-visible,
 .editButton:focus-visible,
@@ -1414,14 +1023,11 @@
 .searchInput:focus-visible,
 .editField input:focus-visible,
 .editInputWrapper input:focus-visible {
-  outline: 2px solid rgba(167, 139, 250, 0.75);
-
+  outline: 2px solid rgba(139, 92, 246, 0.7);
   outline-offset: 2px;
 }
 
-/* ============================================================
-   TABLET
-============================================================ */
+/* TABLET */
 
 @media (max-width: 1200px) {
   .grid {
@@ -1438,7 +1044,6 @@
 @media (max-width: 900px) {
   .content {
     margin-left: 0;
-
     padding: 0 24px 50px;
   }
 
@@ -1452,7 +1057,6 @@
 
   .searchSection {
     flex-direction: column;
-
     align-items: stretch;
   }
 
@@ -1465,16 +1069,12 @@
   }
 }
 
-/* ============================================================
-   MOBILE
-============================================================ */
+/* MOBILE */
 
 @media (max-width: 700px) {
   .header {
     align-items: flex-start;
-
     flex-direction: column;
-
     padding: 28px 0;
   }
 
@@ -1496,7 +1096,6 @@
 
   .editModal {
     max-height: calc(100vh - 24px);
-
     border-radius: 19px;
   }
 
@@ -1513,9 +1112,7 @@
   }
 }
 
-/* ============================================================
-   SMALL MOBILE
-============================================================ */
+/* SMALL MOBILE */
 
 @media (max-width: 500px) {
   .content {
@@ -1524,7 +1121,6 @@
 
   .title {
     font-size: 28px;
-
     line-height: 35px;
   }
 
@@ -1546,7 +1142,6 @@
 
   .editButton {
     padding: 0 8px;
-
     font-size: 11px;
   }
 
@@ -1577,9 +1172,7 @@
   }
 }
 
-/* ============================================================
-   REDUCED MOTION
-============================================================ */
+/* REDUCED MOTION */
 
 @media (prefers-reduced-motion: reduce) {
   .tariffCard,

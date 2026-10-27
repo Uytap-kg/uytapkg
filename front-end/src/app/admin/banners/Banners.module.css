@@ -4,8 +4,8 @@
 
 .admin {
   min-height: 100vh;
-  background: #08080b;
-  color: #f5f5f7;
+  background: #f7fafc;
+  color: #1a202c;
 }
 
 .content {
@@ -15,8 +15,10 @@
 }
 
 .main {
-  padding: 32px;
+  width: 100%;
   max-width: 1700px;
+  box-sizing: border-box;
+  padding: 32px;
 }
 
 /* =========================
@@ -35,23 +37,20 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
 }
 
 .titleIcon {
   width: 52px;
   height: 52px;
   flex-shrink: 0;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   border-radius: 15px;
-
-  background: rgba(139, 92, 246, 0.12);
-  border: 1px solid rgba(139, 92, 246, 0.2);
-
-  color: #a78bfa;
+  background: #f3e8ff;
+  border: 1px solid #e9d5ff;
+  color: #7c3aed;
 }
 
 .titleIcon svg {
@@ -61,43 +60,36 @@
 
 .titleBlock h1 {
   margin: 0 0 5px;
-
+  color: #1a202c;
   font-size: 24px;
   line-height: 1.2;
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: -0.3px;
 }
 
 .titleBlock p {
   margin: 0;
-
-  color: #777782;
+  color: #718096;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .addButton {
-  height: 46px;
-
+  min-height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
-
+  flex-shrink: 0;
   padding: 0 18px;
-
-  border: 0;
+  border: 1px solid #7c3aed;
   border-radius: 11px;
-
-  background: #8b5cf6;
-  color: white;
-
+  background: #7c3aed;
+  color: #ffffff;
   font-family: inherit;
   font-size: 14px;
-  font-weight: 800;
-
+  font-weight: 700;
   cursor: pointer;
-
   transition:
     background 0.2s ease,
     transform 0.2s ease,
@@ -105,9 +97,14 @@
 }
 
 .addButton:hover {
-  background: #7c3aed;
+  background: #6d28d9;
+  border-color: #6d28d9;
   transform: translateY(-1px);
-  box-shadow: 0 8px 25px rgba(124, 58, 237, 0.2);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.18);
+}
+
+.addButton:active {
+  transform: translateY(0);
 }
 
 .addButton svg {
@@ -123,47 +120,42 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
-
   margin-bottom: 28px;
 }
 
 .statCard {
   min-width: 0;
-
   display: flex;
   align-items: center;
   gap: 15px;
-
-  padding: 19px;
-
+  padding: 20px;
+  border: 1px solid #e2e8f0;
   border-radius: 16px;
-
-  background: #101015;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.025);
   transition:
     border-color 0.2s ease,
-    transform 0.2s ease;
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .statCard:hover {
-  border-color: rgba(139, 92, 246, 0.2);
+  border-color: #ddd6fe;
   transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.04);
 }
 
 .statIcon {
   width: 46px;
   height: 46px;
   flex-shrink: 0;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
+  border: 1px solid #e9d5ff;
   border-radius: 12px;
-
-  background: rgba(139, 92, 246, 0.1);
-  color: #a78bfa;
+  background: #f5f3ff;
+  color: #7c3aed;
 }
 
 .statIcon svg {
@@ -173,21 +165,18 @@
 
 .statCard span {
   display: block;
-
-  margin-bottom: 5px;
-
-  color: #777782;
+  margin-bottom: 6px;
+  color: #718096;
   font-size: 12px;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .statCard strong {
   display: block;
-
-  font-size: 22px;
-  line-height: 1;
-
-  font-weight: 900;
+  color: #1a202c;
+  font-size: 23px;
+  line-height: 1.1;
+  font-weight: 800;
 }
 
 /* =========================
@@ -195,12 +184,12 @@
 ========================= */
 
 .listSection {
+  min-width: 0;
   padding: 24px;
-
+  border: 1px solid #e2e8f0;
   border-radius: 18px;
-
-  background: #101015;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: #ffffff;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.025);
 }
 
 .listHeader {
@@ -209,62 +198,53 @@
 
 .listHeader h2 {
   margin: 0 0 5px;
-
+  color: #1a202c;
   font-size: 18px;
-  line-height: 1.3;
-  font-weight: 900;
+  line-height: 1.4;
+  font-weight: 800;
 }
 
 .listHeader p {
   margin: 0;
-
-  color: #70707b;
+  color: #718096;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .bannerGrid {
   display: grid;
-
   grid-template-columns: repeat(2, minmax(0, 1fr));
-
   gap: 20px;
 }
 
 /* =========================
-   EMPTY
+   EMPTY / LOADING / ERROR
 ========================= */
 
 .empty {
-  min-height: 320px;
-
+  min-height: 300px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-
   padding: 30px;
-
-  text-align: center;
-
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border: 1px dashed #cbd5e0;
   border-radius: 15px;
+  background: #fbfcfe;
+  text-align: center;
 }
 
 .emptyIcon {
   width: 58px;
   height: 58px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   margin-bottom: 15px;
-
+  border: 1px solid #e9d5ff;
   border-radius: 15px;
-
-  background: rgba(139, 92, 246, 0.1);
-  color: #a78bfa;
+  background: #f5f3ff;
+  color: #7c3aed;
 }
 
 .emptyIcon svg {
@@ -273,49 +253,54 @@
 }
 
 .empty h3 {
-  margin: 0 0 6px;
-
+  margin: 0 0 7px;
+  color: #2d3748;
   font-size: 16px;
-  line-height: 1.3;
+  line-height: 1.4;
+  font-weight: 700;
 }
 
 .empty p {
   max-width: 400px;
-
   margin: 0 0 20px;
-
-  color: #70707b;
+  color: #718096;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.empty > svg:not(.spin) {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 14px;
+  color: #a0aec0;
 }
 
 .empty button {
-  height: 40px;
-
+  min-height: 40px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-
   padding: 0 15px;
-
-  border: 1px solid rgba(139, 92, 246, 0.25);
+  border: 1px solid #ddd6fe;
   border-radius: 9px;
-
-  background: rgba(139, 92, 246, 0.1);
-  color: #c4b5fd;
-
+  background: #f5f3ff;
+  color: #7c3aed;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 800;
-
+  font-weight: 700;
   cursor: pointer;
-
-  transition: 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .empty button:hover {
-  background: rgba(139, 92, 246, 0.18);
-  color: white;
+  border-color: #c4b5fd;
+  background: #ede9fe;
+  color: #6d28d9;
 }
 
 .empty button svg {
@@ -326,11 +311,8 @@
 .spin {
   width: 26px;
   height: 26px;
-
   margin-bottom: 15px;
-
-  color: #a78bfa;
-
+  color: #7c3aed;
   animation: spin 1s linear infinite;
 }
 
@@ -379,17 +361,20 @@
   }
 
   .pageHeader {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
+    gap: 18px;
   }
 
   .titleBlock {
     align-items: flex-start;
+    gap: 12px;
   }
 
   .titleIcon {
     width: 46px;
     height: 46px;
+    border-radius: 12px;
   }
 
   .titleBlock h1 {
@@ -405,10 +390,73 @@
   }
 
   .listSection {
-    padding: 16px;
+    padding: 17px;
+    border-radius: 15px;
+  }
+
+  .listHeader {
+    margin-bottom: 18px;
   }
 
   .statCard {
     padding: 16px;
+  }
+
+  .empty {
+    min-height: 250px;
+    padding: 24px 16px;
+  }
+}
+
+@media (max-width: 450px) {
+  .main {
+    padding: 14px;
+  }
+
+  .titleBlock h1 {
+    font-size: 19px;
+  }
+
+  .titleBlock p {
+    font-size: 12px;
+  }
+
+  .stats {
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .statCard {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .statIcon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .listSection {
+    padding: 14px;
+  }
+
+  .listHeader h2 {
+    font-size: 16px;
+  }
+}
+
+/* =========================
+   ACCESSIBILITY
+========================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .addButton,
+  .statCard,
+  .empty button {
+    transition: none;
+  }
+
+  .spin {
+    animation: none;
   }
 }

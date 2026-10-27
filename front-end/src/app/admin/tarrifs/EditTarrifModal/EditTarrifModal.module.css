@@ -2,103 +2,72 @@
   position: fixed;
   inset: 0;
   z-index: 1000;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   padding: 24px;
-
-  background: rgba(5, 4, 8, 0.78);
-
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .modal {
   width: min(720px, 100%);
   max-height: calc(100vh - 48px);
-
   overflow-y: auto;
-
   border-radius: 22px;
-
-  background: #111014;
-
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
-  box-shadow:
-    0 30px 80px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(139, 92, 246, 0.04);
-
+  background: #ffffff;
+  border: 1px solid #e8eaf0;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
   scrollbar-width: thin;
-  scrollbar-color: #3b3545 transparent;
+  scrollbar-color: #d1d5db transparent;
 }
 
 .header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-
   gap: 20px;
-
   padding: 26px 28px 22px;
-
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid #edf0f5;
 }
 
 .eyebrow {
   margin-bottom: 7px;
-
   font-size: 10px;
   line-height: 13px;
-
   letter-spacing: 2px;
   font-weight: 700;
-
-  color: #a78bfa;
+  color: #7c3aed;
 }
 
 .header h2 {
   margin: 0 0 7px;
-
   font-size: 25px;
   line-height: 31px;
-
   font-weight: 700;
-
-  color: #f1ebd6;
+  color: #172033;
 }
 
 .header p {
   margin: 0;
-
   font-size: 13px;
   line-height: 19px;
-
-  color: #817c86;
+  color: #7b8495;
 }
 
 .closeButton {
   flex-shrink: 0;
-
   width: 40px;
   height: 40px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   border-radius: 11px;
-
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
-  background: rgba(255, 255, 255, 0.045);
-
-  color: #aaa5af;
-
+  border: 1px solid #e8eaf0;
+  background: #f8f9fc;
+  color: #697386;
   cursor: pointer;
-
   transition:
     background 0.2s ease,
     color 0.2s ease,
@@ -106,8 +75,8 @@
 }
 
 .closeButton:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f1ebd6;
+  background: #f0eaff;
+  color: #7c3aed;
 }
 
 .closeButton:active {
@@ -124,112 +93,84 @@
 
 .sectionTitle {
   margin-bottom: 15px;
-
   font-size: 14px;
   line-height: 18px;
-
   font-weight: 700;
-
-  color: #eae3c0;
+  color: #253047;
 }
 
 .selectedUser {
   display: flex;
   align-items: center;
-
   min-height: 70px;
-
   padding: 12px 14px;
-
   border-radius: 14px;
-
-  background: rgba(124, 58, 237, 0.075);
-
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  background: #faf8ff;
+  border: 1px solid #e9ddff;
 }
 
 .userAvatar {
   width: 42px;
   height: 42px;
-
   flex-shrink: 0;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   border-radius: 12px;
-
-  background: rgba(139, 92, 246, 0.13);
-
-  color: #a78bfa;
+  background: #efe7ff;
+  color: #7c3aed;
 }
 
 .userInfo {
   min-width: 0;
   flex: 1;
-
   margin-left: 12px;
 }
 
 .userInfo strong {
   display: block;
-
   margin-bottom: 5px;
-
   font-size: 14px;
   line-height: 18px;
-
   font-weight: 700;
-
-  color: #eee7d2;
+  color: #202a3d;
+  overflow-wrap: anywhere;
 }
 
 .userInfo span {
   display: flex;
   align-items: center;
   gap: 6px;
-
   font-size: 12px;
   line-height: 16px;
-
-  color: #817c86;
+  color: #7b8495;
 }
 
 .userInfo span svg {
-  color: #a78bfa;
+  flex-shrink: 0;
+  color: #8b5cf6;
 }
 
 .selectedBadge {
   display: flex;
   align-items: center;
   gap: 5px;
-
   padding: 6px 9px;
-
   border-radius: 8px;
-
-  background: rgba(139, 92, 246, 0.11);
-
-  color: #c4b5fd;
-
+  background: #ede9fe;
+  color: #6d28d9;
   font-size: 10px;
   font-weight: 700;
-
   white-space: nowrap;
 }
 
 .label {
   display: block;
-
   margin-bottom: 8px;
-
   font-size: 11px;
   line-height: 15px;
-
   font-weight: 600;
-
-  color: #918b96;
+  color: #596579;
 }
 
 .field + .field {
@@ -239,43 +180,43 @@
 .input {
   width: 100%;
   height: 48px;
-
   padding: 0 14px;
-
   border-radius: 11px;
-
   outline: none;
-
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
-  background: rgba(255, 255, 255, 0.045);
-
-  color: #eee7d2;
-
+  border: 1px solid #dfe3eb;
+  background: #ffffff;
+  color: #202a3d;
   font-size: 14px;
   font-family: inherit;
-
   transition:
     border-color 0.2s ease,
+    box-shadow 0.2s ease,
     background 0.2s ease;
 }
 
 .input::placeholder {
-  color: #5f5b64;
+  color: #a0a8b7;
+}
+
+.input:hover {
+  border-color: #c5cad6;
 }
 
 .input:focus {
-  border-color: rgba(139, 92, 246, 0.65);
+  border-color: #8b5cf6;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+}
 
-  background: rgba(124, 58, 237, 0.06);
+.input:focus-visible,
+.dateInput:focus-visible {
+  outline: none;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 13px;
-
   margin-top: 16px;
 }
 
@@ -287,23 +228,17 @@
 
 .periodSection {
   margin-top: 24px;
-
   padding: 18px;
-
   border-radius: 16px;
-
-  background: rgba(124, 58, 237, 0.055);
-
-  border: 1px solid rgba(139, 92, 246, 0.16);
+  background: #faf8ff;
+  border: 1px solid #e9ddff;
 }
 
 .periodHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   gap: 15px;
-
   margin-bottom: 16px;
 }
 
@@ -311,81 +246,72 @@
   display: flex;
   align-items: center;
   gap: 9px;
-
   font-size: 14px;
   font-weight: 700;
-
-  color: #f1ebd6;
+  color: #253047;
 }
 
 .periodTitle svg {
-  color: #a78bfa;
+  flex-shrink: 0;
+  color: #7c3aed;
 }
 
 .periodHint {
   font-size: 11px;
-
-  color: #77736b;
-
+  color: #858da0;
   text-align: right;
 }
 
 .dateGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
 .dateInputWrapper {
   height: 48px;
-
   display: flex;
   align-items: center;
-
   gap: 10px;
-
   padding: 0 14px;
-
   border-radius: 11px;
-
-  background: rgba(255, 255, 255, 0.045);
-
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
+  background: #ffffff;
+  border: 1px solid #dfe3eb;
   transition:
     border-color 0.2s ease,
-    background 0.2s ease;
+    box-shadow 0.2s ease;
+}
+
+.dateInputWrapper:hover {
+  border-color: #c5cad6;
 }
 
 .dateInputWrapper:focus-within {
-  border-color: rgba(139, 92, 246, 0.65);
-
-  background: rgba(124, 58, 237, 0.08);
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
 }
 
 .dateInputWrapper svg {
   flex-shrink: 0;
-
-  color: #a78bfa;
+  color: #8b5cf6;
 }
 
 .dateInput {
   width: 100%;
-
+  min-width: 0;
   border: 0;
   outline: none;
-
   background: transparent;
-
-  color: #eae3c0;
-
+  color: #253047;
   font-size: 14px;
   font-family: inherit;
-
-  color-scheme: dark;
+  color-scheme: light;
 }
 
+.dateInput::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.7;
+}
 
 .quickPeriods {
   margin-top: 16px;
@@ -393,40 +319,28 @@
 
 .quickPeriodsLabel {
   display: block;
-
   margin-bottom: 9px;
-
   font-size: 11px;
   font-weight: 600;
-
-  color: #817c74;
+  color: #737d91;
 }
 
 .quickPeriodsButtons {
   display: flex;
   flex-wrap: wrap;
-
   gap: 8px;
 }
 
 .periodButton {
   min-height: 36px;
-
   padding: 0 13px;
-
   border-radius: 9px;
-
-  border: 1px solid rgba(139, 92, 246, 0.25);
-
-  background: rgba(139, 92, 246, 0.07);
-
-  color: #c4b5fd;
-
+  border: 1px solid #ddd0ff;
+  background: #ffffff;
+  color: #6d28d9;
   font-size: 12px;
   font-weight: 600;
-
   cursor: pointer;
-
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
@@ -434,13 +348,20 @@
 }
 
 .periodButton:hover {
-  background: rgba(139, 92, 246, 0.16);
-
-  border-color: rgba(139, 92, 246, 0.5);
+  background: #f0eaff;
+  border-color: #bda5ff;
 }
 
 .periodButton:active {
   transform: scale(0.96);
+}
+
+.periodButton:focus-visible,
+.closeButton:focus-visible,
+.cancelButton:focus-visible,
+.submitButton:focus-visible {
+  outline: 3px solid rgba(139, 92, 246, 0.25);
+  outline-offset: 2px;
 }
 
 /* FOOTER */
@@ -449,35 +370,25 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-
   gap: 10px;
-
   padding: 18px 28px 22px;
-
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid #edf0f5;
+  background: #ffffff;
 }
 
 .cancelButton,
 .submitButton {
-  height: 46px;
-
+  min-height: 46px;
   padding: 0 17px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   gap: 8px;
-
   border-radius: 11px;
-
   font-family: inherit;
-
   font-size: 12px;
   font-weight: 700;
-
   cursor: pointer;
-
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
@@ -486,35 +397,30 @@
 }
 
 .cancelButton {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
-  background: rgba(255, 255, 255, 0.045);
-
-  color: #a9a4ac;
+  border: 1px solid #dfe3eb;
+  background: #ffffff;
+  color: #596579;
 }
 
 .cancelButton:hover {
-  background: rgba(255, 255, 255, 0.075);
-
-  color: #eee7d2;
+  background: #f5f6fa;
+  border-color: #cbd1dc;
+  color: #253047;
 }
 
 .submitButton {
   min-width: 190px;
-
-  border: 1px solid rgba(139, 92, 246, 0.45);
-
+  border: 1px solid #7c3aed;
   background: #7c3aed;
-
-  color: #fff;
-
-  box-shadow: 0 7px 22px rgba(124, 58, 237, 0.22);
+  color: #ffffff;
+  box-shadow: 0 5px 14px rgba(124, 58, 237, 0.18);
 }
 
 .submitButton:hover:not(:disabled) {
-  background: #8b5cf6;
-
+  background: #6d28d9;
+  border-color: #6d28d9;
   transform: translateY(-1px);
+  box-shadow: 0 7px 18px rgba(124, 58, 237, 0.24);
 }
 
 .submitButton:active:not(:disabled) {
@@ -522,10 +428,8 @@
 }
 
 .submitButton:disabled {
-  opacity: 0.4;
-
+  opacity: 0.45;
   cursor: not-allowed;
-
   box-shadow: none;
 }
 
@@ -538,7 +442,6 @@
 
   .modal {
     max-height: calc(100vh - 24px);
-
     border-radius: 18px;
   }
 
@@ -565,9 +468,7 @@
 
   .periodHeader {
     align-items: flex-start;
-
     flex-direction: column;
-
     gap: 5px;
   }
 
@@ -581,8 +482,7 @@
 
   .quickPeriodsButtons {
     display: grid;
-
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .periodButton {
@@ -611,5 +511,29 @@
   .cancelButton,
   .submitButton {
     width: 100%;
+  }
+
+  .periodSection {
+    padding: 14px;
+  }
+
+  .header {
+    gap: 12px;
+  }
+
+  .closeButton {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .closeButton,
+  .input,
+  .dateInputWrapper,
+  .periodButton,
+  .cancelButton,
+  .submitButton {
+    transition: none;
   }
 }

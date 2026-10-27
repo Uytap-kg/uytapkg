@@ -7,8 +7,9 @@
   flex-direction: column;
   padding: 22px 14px;
   box-sizing: border-box;
-  background: #0d0d11;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  background: #ffffff;
+  border-right: 1px solid #e8ebf2;
+  color: #172033;
 }
 
 .logo {
@@ -21,25 +22,30 @@
 .logoMark {
   width: 38px;
   height: 38px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 11px;
-  background: linear-gradient(135deg, #a78bfa, #6d28d9);
-  color: white;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: #ffffff;
   font-size: 20px;
   font-weight: 900;
+  box-shadow: 0 4px 10px rgba(124, 58, 237, 0.18);
 }
 
 .logo strong {
   display: block;
+  color: #172033;
   font-size: 16px;
+  font-weight: 850;
+  letter-spacing: -0.4px;
 }
 
 .logo span {
   display: block;
-  margin-top: 2px;
-  color: #666672;
+  margin-top: 3px;
+  color: #8992a4;
   font-size: 8px;
   font-weight: 800;
   letter-spacing: 1px;
@@ -49,11 +55,16 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #dfe3eb transparent;
 }
 
 .label {
   margin: 0 9px 8px;
-  color: #55555f;
+  color: #929bad;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 1px;
@@ -66,18 +77,23 @@
   align-items: center;
   gap: 11px;
   width: 100%;
-  height: 43px;
+  min-height: 43px;
   padding: 0 11px;
   box-sizing: border-box;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
-  color: #858590;
-  font: inherit;
+  color: #687386;
+  font-family: inherit;
   font-size: 12px;
+  font-weight: 550;
+  text-align: left;
   text-decoration: none;
   cursor: pointer;
-  transition: 0.2s;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .link svg,
@@ -85,18 +101,26 @@
 .logout svg {
   width: 17px;
   height: 17px;
+  flex-shrink: 0;
+  stroke-width: 1.9;
 }
 
 .link:hover,
 .home:hover,
 .logout:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: white;
+  background: #f5f6fa;
+  color: #263247;
 }
 
-.active {
-  background: rgba(139, 92, 246, 0.12);
-  color: #c4b5fd;
+.link.active {
+  background: #f1ebff;
+  border-color: #e8ddff;
+  color: #6d28d9;
+  font-weight: 700;
+}
+
+.link.active svg {
+  color: #7c3aed;
 }
 
 .bottom {
@@ -104,22 +128,57 @@
   flex-direction: column;
   gap: 4px;
   margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid #edf0f5;
+}
+
+.home {
+  color: #687386;
 }
 
 .logout {
-  color: #777782;
+  color: #7b8495;
+}
+
+.logout:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.link:focus-visible,
+.home:focus-visible,
+.logout:focus-visible {
+  outline: 3px solid rgba(139, 92, 246, 0.2);
+  outline-offset: 2px;
 }
 
 @media (max-width: 700px) {
   .sidebar {
-    position: static;
+    position: relative;
+    inset: auto;
     width: 100%;
     height: auto;
+    padding: 14px 16px 12px;
+    border-right: none;
+    border-bottom: 1px solid #e8ebf2;
+  }
+
+  .logo {
+    padding: 0 4px 16px;
+  }
+
+  .logoMark {
+    width: 34px;
+    height: 34px;
+    font-size: 18px;
   }
 
   .nav {
     flex-direction: row;
+    gap: 6px;
+    padding-bottom: 4px;
     overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .label,
@@ -128,6 +187,40 @@
   }
 
   .link {
-    flex-shrink: 0;
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 39px;
+    padding: 0 12px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 420px) {
+  .sidebar {
+    padding: 12px 10px 10px;
+  }
+
+  .logo {
+    padding-bottom: 12px;
+  }
+
+  .link {
+    min-height: 37px;
+    gap: 8px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+
+  .link svg {
+    width: 15px;
+    height: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link,
+  .home,
+  .logout {
+    transition: none;
   }
 }

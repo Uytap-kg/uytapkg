@@ -1,48 +1,46 @@
 .page {
   min-height: 100vh;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   padding: 20px;
-
-  background: #08080b;
-  color: #f5f5f7;
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      rgba(139, 92, 246, 0.08),
+      transparent 55%
+    ),
+    #f5f6fa;
+  color: #172033;
 }
 
 .card {
   width: 100%;
   max-width: 380px;
-
   padding: 36px 32px;
-
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #e6e8ef;
   border-radius: 20px;
-
-  background: #0d0d11;
-
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+  background: #ffffff;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
 }
 
 .logo {
   margin-bottom: 4px;
-
-  font-size: 22px;
+  font-size: 25px;
   font-weight: 900;
   letter-spacing: -0.05em;
+  color: #172033;
 }
 
 .logo span {
-  color: #a78bfa;
+  color: #7c3aed;
 }
 
 .subtitle {
   margin: 0 0 28px;
-
-  color: #777783;
-
+  color: #7b8495;
   font-size: 13px;
+  line-height: 1.5;
 }
 
 .form {
@@ -55,77 +53,113 @@
   display: flex;
   align-items: center;
   gap: 10px;
-
   padding: 0 14px;
   height: 48px;
-
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid #dfe3eb;
   border-radius: 12px;
+  background: #ffffff;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
 
-  background: rgba(255, 255, 255, 0.03);
+.inputBox:hover {
+  border-color: #c5cad6;
+}
+
+.inputBox:focus-within {
+  border-color: #8b5cf6;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
 }
 
 .inputBox svg {
   flex-shrink: 0;
-  color: #666672;
+  color: #8992a4;
+  transition: color 0.2s ease;
+}
+
+.inputBox:focus-within svg {
+  color: #7c3aed;
 }
 
 .inputBox input {
+  width: 100%;
+  min-width: 0;
   flex: 1;
-
   border: none;
   outline: none;
-  background: none;
-
-  color: #f5f5f7;
+  background: transparent;
+  color: #172033;
+  font-family: inherit;
   font-size: 14px;
 }
 
 .inputBox input::placeholder {
-  color: #55555f;
+  color: #a0a8b7;
+}
+
+.inputBox input:-webkit-autofill,
+.inputBox input:-webkit-autofill:hover,
+.inputBox input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #172033;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 .error {
-  padding: 10px 14px;
-
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 11px 14px;
+  border: 1px solid #fecaca;
   border-radius: 10px;
-
-  background: rgba(239, 68, 68, 0.08);
-
-  color: #f87171;
-
+  background: #fef2f2;
+  color: #dc2626;
   font-size: 13px;
   line-height: 1.5;
 }
 
 .submit {
   height: 48px;
-
   margin-top: 6px;
-
-  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid #7c3aed;
   border-radius: 12px;
-
-  background: linear-gradient(135deg, #a78bfa, #6d28d9);
-
-  color: white;
-
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: #ffffff;
+  font-family: inherit;
   font-size: 14px;
   font-weight: 800;
-
   cursor: pointer;
-
-  transition: 0.2s;
+  box-shadow: 0 5px 14px rgba(124, 58, 237, 0.18);
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease,
+    opacity 0.2s ease;
 }
 
-.submit:hover {
-  filter: brightness(1.08);
+.submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  box-shadow: 0 7px 18px rgba(124, 58, 237, 0.25);
+  transform: translateY(-1px);
+}
+
+.submit:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .submit:disabled {
-  opacity: 0.7;
+  opacity: 0.65;
   cursor: wait;
+  box-shadow: none;
+}
+
+.submit:focus-visible {
+  outline: 3px solid rgba(139, 92, 246, 0.25);
+  outline-offset: 3px;
 }
 
 .spin {
@@ -135,5 +169,32 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px;
+  }
+
+  .card {
+    padding: 30px 22px;
+    border-radius: 18px;
+  }
+
+  .logo {
+    font-size: 23px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation-duration: 2s;
+  }
+
+  .inputBox,
+  .inputBox svg,
+  .submit {
+    transition: none;
   }
 }

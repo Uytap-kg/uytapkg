@@ -1,40 +1,89 @@
 .wrapper {
   width: 100%;
   overflow-x: auto;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid #e5e8ef;
   border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.025);
+  scrollbar-width: thin;
+  scrollbar-color: #cbd0dc transparent;
 }
 
 .wrapper table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   min-width: 700px;
 }
 
 .wrapper th {
-  padding: 13px 16px;
-  background: #0d0d11;
-  color: #666672;
+  padding: 14px 16px;
+  background: #f8f9fc;
+  color: #737d91;
   font-size: 10px;
   font-weight: 800;
   text-align: left;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+  border-bottom: 1px solid #e8ebf2;
 }
 
 .wrapper td {
   padding: 15px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  color: #c4c4cc;
+  border-bottom: 1px solid #edf0f5;
+  color: #424d61;
   font-size: 12px;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+
+.wrapper tbody tr {
+  background: #ffffff;
+  transition: background 0.18s ease;
 }
 
 .wrapper tbody tr:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: #faf8ff;
+}
+
+.wrapper tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.wrapper th:first-child {
+  border-top-left-radius: 13px;
+}
+
+.wrapper th:last-child {
+  border-top-right-radius: 13px;
 }
 
 .empty {
-  padding: 50px !important;
+  padding: 50px 24px !important;
   text-align: center;
-  color: #666672 !important;
+  color: #8b94a5 !important;
+  font-size: 13px !important;
+  background: #ffffff;
+}
+
+@media (max-width: 768px) {
+  .wrapper {
+    border-radius: 12px;
+  }
+
+  .wrapper th {
+    padding: 12px 14px;
+    font-size: 10px;
+  }
+
+  .wrapper td {
+    padding: 13px 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrapper tbody tr {
+    transition: none;
+  }
 }
