@@ -16,6 +16,7 @@ import {
   FULFILL_LEASE_MS,
   clearProviderCheckThrottleMap,
   MAX_THROTTLE_MAP_SIZE,
+  MAX_PENDING_PAYMENTS_PER_USER,
 } from "../services/payments/paymentsService.js";
 
 // =======================================================
@@ -31,6 +32,7 @@ export {
   FULFILL_LEASE_MS,
   clearProviderCheckThrottleMap,
   MAX_THROTTLE_MAP_SIZE,
+  MAX_PENDING_PAYMENTS_PER_USER,
 };
 
 // =======================================================
@@ -50,6 +52,9 @@ export const createPayment = async (req, res) => {
       if (result.error === "conflict") {
         return res.status(409).json({ success: false, message: result.message });
       }
+      if (result.error === "too_many_pending") {
+        return res.status(429).json({ success: false, message: result.message });
+      }
       if (result.error === "service_unavailable") {
         return res.status(503).json({ success: false, message: result.message });
       }
@@ -65,6 +70,7 @@ export const createPayment = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при создании платежа",
+      requestId: req?.id,
     });
   }
 };
@@ -103,6 +109,9 @@ export const createPromotionPayment = async (req, res) => {
       if (result.error === "bad_request") {
         return res.status(400).json({ success: false, message: result.message });
       }
+      if (result.error === "too_many_pending") {
+        return res.status(429).json({ success: false, message: result.message });
+      }
       if (result.error === "service_unavailable") {
         return res.status(503).json({ success: false, message: result.message });
       }
@@ -121,6 +130,7 @@ export const createPromotionPayment = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при создании платежа",
+      requestId: req?.id,
     });
   }
 };
@@ -154,6 +164,7 @@ export const getPaymentStatus = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при получении статуса платежа",
+      requestId: req?.id,
     });
   }
 };
@@ -194,6 +205,7 @@ export const cancelPayment = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при отмене платежа",
+      requestId: req?.id,
     });
   }
 };
@@ -244,6 +256,7 @@ export const refulfillPayment = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при повторной выдаче услуги",
+      requestId: req?.id,
     });
   }
 };

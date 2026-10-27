@@ -633,7 +633,9 @@ export default function AddProductPage() {
         // Продвижение
         days: ["vip", "top", "urgent"].includes(form.listingType)
           ? DEFAULT_BOOST_DAYS
-          : undefined,
+          : form.listingType === "instagram"
+            ? 1
+            : undefined,
 
         // Фото
         photos,

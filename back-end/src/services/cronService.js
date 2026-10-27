@@ -1,33 +1,83 @@
+import crypto from "crypto";
 import { supabase } from "../config/db.js";
 import alerts from "../utils/alerts.js";
 import { refundTariffListing } from "./subscriptionsService.js";
 import { cleanupOrphanedPendingAvatars } from "../utils/storage.js";
+import { reconcilePaymentStatus } from "./payments/paymentsService.js";
+import {
+  tryAcquireCronLease,
+  releaseCronLease,
+  cleanupExpiredSharedState,
+} from "../utils/sharedState.js";
 
 // Интервал запуска очистки — раз в 15 минут (Дефект 3.1)
 export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
 export const STUCK_PAYMENT_THRESHOLD_MS = 10 * 60 * 1000; // 10 минут
+export const CRON_LEASE_NAME = "uytap_maintenance_job";
+export const CRON_LEASE_TTL_SECONDS = 14 * 60; // 14 минут
+
+const INSTANCE_ID = `pid_${process.pid}_${crypto.randomBytes(4).toString("hex")}`;
 
 let maintenanceTimer = null;
+let isMaintenanceRunning = false;
+
+export function isCronMaintenanceRunning() {
+  return isMaintenanceRunning;
+}
 
 /**
  * Фоновая процедура периодической очистки:
- * 1. Помечает просроченные объявления (expires_at <= NOW() и status = 'active') в status = 'expired'.
- * 2. Сбрасывает просроченные промо-статусы (promotion_status = 'regular', is_urgent = false, priority_rank = 3),
+ * 1. Защищена от параллельного наложения в одном процессе (isMaintenanceRunning)
+ *    и от одновременного запуска в нескольких процессах (distributed lease в PostgreSQL).
+ * 2. Помечает просроченные объявления (expires_at <= NOW() и status = 'active') в status = 'expired'.
+ * 3. Сбрасывает просроченные промо-статусы (promotion_status = 'regular', is_urgent = false, priority_rank = 3),
  *    где promotion_expires_at <= NOW() или urgent_expires_at <= NOW().
- * 3. Проверяет зависшие подтверждённые платежи (status = 'approved' без fulfilled_at старше 10 минут) и шлёт алерт.
- * 4. Очищает невостребованные временные аватары в Storage (старше 24 часов).
+ * 4. Проверяет зависшие подтверждённые платежи (status = 'approved' без fulfilled_at старше 10 минут) и шлёт алерт.
+ * 5. Очищает невостребованные временные аватары в Storage (старше 24 часов).
+ * 6. Очищает устаревшие записи общего состояния (phone_otp_sessions, rate_limit_counters).
  */
-export async function runMaintenanceJob() {
+export async function runMaintenanceJob({ useDistributedLease = false } = {}) {
+  if (isMaintenanceRunning) {
+    return {
+      skipped: true,
+      reason: "in_flight",
+      expiredListingsCount: 0,
+      resetPromotionsCount: 0,
+      resetUrgentCount: 0,
+      stuckPaymentsCount: 0,
+      reconciledProcessingCount: 0,
+      cleanedPendingAvatarsCount: 0,
+    };
+  }
+
+  isMaintenanceRunning = true;
+  let leaseAcquired = false;
+
   const nowIso = new Date().toISOString();
   const summary = {
+    skipped: false,
     expiredListingsCount: 0,
     resetPromotionsCount: 0,
     resetUrgentCount: 0,
     stuckPaymentsCount: 0,
+    reconciledProcessingCount: 0,
     cleanedPendingAvatarsCount: 0,
   };
 
   try {
+    if (useDistributedLease) {
+      leaseAcquired = await tryAcquireCronLease(
+        CRON_LEASE_NAME,
+        INSTANCE_ID,
+        CRON_LEASE_TTL_SECONDS
+      );
+      if (!leaseAcquired) {
+        summary.skipped = true;
+        summary.reason = "lease_held_by_other_instance";
+        return summary;
+      }
+    }
+
     // 0. Мониторинг зависших платежей: approved без fulfilled_at старше 10 минут
     try {
       const tenMinutesAgo = new Date(Date.now() - STUCK_PAYMENT_THRESHOLD_MS).toISOString();
@@ -47,6 +97,33 @@ export async function runMaintenanceJob() {
           paymentIds: stuckPayments.map((p) => p.id),
           orderIds: stuckPayments.map((p) => p.order_id),
         });
+      }
+
+      // 0b. Сверка зависших платежей в статусе processing за последние 24 часа (P1-04)
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const procQuery = supabase
+        .from("payments")
+        .select("*")
+        .eq("status", "processing");
+
+      if (typeof procQuery.gte === "function") {
+        const { data: processingPayments, error: procError } = await procQuery
+          .gte("created_at", twentyFourHoursAgo)
+          .limit(50);
+
+        if (!procError && Array.isArray(processingPayments)) {
+          for (const procPayment of processingPayments) {
+            try {
+              await reconcilePaymentStatus(procPayment, { force: true });
+              summary.reconciledProcessingCount += 1;
+            } catch (recErr) {
+              console.warn(
+                "Cron Maintenance: reconcile processing payment error:",
+                recErr?.message || recErr
+              );
+            }
+          }
+        }
       }
     } catch (paymentCheckErr) {
       console.error("Cron Maintenance: payment check error (isolated):", paymentCheckErr?.message || paymentCheckErr);
@@ -123,8 +200,20 @@ export async function runMaintenanceJob() {
     } catch (cleanErr) {
       console.warn("Cron Maintenance: cleanupOrphanedPendingAvatars error:", cleanErr?.message || cleanErr);
     }
+
+    // 5. Очистка просроченных записей shared-таблиц (phone_otp_sessions, rate_limit_counters)
+    try {
+      await cleanupExpiredSharedState();
+    } catch {
+      // isolated
+    }
   } catch (error) {
     console.error("Cron Maintenance: unhandled error in runMaintenanceJob:", error);
+  } finally {
+    if (leaseAcquired) {
+      await releaseCronLease(CRON_LEASE_NAME, INSTANCE_ID);
+    }
+    isMaintenanceRunning = false;
   }
 
   return summary;
@@ -141,7 +230,7 @@ export function startCronService(intervalMs = MAINTENANCE_INTERVAL_MS) {
 
   maintenanceTimer = setInterval(async () => {
     try {
-      await runMaintenanceJob();
+      await runMaintenanceJob({ useDistributedLease: true });
     } catch (err) {
       console.error("Cron interval execution error:", err);
     }

@@ -59,7 +59,8 @@ export function sanitize(val, key = "", seen = new WeakSet()) {
     if (lowerKey === "authorization") {
       return "[REDACTED]";
     }
-    let masked = maskEmail(val);
+    const truncated = val.length > 2000 ? `${val.slice(0, 2000)}...[truncated]` : val;
+    let masked = maskEmail(truncated);
     masked = maskPhone(masked);
     return masked;
   }
@@ -129,6 +130,42 @@ function formatLog(level, msg, context = {}) {
   return JSON.stringify(payload);
 }
 
+// Защита от шторма одинаковых ошибок под нагрузкой (disk/stdout flood protection):
+// не более LOG_BURST_MAX_PER_WINDOW одинаковых warn/error за LOG_BURST_WINDOW_MS.
+export const LOG_BURST_WINDOW_MS = 10 * 1000;
+export const LOG_BURST_MAX_PER_WINDOW = 20;
+const MAX_BURST_KEYS = 500;
+const logBurstState = new Map();
+
+export function resetLoggerBurstState() {
+  logBurstState.clear();
+}
+
+function checkLogBurst(level, msg) {
+  const key = `${level}:${typeof msg === "string" ? msg.slice(0, 160) : String(msg).slice(0, 160)}`;
+  const now = Date.now();
+  let entry = logBurstState.get(key);
+
+  if (!entry || now - entry.windowStart >= LOG_BURST_WINDOW_MS) {
+    const suppressedFromPrev = entry && entry.suppressed > 0 ? entry.suppressed : 0;
+    if (logBurstState.size >= MAX_BURST_KEYS && !logBurstState.has(key)) {
+      const oldestKey = logBurstState.keys().next().value;
+      if (oldestKey !== undefined) logBurstState.delete(oldestKey);
+    }
+    entry = { windowStart: now, count: 1, suppressed: 0 };
+    logBurstState.set(key, entry);
+    return { allowed: true, suppressedFromPrev };
+  }
+
+  entry.count += 1;
+  if (entry.count <= LOG_BURST_MAX_PER_WINDOW) {
+    return { allowed: true, suppressedFromPrev: 0 };
+  }
+
+  entry.suppressed += 1;
+  return { allowed: false, suppressedFromPrev: 0 };
+}
+
 export const logger = {
   debug(msg, context) {
     if (process.env.NODE_ENV !== "production" || process.env.LOG_LEVEL === "debug") {
@@ -139,10 +176,22 @@ export const logger = {
     process.stdout.write(formatLog("info", msg, context) + "\n");
   },
   warn(msg, context) {
-    process.stdout.write(formatLog("warn", msg, context) + "\n");
+    const burst = checkLogBurst("warn", msg);
+    if (!burst.allowed) return;
+    const ctx =
+      burst.suppressedFromPrev > 0
+        ? { ...(context && typeof context === "object" ? context : {}), suppressedSimilarLogs: burst.suppressedFromPrev }
+        : context;
+    process.stdout.write(formatLog("warn", msg, ctx) + "\n");
   },
   error(msg, context) {
-    process.stderr.write(formatLog("error", msg, context) + "\n");
+    const burst = checkLogBurst("error", msg);
+    if (!burst.allowed) return;
+    const ctx =
+      burst.suppressedFromPrev > 0
+        ? { ...(context && typeof context === "object" ? context : {}), suppressedSimilarLogs: burst.suppressedFromPrev }
+        : context;
+    process.stderr.write(formatLog("error", msg, ctx) + "\n");
   },
 };
 

@@ -1,4 +1,16 @@
 import { supabase } from "../config/db.js";
+import { getOrSetPublicCache } from "../utils/publicCache.js";
+
+const DEVELOPER_COLUMNS =
+  "id, user_id, company_name, logo_url, description, website, is_verified, created_at";
+const DEV_COMPLEX_COLUMNS =
+  "id, developer_id, name, description, country, region, city, district, address, completion_status, completion_date, housing_class, registry_link, cover_photo, features, created_at";
+const DEV_COMPLEX_COLUMNS_LEGACY =
+  "id, developer_id, name, description, region, city, address, completion_status, completion_date, housing_class, registry_link, cover_photo, features, created_at";
+
+const MAX_PAGE = 1000;
+const MAX_LIMIT = 100;
+const PUBLIC_DEVELOPERS_CACHE_TTL_MS = 45 * 1000;
 
 // Реальный аватар застройщика загружается через редактирование профиля и
 // хранится в user_profiles.avatar_url — колонка developers.logo_url почти
@@ -39,6 +51,9 @@ async function attachProfileData(developers) {
 
     return {
       ...dev,
+      residential_complexes: Array.isArray(dev.residential_complexes)
+        ? dev.residential_complexes.slice(0, MAX_LIMIT)
+        : [],
       avatarUrl: profile?.avatar_url || null,
       verificationStatus,
       isVerified: Boolean(user?.is_verified),
@@ -52,48 +67,73 @@ async function attachProfileData(developers) {
 export const getDevelopers = async (req, res) => {
   try {
     const { page = 1, limit = 100 } = req.query;
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 100));
+    const pageNum = Math.min(MAX_PAGE, Math.max(1, parseInt(page, 10) || 1));
+    const limitNum = Math.min(MAX_LIMIT, Math.max(1, parseInt(limit, 10) || 100));
     const from = (pageNum - 1) * limitNum;
     const to = from + limitNum - 1;
 
-    const { data, error, count } = await supabase
-      .from("developers")
-      .select(
-        `
-        *,
-        residential_complexes (*)
-      `,
-        { count: "exact" }
-      )
-      .order("company_name", { ascending: true })
-      .range(from, to);
+    const payload = await getOrSetPublicCache(
+      "developers",
+      `list:${pageNum}:${limitNum}`,
+      PUBLIC_DEVELOPERS_CACHE_TTL_MS,
+      async () => {
+        let { data, error, count } = await supabase
+          .from("developers")
+          .select(
+            `
+            ${DEVELOPER_COLUMNS},
+            residential_complexes (${DEV_COMPLEX_COLUMNS})
+          `,
+            { count: "exact" }
+          )
+          .order("company_name", { ascending: true })
+          .range(from, to);
 
-    if (error) {
-      console.error("Get Developers Error:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Ошибка при получении списка застройщиков",
-      });
-    }
+        if (error && (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("column"))) {
+          const fallbackRes = await supabase
+            .from("developers")
+            .select(
+              `
+              ${DEVELOPER_COLUMNS},
+              residential_complexes (${DEV_COMPLEX_COLUMNS_LEGACY})
+            `,
+              { count: "exact" }
+            )
+            .order("company_name", { ascending: true })
+            .range(from, to);
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+          count = fallbackRes.count;
+        }
 
-    const enriched = await attachProfileData(data);
+        if (error) {
+          const err = new Error("Ошибка при получении списка застройщиков");
+          err.dbError = error;
+          throw err;
+        }
 
-    return res.json({
-      success: true,
-      data: enriched,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total: count ?? enriched.length,
-        hasMore: count ? to + 1 < count : false,
-      },
-    });
+        const enriched = await attachProfileData(data);
+
+        return {
+          success: true,
+          data: enriched,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total: count ?? enriched.length,
+            hasMore: count ? to + 1 < count : false,
+          },
+        };
+      }
+    );
+
+    return res.json(payload);
   } catch (error) {
     console.error("Get Developers Controller Error:", error);
     return res.status(500).json({
       success: false,
-      message: "Ошибка сервера при получении застройщиков",
+      message: "Ошибка при получении списка застройщиков",
+      requestId: req?.id,
     });
   }
 };
@@ -105,31 +145,54 @@ export const getDeveloperById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data, error } = await supabase
-      .from("developers")
-      .select(`
-        *,
-        residential_complexes (*)
-      `)
-      .eq("id", id)
-      .maybeSingle();
+    const enriched = await getOrSetPublicCache(
+      "developers",
+      `byId:${id}`,
+      PUBLIC_DEVELOPERS_CACHE_TTL_MS,
+      async () => {
+        let { data, error } = await supabase
+          .from("developers")
+          .select(`
+            ${DEVELOPER_COLUMNS},
+            residential_complexes (${DEV_COMPLEX_COLUMNS})
+          `)
+          .eq("id", id)
+          .maybeSingle();
 
-    if (error) {
-      console.error("Get Developer By Id Error:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Ошибка при получении данных застройщика",
-      });
-    }
+        if (error && (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("column"))) {
+          const fallbackRes = await supabase
+            .from("developers")
+            .select(`
+              ${DEVELOPER_COLUMNS},
+              residential_complexes (${DEV_COMPLEX_COLUMNS_LEGACY})
+            `)
+            .eq("id", id)
+            .maybeSingle();
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+        }
 
-    if (!data) {
+        if (error) {
+          const err = new Error("Ошибка при получении данных застройщика");
+          err.dbError = error;
+          throw err;
+        }
+
+        if (!data) {
+          return null;
+        }
+
+        const [item] = await attachProfileData([data]);
+        return item;
+      }
+    );
+
+    if (!enriched) {
       return res.status(404).json({
         success: false,
         message: "Застройщик не найден",
       });
     }
-
-    const [enriched] = await attachProfileData([data]);
 
     return res.json({
       success: true,
@@ -140,6 +203,7 @@ export const getDeveloperById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Ошибка сервера при получении застройщика",
+      requestId: req?.id,
     });
   }
 };

@@ -9,14 +9,15 @@ import {
   deleteComplex,
 } from "../controllers/complexesController.js";
 import { authenticateToken } from "../middleware/auth.js";
+import { publicCatalogLimiter } from "../middleware/publicRateLimiters.js";
 
 const router = express.Router();
 
 // Публичные маршруты
-router.get("/", getComplexes);
+router.get("/", publicCatalogLimiter, getComplexes);
 router.get("/my", authenticateToken, getMyComplexes); // Собственные ЖК застройщика (должен идти до :id)
-router.get("/:id", getComplexById);
-router.get("/:id/listings", getComplexListings);
+router.get("/:id", publicCatalogLimiter, getComplexById);
+router.get("/:id/listings", publicCatalogLimiter, getComplexListings);
 
 // Защищенные маршруты (только для застройщиков)
 router.post("/", authenticateToken, createComplex);

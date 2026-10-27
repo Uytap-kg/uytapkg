@@ -72,12 +72,14 @@ async function run() {
       CREATE EXTENSION IF NOT EXISTS pg_trgm;
     `);
 
-    // 2. Ensure schema migrations tracking table exists in public schema
+    // 2. Ensure schema migrations tracking table exists in public schema and is protected by RLS
     await client.query(`
       CREATE TABLE IF NOT EXISTS public._schema_migrations (
         version VARCHAR(255) PRIMARY KEY,
         applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
+      ALTER TABLE public._schema_migrations ENABLE ROW LEVEL SECURITY;
+      REVOKE ALL ON TABLE public._schema_migrations FROM PUBLIC, anon, authenticated;
     `);
 
     // 3. Read already applied migrations

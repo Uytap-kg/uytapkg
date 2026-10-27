@@ -1,11 +1,8 @@
 // Единая безопасная обработка X-Forwarded-For для всех Next.js-прокси к бэкенду.
 //
-// Бэкенд настроен на `trust proxy: 1` и берёт IP клиента из X-Forwarded-For
-// для express-rate-limit.
-// В продакшене перед Next.js могут стоять Cloudflare (cf-connecting-ip),
-// Nginx (x-real-ip) или Vercel (x-vercel-forwarded-for). Если они присутствуют,
-// мы отдаём приоритет проверенным заголовкам провайдеров. В противном случае
-// берём проверенный IP из X-Forwarded-For. Все значения валидируются по формату IP.
+// Бэкенд принимает X-Forwarded-For ТОЛЬКО при наличии X-Internal-Proxy-Secret.
+// В продакшене перед Next.js могут стоять Cloudflare / Render Ingress (cf-connecting-ip, true-client-ip),
+// Nginx (x-real-ip, при явном TRUST_NGINX_REAL_IP=true) или Vercel (x-vercel-forwarded-for).
 
 const IPV4_REGEX = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const IPV6_REGEX = /^(?:[a-fA-F0-9]{1,4}:){1,7}[a-fA-F0-9]{1,4}$|^::1$|^::$/;
@@ -19,13 +16,17 @@ export function isValidIp(val) {
 export function getTrustedClientIp(request) {
   if (!request) return null;
 
-  // 1. Cloudflare Edge: гарантированно реальный IP посетителя ТОЛЬКО если Cloudflare явно включен в конфигурации
+  // 1. Cloudflare Edge / Render Ingress: гарантированно реальный IP посетителя,
+  // когда Cloudflare явно включён ИЛИ приложение запущено на Render (RENDER=true).
   const isCloudflareEnabled =
     process.env.ENABLE_CLOUDFLARE === "true" ||
-    process.env.BEHIND_CLOUDFLARE === "true";
+    process.env.BEHIND_CLOUDFLARE === "true" ||
+    process.env.RENDER === "true";
 
   if (isCloudflareEnabled) {
-    const cfIp = request.headers?.get?.("cf-connecting-ip");
+    const cfIp =
+      request.headers?.get?.("cf-connecting-ip") ||
+      request.headers?.get?.("true-client-ip");
     if (cfIp && isValidIp(cfIp)) {
       return cfIp.trim();
     }
@@ -43,10 +44,13 @@ export function getTrustedClientIp(request) {
     return request.ip.trim();
   }
 
-  // 4. Nginx X-Real-IP (устанавливается директивой proxy_set_header X-Real-IP $remote_addr)
-  const realIp = request.headers?.get?.("x-real-ip");
-  if (realIp && isValidIp(realIp)) {
-    return realIp.trim();
+  // 4. Nginx X-Real-IP: доверяем ТОЛЬКО при явном включении TRUST_NGINX_REAL_IP=true
+  // (защита P0-03: без явного флага внешний клиент может подделать X-Real-IP и обойти rate limit)
+  if (process.env.TRUST_NGINX_REAL_IP === "true") {
+    const realIp = request.headers?.get?.("x-real-ip");
+    if (realIp && isValidIp(realIp)) {
+      return realIp.trim();
+    }
   }
 
   // 5. X-Forwarded-For: для локальной разработки без Vercel/Cloudflare
@@ -90,9 +94,12 @@ export function applyTrustedForwardedFor(headers, request) {
     headers.set("x-forwarded-for", trustedClientIp);
   }
 
-  const proxySecret = process.env.INTERNAL_PROXY_SECRET;
-  if (proxySecret) {
-    headers.set("x-internal-proxy-secret", proxySecret);
+  const rawProxySecret =
+    process.env.INTERNAL_PROXY_SECRET ||
+    process.env.TRUSTED_PROXY_SECRET ||
+    process.env.PROXY_SECRET;
+  if (typeof rawProxySecret === "string" && rawProxySecret.trim().length > 0) {
+    headers.set("x-internal-proxy-secret", rawProxySecret.trim());
   }
 
   return headers;
@@ -100,7 +107,7 @@ export function applyTrustedForwardedFor(headers, request) {
 
 /**
  * Единый надёжный резолвер URL бэкенда для proxy routes.
- * Корректно нормализует суффикс /api для любого хоста (localhost, VPS, Docker, Kubernetes).
+ * Корректно нормализует суффикс /api для любого хоста (localhost, Render, VPS, Docker, Kubernetes).
  */
 export function getBackendApiUrl() {
   let url = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api")

@@ -37,6 +37,12 @@ import {
   MAX_DRAFTS_PER_USER,
 } from "../services/subscriptionsService.js";
 import { verifyAllOwnedBy } from "../utils/uploadOwnership.js";
+import { evictExpiredAndCapMap } from "../utils/boundedMap.js";
+import { isBatchCountersEnabled, bufferListingView } from "../utils/counterBatcher.js";
+
+const PUBLIC_LISTING_COLUMNS =
+  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
+const MAX_CATALOG_PAGE = 1000;
 
 // Удаляет из пользовательского объекта features системные ключи:
 // promotionExpiresAt, urgentExpiresAt, residentialComplexId,
@@ -60,7 +66,7 @@ export function sanitizeFeatures(features) {
 // каждый read-путь маскирует уже истёкшее продвижение прямо в ответе (см.
 // resolvePromotionExpiry). Возвращает тот же объект, если ничего не
 // изменилось — лишний спред не нужен.
-function maskExpiredPromotion(listing) {
+export function maskExpiredPromotion(listing) {
   const resolved = resolvePromotionExpiry(listing);
   if (!resolved.changed) return listing;
 
@@ -302,7 +308,10 @@ export function applyListingFilters(query, filters = {}) {
     const patterns = REGION_SEARCH_PATTERNS[regionCode];
     query = query.or(patterns.map((p) => `region.ilike.%${p}%`).join(","));
   } else if (effectiveRegion && typeof query.ilike === "function") {
-    query = query.ilike("region", `%${effectiveRegion}%`);
+    const safeRegion = String(effectiveRegion).replace(/[%_\\]/g, " ").trim();
+    if (safeRegion) {
+      query = query.ilike("region", `%${safeRegion}%`);
+    }
   } else if ((cLower === "kyrgyzstan" || cLower === "кыргызстан") && typeof query.neq === "function") {
     query = query.neq("region", "TURKEY");
   }
@@ -317,7 +326,10 @@ export function applyListingFilters(query, filters = {}) {
   }
 
   if (district && district !== "Все" && district !== "all") {
-    query = query.ilike("district", `%${String(district).trim()}%`);
+    const safeDistrict = String(district).replace(/[%_\\]/g, " ").trim();
+    if (safeDistrict) {
+      query = query.ilike("district", `%${safeDistrict}%`);
+    }
   }
 
   // 3. Фильтрация по типу недвижимости (с поддержкой cottage и parking через единые константы)
@@ -512,7 +524,7 @@ export const getListings = async (req, res) => {
     let query = supabase
       .from("listings")
       .select(`
-        *,
+        ${PUBLIC_LISTING_COLUMNS},
         listing_photos (id, url, is_main, display_order),
         users!inner (id, is_verified, account_type)
       `, { count: "exact" })
@@ -521,8 +533,8 @@ export const getListings = async (req, res) => {
 
     query = applyListingFilters(query, req.query);
 
-    // Пагинация и сортировка на уровне БД
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    // Пагинация и сортировка на уровне БД (с потолком page <= 1000 и limit <= 100)
+    const pageNum = Math.min(MAX_CATALOG_PAGE, Math.max(1, parseInt(page, 10) || 1));
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const from = (pageNum - 1) * limitNum;
     const to = from + limitNum - 1;
@@ -766,6 +778,36 @@ export async function resolveCurrentUser(req) {
 // - phone отдаётся только для бизнес-аккаунтов (agency, developer, realtor)
 //   либо если у автора включен флаг показа телефона (show_phone).
 //   Для personal-продавцов отдаётся phone: null.
+export function sanitizePublicProfileAbout(aboutValue) {
+  if (typeof aboutValue !== "string") return aboutValue;
+  const trimmed = aboutValue.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        delete parsed.verificationDocs;
+        delete parsed.verificationStatus;
+        delete parsed.rejectionReason;
+        return JSON.stringify(parsed);
+      }
+    } catch {}
+  }
+  return aboutValue;
+}
+
+function sanitizeAuthorProfileEntry(profileEntry) {
+  if (!profileEntry || typeof profileEntry !== "object") return profileEntry;
+  const cleanProfile = { ...profileEntry };
+  delete cleanProfile.inn;
+  delete cleanProfile.verificationDocs;
+  delete cleanProfile.verificationStatus;
+  delete cleanProfile.rejectionReason;
+  if (typeof cleanProfile.about === "string") {
+    cleanProfile.about = sanitizePublicProfileAbout(cleanProfile.about);
+  }
+  return cleanProfile;
+}
+
 export function sanitizeAuthorPII(author) {
   if (!author || typeof author !== "object") return author;
 
@@ -784,6 +826,12 @@ export function sanitizeAuthorPII(author) {
     ...author,
     phone: showPhone ? (author.phone || null) : null,
   };
+
+  if (sanitized.user_profiles) {
+    sanitized.user_profiles = Array.isArray(sanitized.user_profiles)
+      ? sanitized.user_profiles.map(sanitizeAuthorProfileEntry)
+      : sanitizeAuthorProfileEntry(sanitized.user_profiles);
+  }
 
   delete sanitized.email;
   return sanitized;
@@ -808,6 +856,7 @@ export function getClientIp(req) {
 
 // Защита от спама просмотров: не чаще 1 инкремента с одного IP на объявление за 10 минут
 export const VIEW_THROTTLE_MS = 10 * 60 * 1000;
+export const VIEWS_THROTTLE_MAX_SIZE = 10000;
 export const viewsThrottleMap = new Map();
 
 export function shouldIncrementView(ip, listingId) {
@@ -818,21 +867,28 @@ export function shouldIncrementView(ip, listingId) {
   if (lastViewTime && now - lastViewTime < VIEW_THROTTLE_MS) {
     return false;
   }
+  if (viewsThrottleMap.has(key)) {
+    viewsThrottleMap.delete(key);
+  }
   viewsThrottleMap.set(key, now);
 
-  // Защита от утечки памяти при большом числе ключей
-  if (viewsThrottleMap.size > 10000) {
-    for (const [k, timestamp] of viewsThrottleMap.entries()) {
-      if (now - timestamp >= VIEW_THROTTLE_MS) {
-        viewsThrottleMap.delete(k);
-      }
-    }
+  // Защита от утечки памяти при большом числе ключей (TTL + FIFO)
+  if (viewsThrottleMap.size > VIEWS_THROTTLE_MAX_SIZE) {
+    evictExpiredAndCapMap(
+      viewsThrottleMap,
+      VIEWS_THROTTLE_MAX_SIZE,
+      (timestamp) => now - timestamp >= VIEW_THROTTLE_MS
+    );
   }
   return true;
 }
 
-// Атомарный инкремент просмотров в базе данных через RPC increment_views с фолбэком
+// Атомарный инкремент просмотров в базе данных через пакетный буфер (или RPC increment_views с фолбэком)
 export async function incrementListingViews(listingId, currentViewsCount) {
+  if (isBatchCountersEnabled()) {
+    return bufferListingView(listingId, currentViewsCount);
+  }
+
   let newViewsCount = (currentViewsCount || 0) + 1;
   try {
     const { data: rpcViews, error: rpcError } = await supabase.rpc("increment_views", {
@@ -879,8 +935,8 @@ export const getListingById = async (req, res) => {
     const { data: listing, error } = await supabase
       .from("listings")
       .select(`
-        *,
-        listing_photos (*),
+        ${PUBLIC_LISTING_COLUMNS},
+        listing_photos (id, listing_id, url, is_main, display_order),
         users (id, phone, show_phone, is_verified, account_type, user_profiles (first_name, last_name, company_name, avatar_url, about))
       `)
       .eq("id", id)
@@ -1040,8 +1096,8 @@ export const createListing = async (req, res) => {
       } else {
         initialStatus = "draft";
       }
-    } else if (listingType === "urgent") {
-      // "Срочно" не входит в лимиты тарифа — всегда только платно.
+    } else if (listingType === "urgent" || listingType === "instagram") {
+      // "Срочно" и "Instagram" не входят в лимиты тарифа — всегда только платно через экран оплаты.
       initialStatus = "draft";
     }
 
@@ -1270,20 +1326,8 @@ export const createListing = async (req, res) => {
       newListing.photos_count = photos.length;
     }
 
-    // Тип размещения "instagram" публикует объявление как обычное (оплата
-    // услуги пока не реализована), но создаёт заявку для админки — там её
-    // подтверждают вручную после фактической публикации в Instagram UyTap.
-    if (listingType === "instagram") {
-      try {
-        await createInstagramRequest({ listingId: newListing.id, userId });
-      } catch (instagramError) {
-        if (instagramError.status === 409 || instagramError.code === "23505") {
-          console.warn("Instagram request already exists for listing:", newListing.id);
-        } else {
-          console.error("Instagram Request Create Error:", instagramError);
-        }
-      }
-    }
+    // Заявка в Instagram (instagram_requests) создаётся ТОЛЬКО после подтверждения оплаты
+    // в promotionsService.applyPromotion (защита от спама бесплатными заявками P1-06).
 
     let finalListing = newListing;
 
@@ -1326,7 +1370,9 @@ export const createListing = async (req, res) => {
       // POST /api/payments/promotion/create → успешная оплата.
       needsPayment: initialStatus === "draft",
       promotion:
-        initialStatus === "draft" ? { serviceType: listingType, days: boostDays } : null,
+        initialStatus === "draft"
+          ? { serviceType: listingType, days: listingType === "instagram" ? 1 : boostDays }
+          : null,
     });
   } catch (error) {
     console.error("Create Listing Error:", error);

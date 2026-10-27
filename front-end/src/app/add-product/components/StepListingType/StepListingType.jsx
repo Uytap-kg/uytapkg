@@ -40,11 +40,11 @@ const types = [
   {
     id: "instagram",
     icon: Camera,
-    paid: false,
+    paid: true,
   },
 ];
 
-const paidListingTypes = ["vip", "urgent", "top"];
+const paidListingTypes = ["vip", "urgent", "top", "instagram"];
 
 const regionNames = {
   BISHKEK: "Бишкек",

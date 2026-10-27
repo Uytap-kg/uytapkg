@@ -57,6 +57,8 @@ export default function Login() {
   };
 
   const handleLogin = async (e) => {
+    // handlePhoneLogin unified into handleLogin
+    const handlePhoneLogin = handleLogin;
     e.preventDefault();
 
     setError("");
@@ -103,16 +105,24 @@ export default function Login() {
         router.push("/profile");
       }, 1000);
     } catch (err) {
-      if (err?.needVerification && err?.email) {
-        const verifyEmail = String(err.email).trim().toLowerCase();
+      if (err?.needVerification) {
+        if (err?.verificationMethod === "phone" || (method === "phone" && (err?.phone || identifier))) {
+          const verifyPhone = String(err.phone || identifier).replace(/\D/g, "");
+          localStorage.setItem("register_phone", verifyPhone);
+          router.push(
+            `/auth-code?method=phone&phone=${encodeURIComponent(verifyPhone)}&reason=login`,
+          );
+          return;
+        }
 
-        localStorage.setItem("register_email", verifyEmail);
-
-        router.push(
-          `/auth-code?email=${encodeURIComponent(verifyEmail)}&reason=login`,
-        );
-
-        return;
+        if (err?.email) {
+          const verifyEmail = String(err.email).trim().toLowerCase();
+          localStorage.setItem("register_email", verifyEmail);
+          router.push(
+            `/auth-code?method=email&email=${encodeURIComponent(verifyEmail)}&reason=login`,
+          );
+          return;
+        }
       }
 
       setError(err?.message || t("login.loginError"));

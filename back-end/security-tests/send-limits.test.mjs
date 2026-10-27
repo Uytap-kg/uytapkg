@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BASE_URL } from "./helpers.mjs";
+import { BASE_URL, isTestDbConfigured, SKIP_NO_TEST_DB_REASON } from "./helpers.mjs";
 import nikitaService, { normalizeNikitaPhone } from "../src/services/nikitaService.js";
 import { phoneOtpStore } from "../src/utils/phoneOtpStore.js";
 import logger from "../src/utils/logger.js";
@@ -161,7 +161,7 @@ test("Send Limits: Logs warning when daily service SMS ceiling reaches 70% thres
   }
 });
 
-test("Send Limits (API Integration): POST /api/auth/send-otp with non-Kyrgyz phone is rejected with 400", async () => {
+test("Send Limits (API Integration): POST /api/auth/send-otp with non-Kyrgyz phone is rejected with 400", { skip: !isTestDbConfigured ? SKIP_NO_TEST_DB_REASON : false }, async () => {
   const res = await fetch(`${BASE_URL}/api/auth/send-otp`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

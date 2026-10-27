@@ -26,6 +26,10 @@ import {
 } from "../ai/smartSearch.normalize.js";
 import { extractCategoryFeatures } from "../ai/smartSearch.features.js";
 import { resolveComplexFromText } from "../services/complexLookupService.js";
+import { setBoundedMap } from "../utils/boundedMap.js";
+import { Semaphore } from "../utils/semaphore.js";
+import { checkAndIncrementRateLimit } from "../utils/sharedState.js";
+import { getClientIp } from "./listingsController.js";
 
 // Числа с единицей площади (для локального парсера): «50 квадратов», «80 м2», «от 80 до 100 кв».
 const AREA_NUMBER_RE = new RegExp(`(?<![\\p{L}\\d.,])\\d+(?:[.,]\\d+)?\\s*${AREA_UNIT}`, "giu");
@@ -939,7 +943,16 @@ export const fallbackParse = (prompt) => {
 // Умный Поиск: вызов LLM с таймаутом, дедупликацией и LRU
 // =======================================================
 
+export const MAX_INFLIGHT_SEARCHES = 500;
 export const INFLIGHT_SEARCHES = new Map();
+export const AI_DAILY_USER_LIMIT = Number(process.env.AI_DAILY_USER_LIMIT) || 100;
+export const AI_DAILY_GLOBAL_LIMIT = Number(process.env.AI_DAILY_GLOBAL_LIMIT) || 3000;
+export const aiSemaphore = new Semaphore({
+  maxConcurrent: 8,
+  maxQueue: 50,
+  acquireTimeoutMs: 10000,
+  name: "ai_llm",
+});
 
 const LOCAL_PARSER_SOURCE = "local-parser";
 
@@ -975,7 +988,8 @@ export async function executeAiSearch(prompt) {
 
   const tryProvider = async (providerSource, call, label) => {
     try {
-      const validated = validateProviderResult(await call(prompt), prompt);
+      const rawRes = await aiSemaphore.run(() => call(prompt));
+      const validated = validateProviderResult(rawRes, prompt);
       if (validated) {
         filters = validated;
         source = providerSource;
@@ -1071,6 +1085,31 @@ export const aiSearch = async (req, res) => {
       });
     }
 
+    // 1b. Проверка суточных потолков стоимости LLM (на пользователя/IP и общий суточный потолок сервиса)
+    if (hasClaudeKey() || process.env.GEMINI_API_KEY) {
+      const actorKey = req.user?.id ? `user:${req.user.id}` : `ip:${getClientIp(req)}`;
+      const userLimit = Number(process.env.AI_DAILY_USER_LIMIT) || AI_DAILY_USER_LIMIT;
+      const globalLimit = Number(process.env.AI_DAILY_GLOBAL_LIMIT) || AI_DAILY_GLOBAL_LIMIT;
+      const dayMs = 24 * 60 * 60 * 1000;
+
+      const [userQuota, globalQuota] = await Promise.all([
+        checkAndIncrementRateLimit(`quota:ai_search:${actorKey}`, dayMs, userLimit, 1),
+        checkAndIncrementRateLimit("quota:ai_search:global", dayMs, globalLimit, 1),
+      ]);
+
+      if (!userQuota.allowed || !globalQuota.allowed) {
+        const fallbackFilters = safeLocalParse(prompt) || emptySmartSearchFilters();
+        return res.json({
+          success: true,
+          filters: fallbackFilters,
+          matchedComplex: null,
+          features: extractCategoryFeatures(prompt, fallbackFilters),
+          source: LOCAL_PARSER_SOURCE,
+          degraded: true,
+        });
+      }
+    }
+
     // 2. Дедупликация параллельных запросов с одинаковым промптом (Inflight Map)
     const cacheKey = normalizeCacheKey(prompt);
     let inflightPromise = INFLIGHT_SEARCHES.get(cacheKey);
@@ -1079,7 +1118,7 @@ export const aiSearch = async (req, res) => {
       inflightPromise = executeAiSearch(prompt).finally(() => {
         INFLIGHT_SEARCHES.delete(cacheKey);
       });
-      INFLIGHT_SEARCHES.set(cacheKey, inflightPromise);
+      setBoundedMap(INFLIGHT_SEARCHES, cacheKey, inflightPromise, MAX_INFLIGHT_SEARCHES);
     }
 
     const { filters, matchedComplex, source, degraded } = await inflightPromise;
@@ -1235,11 +1274,11 @@ export const aiGenerateDescription = async (req, res) => {
 
     let generated = null;
     if (preferredProvider === "claude" || preferredProvider === "anthropic") {
-      generated = await tryClaudeDescription();
-      if (!generated) generated = await tryGeminiDescription();
+      generated = await aiSemaphore.run(() => tryClaudeDescription()).catch(() => null);
+      if (!generated) generated = await aiSemaphore.run(() => tryGeminiDescription()).catch(() => null);
     } else {
-      generated = await tryGeminiDescription();
-      if (!generated) generated = await tryClaudeDescription();
+      generated = await aiSemaphore.run(() => tryGeminiDescription()).catch(() => null);
+      if (!generated) generated = await aiSemaphore.run(() => tryClaudeDescription()).catch(() => null);
     }
 
     if (generated && (generated.ru || generated.kg)) {

@@ -4,6 +4,7 @@ import { uploadImage, uploadListingPhoto, uploadComplexPhoto } from "../controll
 import { uploadAnonymousFile, uploadImageFile } from "../middleware/upload.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { ipKeyGenerator } from "./authRoutes.js";
+import { BoundedSharedRateLimitStore } from "../utils/sharedState.js";
 
 const router = express.Router();
 
@@ -12,6 +13,13 @@ export const anonymousUploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 час
   max: 5,
   keyGenerator: (req) => ipKeyGenerator(req),
+  validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:upload_anon:",
+    windowMs: 60 * 60 * 1000,
+    maxEntries: 5000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много загрузок с этого IP-адреса. Разрешено не более 5 файлов в час.",
@@ -24,6 +32,14 @@ export const anonymousUploadLimiter = rateLimit({
 export const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 50,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  validate: { xForwardedForHeader: false },
+  store: new BoundedSharedRateLimitStore({
+    prefix: "rl:upload_auth:",
+    windowMs: 15 * 60 * 1000,
+    maxEntries: 5000,
+    syncShared: true,
+  }),
   message: {
     success: false,
     message: "Слишком много загрузок. Попробуйте снова через 15 минут.",
