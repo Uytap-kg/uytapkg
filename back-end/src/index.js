@@ -54,6 +54,9 @@ const devOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
   "http://localhost:3001",
+  "https://uytapkgdep.vercel.app",
+  "https://uytap.kg",
+  "https://www.uytap.kg",
 ];
 const defaultOrigins = [
   "https://uytapkgdep.vercel.app",
