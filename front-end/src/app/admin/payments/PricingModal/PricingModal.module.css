@@ -5,20 +5,14 @@
 .overlay {
   position: fixed;
   inset: 0;
-
   z-index: 99999;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   padding: 24px;
-
-  background: rgba(3, 3, 6, 0.78);
-
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-
+  background: rgba(26, 32, 44, 0.48);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
   animation: overlayIn 0.2s ease;
 }
 
@@ -26,7 +20,6 @@
   from {
     opacity: 0;
   }
-
   to {
     opacity: 1;
   }
@@ -38,37 +31,23 @@
 
 .modal {
   width: min(900px, 100%);
-
   max-height: min(900px, calc(100vh - 48px));
-
   display: flex;
   flex-direction: column;
-
   overflow: hidden;
-
-  border: 1px solid rgba(255, 255, 255, 0.09);
-
-  border-radius: 24px;
-
-  background:
-    radial-gradient(circle at 0% 0%, rgba(139, 92, 246, 0.08), transparent 30%),
-    linear-gradient(145deg, #15151b, #0d0d12);
-
-  color: #f5f3f8;
-
-  box-shadow:
-    0 45px 120px rgba(0, 0, 0, 0.65),
-    0 0 60px rgba(139, 92, 246, 0.07);
-
+  border: 1px solid #e2e8f0;
+  border-radius: 22px;
+  background: #ffffff;
+  color: #1a202c;
+  box-shadow: 0 25px 80px rgba(26, 32, 44, 0.2);
   animation: modalIn 0.24s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes modalIn {
   from {
     opacity: 0;
-    transform: translateY(15px) scale(0.985);
+    transform: translateY(12px) scale(0.99);
   }
-
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -83,40 +62,30 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   gap: 20px;
-
-  padding: 24px 25px;
-
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 22px 25px;
+  border-bottom: 1px solid #edf2f7;
+  background: #ffffff;
 }
 
 .headerTitle {
   display: flex;
   align-items: center;
-
   gap: 14px;
-
   min-width: 0;
 }
 
 .headerIcon {
   width: 46px;
   height: 46px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   flex-shrink: 0;
-
-  border: 1px solid rgba(139, 92, 246, 0.2);
-
-  border-radius: 14px;
-
-  background: rgba(139, 92, 246, 0.1);
-
-  color: #a78bfa;
+  border: 1px solid #e9d5ff;
+  border-radius: 13px;
+  background: #f3e8ff;
+  color: #7c3aed;
 }
 
 .headerTitle > div:last-child {
@@ -125,37 +94,25 @@
 
 .headerTitle span {
   display: block;
-
   margin-bottom: 4px;
-
-  color: #77727f;
-
+  color: #805ad5;
   font-size: 9px;
-
-  font-weight: 900;
-
-  letter-spacing: 1.5px;
+  font-weight: 800;
+  letter-spacing: 1.3px;
 }
 
 .headerTitle h2 {
   margin: 0;
-
-  color: #f5f3f8;
-
+  color: #1a202c;
   font-size: 20px;
-
-  font-weight: 900;
-
+  font-weight: 800;
   letter-spacing: -0.35px;
 }
 
 .headerTitle p {
   margin: 5px 0 0;
-
-  color: #74717c;
-
-  font-size: 11px;
-
+  color: #718096;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -166,25 +123,16 @@
 .close {
   width: 38px;
   height: 38px;
-
   flex-shrink: 0;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   padding: 0;
-
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
-
-  background: rgba(255, 255, 255, 0.035);
-
-  color: #88848f;
-
+  background: #f8fafc;
+  color: #718096;
   cursor: pointer;
-
   transition:
     background 0.2s ease,
     color 0.2s ease,
@@ -193,12 +141,9 @@
 }
 
 .close:hover {
-  border-color: rgba(139, 92, 246, 0.35);
-
-  background: rgba(139, 92, 246, 0.1);
-
-  color: #fff;
-
+  border-color: #d6bcfa;
+  background: #f3e8ff;
+  color: #6d28d9;
   transform: rotate(2deg);
 }
 
@@ -213,13 +158,10 @@
 
 .body {
   flex: 1;
-
   overflow-y: auto;
-
   padding: 25px;
-
   scrollbar-width: thin;
-  scrollbar-color: #44345e transparent;
+  scrollbar-color: #c4b5fd transparent;
 }
 
 .body::-webkit-scrollbar {
@@ -231,13 +173,12 @@
 }
 
 .body::-webkit-scrollbar-thumb {
-  background: #44345e;
-
+  background: #c4b5fd;
   border-radius: 999px;
 }
 
 .body::-webkit-scrollbar-thumb:hover {
-  background: #654a8f;
+  background: #8b5cf6;
 }
 
 /* =========================================================
@@ -251,50 +192,35 @@
 .sectionHeading {
   display: flex;
   align-items: center;
-
   gap: 11px;
-
   margin-bottom: 17px;
 }
 
 .sectionNumber {
   width: 30px;
   height: 30px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   flex-shrink: 0;
-
+  border: 1px solid #e9d5ff;
   border-radius: 9px;
-
-  background: linear-gradient(135deg, #7c3aed, #a855f7);
-
-  color: #fff;
-
+  background: #f3e8ff;
+  color: #7c3aed;
   font-size: 10px;
-
-  font-weight: 900;
-
-  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.2);
+  font-weight: 800;
 }
 
 .sectionHeading h3 {
   margin: 0;
-
-  color: #f0eef5;
-
+  color: #2d3748;
   font-size: 15px;
-
-  font-weight: 850;
+  font-weight: 800;
 }
 
 .sectionHeading p {
   margin: 4px 0 0;
-
-  color: #716d78;
-
+  color: #718096;
   font-size: 11px;
 }
 
@@ -304,29 +230,16 @@
 
 .fields {
   display: grid;
-
   grid-template-columns: repeat(2, minmax(0, 1fr));
-
   gap: 12px;
 }
 
 .fieldCard {
   min-width: 0;
-
   padding: 17px;
-
-  border: 1px solid rgba(255, 255, 255, 0.06);
-
-  border-radius: 16px;
-
-  background:
-    linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.025),
-      rgba(255, 255, 255, 0.01)
-    ),
-    #101015;
-
+  border: 1px solid #e2e8f0;
+  border-radius: 15px;
+  background: #ffffff;
   transition:
     border-color 0.2s ease,
     transform 0.2s ease,
@@ -334,63 +247,46 @@
 }
 
 .fieldCard:hover {
-  transform: translateY(-2px);
-
-  border-color: rgba(139, 92, 246, 0.2);
-
-  box-shadow:
-    0 14px 35px rgba(0, 0, 0, 0.22),
-    0 0 25px rgba(139, 92, 246, 0.035);
+  transform: translateY(-1px);
+  border-color: #d6bcfa;
+  box-shadow: 0 6px 18px rgba(26, 32, 44, 0.045);
 }
 
 .fieldTop {
   display: flex;
   align-items: center;
-
   gap: 11px;
 }
 
 .fieldIcon {
   width: 40px;
   height: 40px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   flex-shrink: 0;
-
-  border: 1px solid rgba(139, 92, 246, 0.15);
-
+  border: 1px solid #e9d5ff;
   border-radius: 11px;
-
-  background: rgba(139, 92, 246, 0.08);
-
-  color: #a78bfa;
+  background: #f5f3ff;
+  color: #7c3aed;
 }
 
 .fieldTitle {
   min-width: 0;
-
   display: flex;
   flex-direction: column;
-
   gap: 4px;
 }
 
 .fieldTitle strong {
-  color: #e7e4ec;
-
+  color: #2d3748;
   font-size: 13px;
-
-  font-weight: 850;
+  font-weight: 800;
 }
 
 .fieldTitle span {
-  color: #6f6b76;
-
-  font-size: 10px;
-
+  color: #718096;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -400,71 +296,53 @@
 
 .priceInput {
   margin-top: 14px;
-
   display: flex;
   align-items: center;
-
   gap: 9px;
-
   height: 48px;
-
   padding: 0 13px;
-
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
+  border: 1px solid #e2e8f0;
   border-radius: 11px;
-
-  background: #0b0b0f;
-
+  background: #f8fafc;
   transition:
     border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    background 0.2s ease;
 }
 
 .priceInput:focus-within {
-  border-color: rgba(139, 92, 246, 0.6);
-
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.07);
+  border-color: #a78bfa;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
 .priceInput input {
   width: 100%;
   min-width: 0;
-
   padding: 0;
-
   border: 0;
   outline: 0;
-
   background: transparent;
-
-  color: #f5f3f8;
-
+  color: #1a202c;
   font-family: inherit;
-
   font-size: 15px;
-
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .priceInput input::placeholder {
-  color: #4f4c57;
+  color: #a0aec0;
 }
 
 .priceInput input::-webkit-inner-spin-button,
 .priceInput input::-webkit-outer-spin-button {
-  opacity: 0.35;
+  opacity: 0.5;
 }
 
 .priceInput span {
   flex-shrink: 0;
-
-  color: #686470;
-
-  font-size: 10px;
-
-  font-weight: 700;
-
+  color: #718096;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -478,41 +356,25 @@
 
 .developerModes {
   display: grid;
-
   grid-template-columns: repeat(2, minmax(0, 1fr));
-
   gap: 7px;
-
   margin-top: 15px;
-
   padding: 4px;
-
-  border: 1px solid rgba(255, 255, 255, 0.05);
-
+  border: 1px solid #e2e8f0;
   border-radius: 11px;
-
-  background: #0b0b0f;
+  background: #f8fafc;
 }
 
 .developerModes button {
   min-height: 37px;
-
   border: 0;
-
   border-radius: 8px;
-
   background: transparent;
-
-  color: #77737f;
-
+  color: #718096;
   font-family: inherit;
-
   font-size: 11px;
-
-  font-weight: 750;
-
+  font-weight: 700;
   cursor: pointer;
-
   transition:
     background 0.2s ease,
     color 0.2s ease,
@@ -520,17 +382,14 @@
 }
 
 .developerModes button:hover {
-  color: #c7bbdf;
-
-  background: rgba(139, 92, 246, 0.07);
+  color: #6d28d9;
+  background: #ede9fe;
 }
 
 .developerModes .modeActive {
-  color: #fff;
-
-  background: linear-gradient(135deg, #6d28d9, #8b5cf6);
-
-  box-shadow: 0 7px 18px rgba(124, 58, 237, 0.2);
+  color: #ffffff;
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  box-shadow: 0 3px 9px rgba(124, 58, 237, 0.2);
 }
 
 /* =========================================================
@@ -540,14 +399,10 @@
 .fieldError {
   display: flex;
   align-items: center;
-
   gap: 6px;
-
   margin-top: 8px;
-
-  color: #f08b8b;
-
-  font-size: 10px;
+  color: #c53030;
+  font-size: 11px;
 }
 
 /* =========================================================
@@ -558,38 +413,25 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-
   gap: 10px;
-
   padding: 18px 25px;
-
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-
-  background: rgba(255, 255, 255, 0.012);
+  border-top: 1px solid #edf2f7;
+  background: #ffffff;
 }
 
 .cancel,
 .save {
-  min-height: 46px;
-
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
   gap: 8px;
-
   padding: 0 17px;
-
-  border-radius: 11px;
-
+  border-radius: 10px;
   font-family: inherit;
-
   font-size: 12px;
-
-  font-weight: 850;
-
+  font-weight: 700;
   cursor: pointer;
-
   transition:
     transform 0.2s ease,
     background 0.2s ease,
@@ -598,35 +440,35 @@
 }
 
 .cancel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
-  background: rgba(255, 255, 255, 0.035);
-
-  color: #98949f;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #4a5568;
 }
 
 .cancel:hover {
-  border-color: rgba(255, 255, 255, 0.14);
-
-  background: rgba(255, 255, 255, 0.055);
-
-  color: #fff;
+  border-color: #cbd5e0;
+  background: #f7fafc;
+  color: #1a202c;
 }
 
 .save {
-  border: 1px solid rgba(139, 92, 246, 0.5);
-
-  background: linear-gradient(135deg, #6d28d9, #8b5cf6);
-
-  color: #fff;
-
-  box-shadow: 0 10px 25px rgba(124, 58, 237, 0.2);
+  border: 1px solid #7c3aed;
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.16);
 }
 
 .save:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
+  box-shadow: 0 7px 18px rgba(124, 58, 237, 0.24);
+}
 
-  box-shadow: 0 14px 32px rgba(124, 58, 237, 0.3);
+.cancel:disabled,
+.save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* =========================================================
@@ -637,10 +479,181 @@
 .developerModes button:focus-visible,
 .cancel:focus-visible,
 .save:focus-visible,
-.priceInput input:focus-visible {
-  outline: 2px solid rgba(167, 139, 250, 0.7);
-
+.priceInput input:focus-visible,
+.limitInput input:focus-visible {
+  outline: 2px solid #a78bfa;
   outline-offset: 2px;
+}
+
+/* =========================================================
+   TARIFF FIELDS
+========================================================= */
+
+.tariffFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* =========================================================
+   TARIFF CARD
+========================================================= */
+
+.tariffCard {
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid #e2e8f0;
+  border-radius: 15px;
+  background: #ffffff;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.tariffCard:hover {
+  transform: translateY(-1px);
+  border-color: #d6bcfa;
+  box-shadow: 0 6px 18px rgba(26, 32, 44, 0.045);
+}
+
+/* =========================================================
+   LIMITS
+========================================================= */
+
+.limits {
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid #edf2f7;
+}
+
+.limitsTitle {
+  margin-bottom: 10px;
+  color: #718096;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+
+.limitsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* =========================================================
+   LIMIT FIELD
+========================================================= */
+
+.limitField {
+  min-width: 0;
+}
+
+.limitLabel {
+  min-height: 30px;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin-bottom: 6px;
+  color: #718096;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.limitLabel svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #805ad5;
+}
+
+/* =========================================================
+   LIMIT INPUT
+========================================================= */
+
+.limitInput {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.limitInput:focus-within {
+  border-color: #a78bfa;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.09);
+}
+
+.limitInput input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #1a202c;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.limitInput input::placeholder {
+  color: #a0aec0;
+}
+
+.limitInput input::-webkit-inner-spin-button,
+.limitInput input::-webkit-outer-spin-button {
+  opacity: 0.5;
+}
+
+.limitInput span {
+  flex-shrink: 0;
+  color: #718096;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   LIMIT ERROR
+========================================================= */
+
+.limitError {
+  display: block;
+  margin-top: 5px;
+  color: #c53030;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+/* =========================================================
+   INDIVIDUAL DEVELOPER PRICE
+========================================================= */
+
+.individualPrice {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 0 13px;
+  border: 1px solid #e9d5ff;
+  border-radius: 11px;
+  background: #faf5ff;
+  color: #6b46a3;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.individualPrice svg {
+  flex-shrink: 0;
+  color: #7c3aed;
 }
 
 /* =========================================================
@@ -654,19 +667,19 @@
 
   .modal {
     max-height: calc(100vh - 24px);
-
-    border-radius: 19px;
+    border-radius: 18px;
   }
 
   .modalHeader {
-    padding: 19px;
+    padding: 18px;
   }
 
   .body {
-    padding: 19px;
+    padding: 18px;
   }
 
-  .fields {
+  .fields,
+  .tariffFields {
     grid-template-columns: 1fr;
   }
 
@@ -675,7 +688,7 @@
   }
 
   .footer {
-    padding: 15px 19px;
+    padding: 15px 18px;
   }
 }
 
@@ -685,8 +698,8 @@
 
 @media (max-width: 480px) {
   .headerIcon {
-    width: 41px;
-    height: 41px;
+    width: 40px;
+    height: 40px;
   }
 
   .headerTitle h2 {
@@ -706,7 +719,8 @@
     margin-bottom: 13px;
   }
 
-  .fieldCard {
+  .fieldCard,
+  .tariffCard {
     padding: 14px;
   }
 
@@ -715,7 +729,15 @@
   }
 
   .fieldTitle span {
-    font-size: 9px;
+    font-size: 10px;
+  }
+
+  .limitsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .limitLabel {
+    min-height: auto;
   }
 
   .footer {
@@ -736,265 +758,11 @@
   .overlay,
   .modal,
   .fieldCard,
+  .tariffCard,
   .close,
   .cancel,
   .save {
     animation: none;
     transition: none;
-  }
-}
-
-.tariffFields {
-  display: grid;
-
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-
-  gap: 12px;
-}
-
-/* =========================================================
-   TARIFF CARD
-========================================================= */
-
-.tariffCard {
-  min-width: 0;
-
-  padding: 17px;
-
-  border: 1px solid rgba(255, 255, 255, 0.06);
-
-  border-radius: 16px;
-
-  background:
-    linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.025),
-      rgba(255, 255, 255, 0.01)
-    ),
-    #101015;
-
-  transition:
-    border-color 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.tariffCard:hover {
-  transform: translateY(-2px);
-
-  border-color: rgba(139, 92, 246, 0.2);
-
-  box-shadow:
-    0 14px 35px rgba(0, 0, 0, 0.22),
-    0 0 25px rgba(139, 92, 246, 0.035);
-}
-
-/* =========================================================
-   LIMITS
-========================================================= */
-
-.limits {
-  margin-top: 16px;
-
-  padding-top: 15px;
-
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
-}
-
-.limitsTitle {
-  margin-bottom: 10px;
-
-  color: #5f5b66;
-
-  font-size: 8px;
-
-  font-weight: 900;
-
-  letter-spacing: 1.4px;
-}
-
-.limitsGrid {
-  display: grid;
-
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-
-  gap: 8px;
-}
-
-/* =========================================================
-   LIMIT FIELD
-========================================================= */
-
-.limitField {
-  min-width: 0;
-}
-
-.limitLabel {
-  min-height: 30px;
-
-  display: flex;
-  align-items: flex-start;
-
-  gap: 5px;
-
-  margin-bottom: 6px;
-
-  color: #77727e;
-
-  font-size: 9px;
-
-  line-height: 1.3;
-}
-
-.limitLabel svg {
-  flex-shrink: 0;
-
-  margin-top: 1px;
-
-  color: #9b7ee8;
-}
-
-/* =========================================================
-   LIMIT INPUT
-========================================================= */
-
-.limitInput {
-  height: 42px;
-
-  display: flex;
-  align-items: center;
-
-  gap: 5px;
-
-  padding: 0 9px;
-
-  border: 1px solid rgba(255, 255, 255, 0.065);
-
-  border-radius: 9px;
-
-  background: #0b0b0f;
-
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.limitInput:focus-within {
-  border-color: rgba(139, 92, 246, 0.55);
-
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.06);
-}
-
-.limitInput input {
-  width: 100%;
-  min-width: 0;
-
-  padding: 0;
-
-  border: 0;
-  outline: 0;
-
-  background: transparent;
-
-  color: #f3f0f7;
-
-  font-family: inherit;
-
-  font-size: 13px;
-
-  font-weight: 800;
-}
-
-.limitInput input::placeholder {
-  color: #46434d;
-}
-
-.limitInput input::-webkit-inner-spin-button,
-.limitInput input::-webkit-outer-spin-button {
-  opacity: 0.3;
-}
-
-.limitInput span {
-  flex-shrink: 0;
-
-  color: #5f5b66;
-
-  font-size: 8px;
-
-  font-weight: 700;
-}
-
-/* =========================================================
-   LIMIT ERROR
-========================================================= */
-
-.limitError {
-  display: block;
-
-  margin-top: 5px;
-
-  color: #e88383;
-
-  font-size: 8px;
-
-  line-height: 1.3;
-}
-
-/* =========================================================
-   INDIVIDUAL DEVELOPER PRICE
-========================================================= */
-
-.individualPrice {
-  height: 48px;
-
-  display: flex;
-  align-items: center;
-
-  gap: 8px;
-
-  margin-top: 14px;
-
-  padding: 0 13px;
-
-  border: 1px solid rgba(139, 92, 246, 0.12);
-
-  border-radius: 11px;
-
-  background: rgba(139, 92, 246, 0.045);
-
-  color: #77717f;
-
-  font-size: 10px;
-
-  font-weight: 700;
-}
-
-.individualPrice svg {
-  flex-shrink: 0;
-
-  color: #a78bfa;
-}
-
-/* =========================================================
-   MOBILE / TABLET
-========================================================= */
-
-@media (max-width: 700px) {
-  .tariffFields {
-    grid-template-columns: 1fr;
-  }
-
-  .limitsGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 480px) {
-  .limitsGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .limitLabel {
-    min-height: auto;
   }
 }

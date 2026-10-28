@@ -1,3 +1,7 @@
+/* =========================================================
+   OVERLAY
+========================================================= */
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -9,30 +13,32 @@
 
   padding: 20px;
 
-  background: rgba(0, 0, 0, 0.72);
-
-  backdrop-filter: blur(8px);
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
+
+/* =========================================================
+   MODAL
+========================================================= */
 
 .modal {
   width: 100%;
   max-width: 570px;
-
   max-height: calc(100vh - 40px);
 
   overflow-y: auto;
-
+  overscroll-behavior: contain;
   box-sizing: border-box;
 
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #e5e7eb;
   border-radius: 22px;
 
-  background:
-    linear-gradient(145deg, rgba(139, 92, 246, 0.035), transparent 45%), #101015;
+  background: #ffffff;
 
   box-shadow:
-    0 35px 100px rgba(0, 0, 0, 0.55),
-    0 0 50px rgba(139, 92, 246, 0.05);
+    0 25px 70px rgba(15, 23, 42, 0.18),
+    0 5px 20px rgba(15, 23, 42, 0.06);
 }
 
 /* =========================================================
@@ -43,72 +49,76 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-
   gap: 20px;
 
   padding: 25px 25px 20px;
 
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  border-bottom: 1px solid #f1f2f5;
 }
 
 .eyebrow {
   display: block;
+  margin-bottom: 7px;
 
-  margin-bottom: 6px;
+  color: #7c3aed;
 
-  color: #a78bfa;
-
-  font-size: 9px;
-  font-weight: 900;
-
-  letter-spacing: 1.3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
 }
 
 .header h2 {
   margin: 0;
 
-  color: #f3f1f7;
+  color: #111827;
 
-  font-size: 22px;
-  font-weight: 900;
+  font-size: 23px;
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: -0.4px;
 }
 
 .header p {
   margin: 6px 0 0;
 
-  color: #716d79;
+  color: #6b7280;
 
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 .closeButton {
-  width: 36px;
-  height: 36px;
-
-  flex-shrink: 0;
-
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
 
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  width: 36px;
+  height: 36px;
+
+  border: 1px solid #e5e7eb;
   border-radius: 10px;
 
-  background: rgba(255, 255, 255, 0.035);
-
-  color: #77727f;
+  background: #f9fafb;
+  color: #6b7280;
 
   cursor: pointer;
 
   transition:
     background 0.2s ease,
+    border-color 0.2s ease,
     color 0.2s ease;
 }
 
 .closeButton:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: #eeeaf5;
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.closeButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
 }
 
 /* =========================================================
@@ -118,81 +128,87 @@
 .userCard {
   display: flex;
   align-items: center;
-
   gap: 12px;
 
   margin: 20px 25px 0;
+  padding: 14px;
 
-  padding: 13px;
-
-  border: 1px solid rgba(255, 255, 255, 0.055);
+  border: 1px solid #e5e7eb;
   border-radius: 14px;
 
-  background: rgba(255, 255, 255, 0.018);
+  background: #f9fafb;
 }
 
 .avatar {
-  width: 42px;
-  height: 42px;
-
-  flex-shrink: 0;
-
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
 
-  border: 1px solid rgba(139, 92, 246, 0.18);
+  width: 42px;
+  height: 42px;
+
+  border: 1px solid #ddd6fe;
   border-radius: 11px;
 
-  background: rgba(139, 92, 246, 0.09);
-
-  color: #c4b5fd;
+  background: #f3f0ff;
+  color: #7c3aed;
 
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .userInfo {
-  min-width: 0;
-
   display: flex;
   flex-direction: column;
+  gap: 4px;
 
-  gap: 3px;
+  min-width: 0;
 }
 
 .userInfo strong {
-  color: #e4e1e9;
+  overflow: hidden;
+
+  color: #1f2937;
 
   font-size: 13px;
-  font-weight: 800;
+  line-height: 1.35;
+  font-weight: 750;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .userInfo span,
 .userInfo small {
-  color: #696571;
+  overflow: hidden;
 
-  font-size: 10px;
+  color: #6b7280;
+
+  font-size: 11px;
+  line-height: 1.35;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .userInfo small {
-  color: #55515d;
+  color: #9ca3af;
 }
 
 .tariffBadge {
+  flex-shrink: 0;
   margin-left: auto;
+  padding: 6px 10px;
 
-  padding: 6px 9px;
+  border: 1px solid #ddd6fe;
+  border-radius: 8px;
 
-  border: 1px solid rgba(139, 92, 246, 0.16);
-  border-radius: 7px;
+  background: #f5f3ff;
+  color: #7c3aed;
 
-  background: rgba(139, 92, 246, 0.07);
-
-  color: #a78bfa;
-
-  font-size: 9px;
-  font-weight: 900;
+  font-size: 10px;
+  font-weight: 800;
 
   white-space: nowrap;
 }
@@ -204,61 +220,59 @@
 .currentPeriod {
   display: flex;
   align-items: center;
-
   gap: 11px;
 
   margin: 15px 25px 0;
-
   padding: 13px;
 
-  border: 1px solid rgba(255, 255, 255, 0.045);
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
 
-  background: #0c0c10;
+  background: #f9fafb;
 }
 
 .currentIcon {
-  width: 34px;
-  height: 34px;
-
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
 
-  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
 
-  border-radius: 9px;
+  border: 1px solid #ede9fe;
+  border-radius: 10px;
 
-  background: rgba(139, 92, 246, 0.08);
-
-  color: #8f7ac7;
+  background: #f3f0ff;
+  color: #7c3aed;
 }
 
 .currentPeriod > div:last-child {
   display: flex;
   flex-direction: column;
+  gap: 4px;
 
-  gap: 3px;
+  min-width: 0;
 }
 
 .currentPeriod span {
-  color: #55515d;
+  color: #6b7280;
 
-  font-size: 8px;
-  font-weight: 900;
-
-  letter-spacing: 0.7px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
 }
 
 .currentPeriod strong {
-  color: #c9c5cf;
+  color: #374151;
 
   font-size: 12px;
-  font-weight: 750;
+  line-height: 1.4;
+  font-weight: 700;
 }
 
 /* =========================================================
-   SECTION
+   SECTIONS
 ========================================================= */
 
 .section {
@@ -268,77 +282,71 @@
 .sectionTitle {
   display: flex;
   align-items: center;
+  gap: 8px;
 
-  gap: 7px;
+  margin-bottom: 13px;
 
-  margin-bottom: 12px;
+  color: #374151;
 
-  color: #aaa5b1;
-
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .sectionTitle svg {
-  color: #a78bfa;
+  flex-shrink: 0;
+  color: #7c3aed;
 }
 
 .quickDescription {
   margin: -4px 0 12px;
 
-  color: #5e5a66;
+  color: #6b7280;
 
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 /* =========================================================
-   DATES
+   DATE FIELDS
 ========================================================= */
 
 .dates {
   display: grid;
-
   grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1fr);
-
   align-items: end;
-
   gap: 8px;
 }
 
 .field {
-  min-width: 0;
-
   display: flex;
   flex-direction: column;
+  gap: 7px;
 
-  gap: 6px;
+  min-width: 0;
 }
 
 .field label {
-  color: #625e69;
+  color: #6b7280;
 
-  font-size: 9px;
-  font-weight: 800;
-
-  letter-spacing: 0.4px;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .dateInput {
-  height: 42px;
-
   display: flex;
   align-items: center;
+  gap: 8px;
 
-  gap: 7px;
+  height: 43px;
+  min-width: 0;
 
   padding: 0 10px;
-
   box-sizing: border-box;
 
-  border: 1px solid #292632;
-  border-radius: 9px;
+  border: 1px solid #dfe3ea;
+  border-radius: 10px;
 
-  background: #0b0b0f;
+  background: #ffffff;
 
   transition:
     border-color 0.2s ease,
@@ -346,37 +354,33 @@
 }
 
 .dateInput:focus-within {
-  border-color: rgba(139, 92, 246, 0.5);
-
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.07);
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08);
 }
 
 .dateInput svg {
   flex-shrink: 0;
-
-  color: #68636f;
+  color: #9ca3af;
 }
 
 .dateInput input {
   width: 100%;
   min-width: 0;
+  padding: 0;
 
   border: 0;
   outline: 0;
 
   background: transparent;
-
-  color: #d2ced8;
+  color: #374151;
 
   font-family: inherit;
-
   font-size: 11px;
 }
 
 .dateInput input::-webkit-calendar-picker-indicator {
-  filter: invert(0.55);
-
   cursor: pointer;
+  opacity: 0.65;
 }
 
 .arrow {
@@ -384,11 +388,10 @@
   align-items: center;
   justify-content: center;
 
-  height: 42px;
+  height: 43px;
 
-  color: #514d59;
-
-  font-size: 12px;
+  color: #9ca3af;
+  font-size: 13px;
 }
 
 /* =========================================================
@@ -397,26 +400,25 @@
 
 .quickActions {
   display: grid;
-
-  grid-template-columns: repeat(3, 1fr);
-
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
 }
 
 .quickActions button {
-  min-height: 55px;
-
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 3px;
 
-  border: 1px solid rgba(139, 92, 246, 0.12);
-  border-radius: 10px;
+  min-height: 58px;
+  padding: 9px;
 
-  background: rgba(139, 92, 246, 0.045);
+  border: 1px solid #e9ddff;
+  border-radius: 11px;
 
-  color: #aaa1c8;
+  background: #faf8ff;
+  color: #7c3aed;
 
   font-family: inherit;
 
@@ -429,26 +431,27 @@
 }
 
 .quickActions button:hover {
-  border-color: rgba(139, 92, 246, 0.35);
-
-  background: rgba(139, 92, 246, 0.09);
+  border-color: #c4b5fd;
+  background: #f3edff;
 }
 
 .quickActions button:active {
   transform: scale(0.97);
 }
 
+.quickActions button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
 .quickActions span {
-  font-size: 14px;
-  font-weight: 900;
+  font-size: 15px;
+  font-weight: 800;
 }
 
 .quickActions small {
-  margin-top: 2px;
-
-  color: #676271;
-
-  font-size: 9px;
+  color: #8b5cf6;
+  font-size: 10px;
 }
 
 /* =========================================================
@@ -459,47 +462,44 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   gap: 15px;
 
   margin: 22px 25px 0;
+  padding: 14px 15px;
 
-  padding: 13px 15px;
-
-  border: 1px solid rgba(139, 92, 246, 0.16);
+  border: 1px solid #ddd6fe;
   border-radius: 12px;
 
-  background: linear-gradient(
-    145deg,
-    rgba(139, 92, 246, 0.07),
-    rgba(139, 92, 246, 0.025)
-  );
+  background: linear-gradient(135deg, #faf8ff, #f5f3ff);
 }
 
 .preview > div {
   display: flex;
   flex-direction: column;
+  gap: 5px;
 
-  gap: 4px;
+  min-width: 0;
 }
 
 .preview span {
-  color: #70677f;
+  color: #7c3aed;
 
-  font-size: 8px;
-  font-weight: 900;
-
-  letter-spacing: 0.7px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
 }
 
 .preview strong {
-  color: #d5cceb;
+  color: #312e81;
 
   font-size: 12px;
+  line-height: 1.5;
+  font-weight: 750;
 }
 
 .preview > svg {
-  color: #a78bfa;
+  flex-shrink: 0;
+  color: #7c3aed;
 }
 
 /* =========================================================
@@ -509,63 +509,101 @@
 .actions {
   display: flex;
   justify-content: flex-end;
-
-  gap: 9px;
+  gap: 10px;
 
   margin-top: 22px;
-
   padding: 18px 25px 22px;
 
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-top: 1px solid #f1f2f5;
 }
 
 .cancelButton,
 .saveButton {
-  height: 40px;
-
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 
-  gap: 7px;
+  min-height: 41px;
+  padding: 0 16px;
 
-  padding: 0 15px;
-
-  border-radius: 9px;
+  border-radius: 10px;
 
   font-family: inherit;
-
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
 
   cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
 }
 
 .cancelButton {
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
-  background: rgba(255, 255, 255, 0.035);
-
-  color: #817c88;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #4b5563;
 }
 
-.cancelButton:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #aaa5b1;
+.cancelButton:hover:not(:disabled) {
+  border-color: #d1d5db;
+  background: #f9fafb;
 }
 
 .saveButton {
-  border: 1px solid rgba(139, 92, 246, 0.35);
+  border: 1px solid #7c3aed;
+  background: #7c3aed;
+  color: #ffffff;
 
-  background: #8b5cf6;
-
-  color: #fff;
-
-  box-shadow: 0 8px 25px rgba(139, 92, 246, 0.15);
+  box-shadow: 0 3px 8px rgba(124, 58, 237, 0.15);
 }
 
-.saveButton:hover {
-  background: #9569f7;
+.saveButton:hover:not(:disabled) {
+  border-color: #6d28d9;
+  background: #6d28d9;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.22);
+}
+
+.cancelButton:active:not(:disabled),
+.saveButton:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.cancelButton:disabled,
+.saveButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cancelButton:focus-visible,
+.saveButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+/* =========================================================
+   SCROLLBAR
+========================================================= */
+
+.modal {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.modal::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #d1d5db;
 }
 
 /* =========================================================
@@ -574,25 +612,38 @@
 
 @media (max-width: 600px) {
   .overlay {
+    align-items: center;
     padding: 10px;
   }
 
   .modal {
-    max-height: calc(100vh - 20px);
-
+    max-height: calc(100dvh - 20px);
     border-radius: 18px;
   }
 
   .header {
+    gap: 12px;
     padding: 20px 18px 17px;
+  }
+
+  .header h2 {
+    font-size: 21px;
+  }
+
+  .header p {
+    font-size: 11px;
   }
 
   .userCard,
   .currentPeriod,
   .section,
   .preview {
-    margin-left: 18px;
     margin-right: 18px;
+    margin-left: 18px;
+  }
+
+  .userCard {
+    padding: 12px;
   }
 
   .actions {
@@ -600,11 +651,16 @@
   }
 
   .dates {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
 
   .arrow {
     display: none;
+  }
+
+  .dateInput {
+    height: 44px;
   }
 
   .tariffBadge {
@@ -613,16 +669,26 @@
 }
 
 @media (max-width: 400px) {
+  .header {
+    padding: 18px 15px 15px;
+  }
+
+  .userCard,
+  .currentPeriod,
+  .section,
+  .preview {
+    margin-right: 15px;
+    margin-left: 15px;
+  }
+
   .quickActions {
     grid-template-columns: 1fr;
   }
 
   .quickActions button {
-    min-height: 45px;
-
+    min-height: 44px;
     flex-direction: row;
-
-    gap: 5px;
+    gap: 6px;
   }
 
   .quickActions small {
@@ -631,10 +697,26 @@
 
   .actions {
     flex-direction: column-reverse;
+    padding: 15px;
   }
 
   .cancelButton,
   .saveButton {
     width: 100%;
+  }
+}
+
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay *,
+  .overlay *::before,
+  .overlay *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

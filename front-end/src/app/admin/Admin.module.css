@@ -1,16 +1,17 @@
+/* =========================
+   Admin.module.css
+========================= */
+
 .admin {
   min-height: 100vh;
-
   display: flex;
-
-  background: #08080b;
-  color: #f5f5f7;
+  background-color: #f7fafc; /* Светло-серый фон */
+  color: #1a202c; /* Темный цвет текста */
 }
 
 .content {
   min-width: 0;
   flex: 1;
-
   margin-left: 250px;
 }
 
@@ -25,7 +26,6 @@
 .period {
   display: flex;
   align-items: center;
-
   margin-bottom: 22px;
 }
 
@@ -36,14 +36,12 @@
 }
 
 .period span {
-  color: #777783;
-
+  color: #718096; /* Светло-серый цвет для описания */
   font-size: 13px;
 }
 
 .period strong {
-  color: #f5f5f7;
-
+  color: #1a202c; /* Темный цвет текста для значения */
   font-size: 16px;
   font-weight: 700;
 }
@@ -54,9 +52,7 @@
 
 .stats {
   display: grid;
-
   grid-template-columns: repeat(4, 1fr);
-
   gap: 18px;
 }
 
@@ -66,14 +62,10 @@
 
 .card {
   margin-top: 24px;
-
   padding: 26px;
-
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
+  border: 1px solid #e2e8f0; /* Светло-серая граница */
   border-radius: 20px;
-
-  background: #101014;
+  background-color: #fff; /* Белый фон для карточки */
 }
 
 /* =========================
@@ -84,24 +76,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   margin-bottom: 22px;
 }
 
 .cardHeader h2 {
   margin: 0;
-
-  color: #f5f5f7;
-
+  color: #1a202c; /* Темный цвет текста для заголовка */
   font-size: 20px;
   font-weight: 750;
 }
 
 .cardHeader p {
   margin: 6px 0 0;
-
-  color: #777783;
-
+  color: #718096; /* Светло-серый цвет для описания */
   font-size: 13px;
 }
 
@@ -111,43 +98,36 @@
 
 .sectionGrid {
   display: grid;
-
   grid-template-columns: repeat(3, 1fr);
-
   gap: 14px;
 }
 
 .sectionItem {
   min-height: 82px;
-
   display: flex;
   align-items: center;
-
   gap: 14px;
-
   padding: 16px;
-
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
+  border: 1px solid #e2e8f0; /* Светло-серая граница */
   border-radius: 14px;
-
   color: inherit;
   text-decoration: none;
-
-  background: rgba(255, 255, 255, 0.015);
-
+  background-color: rgba(0, 0, 0, 0.015); /* Очень прозрачный фон */
   transition:
-    background 0.2s ease,
+    background-color 0.2s ease,
     border-color 0.2s ease,
     transform 0.2s ease;
 }
 
 .sectionItem:hover {
   transform: translateY(-2px);
-
-  background: rgba(139, 92, 246, 0.08);
-
-  border-color: rgba(139, 92, 246, 0.3);
+  background-color: rgba(
+    139,
+    92,
+    246,
+    0.08
+  ); /* Легкий фиолетовый фон при наведении */
+  border-color: rgba(139, 92, 246, 0.3); /* Фиолетовая граница при наведении */
 }
 
 /* =========================
@@ -157,18 +137,13 @@
 .sectionIcon {
   width: 46px;
   height: 46px;
-
   flex-shrink: 0;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   border-radius: 12px;
-
-  background: rgba(139, 92, 246, 0.12);
-
-  color: #a78bfa;
+  background-color: rgba(139, 92, 246, 0.12); /* Прозрачный фиолетовый фон */
+  color: #a78bfa; /* Светло-фиолетовый цвет для иконок */
 }
 
 .sectionIcon svg {
@@ -187,22 +162,16 @@
 
 .sectionInfo strong {
   display: block;
-
-  color: #f5f5f7;
-
+  color: #1a202c; /* Темный цвет текста для заголовка */
   font-size: 15px;
   font-weight: 700;
 }
 
 .sectionInfo span {
   display: block;
-
   margin-top: 5px;
-
-  color: #777783;
-
+  color: #718096; /* Светло-серый цвет для описания */
   font-size: 12px;
-
   line-height: 1.4;
 }
 
@@ -213,19 +182,15 @@
 .arrow {
   width: 18px;
   height: 18px;
-
   flex-shrink: 0;
-
-  color: #666672;
-
+  color: #718096; /* Светло-серый цвет для стрелки */
   transition:
     color 0.2s ease,
     transform 0.2s ease;
 }
 
 .sectionItem:hover .arrow {
-  color: #a78bfa;
-
+  color: #a78bfa; /* Светло-фиолетовый цвет при наведении */
   transform: translate(2px, -2px);
 }
 
