@@ -137,34 +137,31 @@ export default function RealtorPublicProfile({
               </p>
 
               <div className={styles.actions}>
-                {phone && (
-                  <a href={`tel:${phone}`} className={styles.primaryAction}>
-                    <Phone />
-                    {t("realtorPublicProfile.actions.call")}
-                  </a>
-                )}
+                <div className={styles.primaryAction}>
+                  <Phone size={18} />
+                  <span>Phone: {phone || "Not provided"}</span>
+                </div>
 
-                {whatsapp && (
-                  <a
-                    href={`https://wa.me/${whatsapp}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.secondaryAction}
-                  >
-                    <MessageCircle />
-                    {t("realtorPublicProfile.actions.whatsapp")}
-                  </a>
-                )}
+                <a
+                  href={whatsapp ? `https://wa.me/${whatsapp}` : undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${styles.secondaryAction} ${
+                    !whatsapp ? styles.disabledAction : ""
+                  }`}
+                  onClick={(e) => {
+                    if (!whatsapp) e.preventDefault();
+                  }}
+                  aria-disabled={!whatsapp}
+                >
+                  <MessageCircle size={18} />
+                  <span>WhatsApp</span>
+                </a>
 
-                {email && (
-                  <a
-                    href={`mailto:${email}`}
-                    className={styles.secondaryAction}
-                  >
-                    <Mail />
-                    {t("realtorPublicProfile.actions.email")}
-                  </a>
-                )}
+                <div className={styles.secondaryAction}>
+                  <Mail size={18} />
+                  <span>Email: {email || "Not provided"}</span>
+                </div>
               </div>
             </motion.div>
           </div>
