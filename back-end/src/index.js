@@ -57,6 +57,7 @@ const devOrigins = [
   "https://uytapkgdep.vercel.app",
   "https://uytap.kg",
   "https://www.uytap.kg",
+  "https://uytapkg.vercel.app",
 ];
 const defaultOrigins = [
   "https://uytapkgdep.vercel.app",
