@@ -2500,3 +2500,23 @@ a.detail:hover {
     justify-content: flex-start;
   }
 }
+
+.primaryAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: #35245f;
+  background: #f3efff;
+  border: 1px solid #e5dcff;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+.primaryAction span {
+  overflow-wrap: anywhere;
+}

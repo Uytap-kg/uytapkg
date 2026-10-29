@@ -146,16 +146,12 @@ export default function RealtorPublicProfile({
                 {profile.about || t("realtorPublicProfile.defaults.about")}
               </p>
 
-              {/* Контакты для посетителей */}
               <div className={styles.actions}>
                 {phone && (
-                  <a
-                    href={`tel:${phone.replace(/[^\d+]/g, "")}`}
-                    className={styles.primaryAction}
-                  >
+                  <div className={styles.primaryAction}>
                     <Phone size={18} />
                     <span>{phone}</span>
-                  </a>
+                  </div>
                 )}
 
                 {whatsapp && (
@@ -164,12 +160,10 @@ export default function RealtorPublicProfile({
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.secondaryAction}
+                    aria-label="WhatsApp"
                   >
                     <MessageCircle size={18} />
-                    <span>
-                      {t("realtorPublicProfile.contacts.whatsapp") ||
-                        "WhatsApp"}
-                    </span>
+                    <span>WhatsApp</span>
                     <ArrowUpRight size={14} />
                   </a>
                 )}
@@ -178,9 +172,11 @@ export default function RealtorPublicProfile({
                   <a
                     href={`mailto:${email}`}
                     className={styles.secondaryAction}
+                    aria-label="Email"
                   >
                     <Mail size={18} />
-                    <span>{email}</span>
+                    <span>Email</span>
+                    <ArrowUpRight size={14} />
                   </a>
                 )}
               </div>
