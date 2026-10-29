@@ -42,9 +42,12 @@ export default function RealtorPublicProfile({
 
   const name =
     `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
+    user.name ||
+    user.full_name ||
     t("realtorPublicProfile.defaults.realtor");
 
   const company = profile.company_name || "";
+
   const phone = String(user.phone || profile.phone || "").trim();
   const email = String(user.email || profile.email || "").trim();
   const website = String(profile.website || "").trim();
@@ -70,6 +73,8 @@ export default function RealtorPublicProfile({
       : `https://${website}`
     : "";
 
+  const favorites = favIds instanceof Set ? favIds : new Set();
+
   return (
     <main className={styles.page}>
       <div className={styles.backgroundGlow} />
@@ -81,7 +86,6 @@ export default function RealtorPublicProfile({
           <span>{t("realtorPublicProfile.topBar.home")}</span>
         </Link>
 
-        {/* Публичная информация риэлтора */}
         <motion.section
           className={styles.profileCard}
           initial={{ opacity: 0, y: 25 }}
@@ -99,7 +103,14 @@ export default function RealtorPublicProfile({
             >
               <div className={styles.avatarRing}>
                 <div className={styles.avatar}>
-                  <img src={avatarUrl} alt={name} />
+                  <img
+                    src={avatarUrl}
+                    alt={name}
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = "/assets/realtorImage.png";
+                    }}
+                  />
                 </div>
               </div>
 
@@ -183,7 +194,6 @@ export default function RealtorPublicProfile({
             </motion.div>
           </div>
 
-          {/* Дополнительные публичные данные */}
           {(officeAddress || websiteUrl) && (
             <div className={styles.details}>
               {officeAddress && (
@@ -224,7 +234,6 @@ export default function RealtorPublicProfile({
           )}
         </motion.section>
 
-        {/* Количество объявлений — без личной статистики */}
         <motion.section
           className={styles.stats}
           initial={{ opacity: 0, y: 15 }}
@@ -243,7 +252,6 @@ export default function RealtorPublicProfile({
           </div>
         </motion.section>
 
-        {/* Публичные объявления риэлтора */}
         <motion.section
           className={styles.listingsSection}
           initial={{ opacity: 0, y: 20 }}
@@ -266,7 +274,7 @@ export default function RealtorPublicProfile({
             <div className={styles.listingsGrid}>
               {ads.map((item, index) => (
                 <motion.div
-                  key={item.id}
+                  key={item.id ?? item.ad_id ?? index}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
@@ -276,7 +284,7 @@ export default function RealtorPublicProfile({
                 >
                   <ListingCard
                     item={mapListingData(item)}
-                    isFavorite={favIds.has(item.id)}
+                    isFavorite={favorites.has(item.id)}
                     onFavoriteClick={onFavoriteClick}
                   />
                 </motion.div>
