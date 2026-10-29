@@ -25,8 +25,6 @@ import Header from "@/components/pageComponents/header/Header";
 
 export default function PersonalProfile({
   user,
-  adsCount = 0,
-  favoritesCount = 0,
 }) {
   const { t } = useLanguage();
 

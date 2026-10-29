@@ -2382,3 +2382,141 @@ a.detail:hover {
     transition: none;
   }
 }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.phoneDisplay {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+  box-sizing: border-box;
+}
+
+.phoneDisplay svg {
+  flex-shrink: 0;
+  color: #475569;
+}
+
+.phoneLabel {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.phoneDisplay strong {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.whatsappButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #16a34a;
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+  box-sizing: border-box;
+}
+
+.whatsappButton:hover {
+  background: #15803d;
+  transform: translateY(-1px);
+}
+
+.whatsappButton svg {
+  flex-shrink: 0;
+}
+
+.contactUnavailable {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 14px;
+}
+
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #334155;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  box-sizing: border-box;
+  transition: background 0.2s ease;
+}
+
+.secondaryAction:hover {
+  background: #f1f5f9;
+}
+
+@media (max-width: 600px) {
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .phoneDisplay,
+  .whatsappButton,
+  .secondaryAction,
+  .contactUnavailable {
+    width: 100%;
+  }
+
+  .phoneDisplay {
+    justify-content: flex-start;
+  }
+}
+
+.primaryAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: #35245f;
+  background: #f3efff;
+  border: 1px solid #e5dcff;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+.primaryAction span {
+  overflow-wrap: anywhere;
+}

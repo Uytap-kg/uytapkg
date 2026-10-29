@@ -1,24 +1,25 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
+
 import {
-  Phone,
-  MessageCircle,
-  Globe,
-  MapPin,
-  Mail,
-  Home,
+  ArrowLeft,
+  ArrowUpRight,
   Building2,
   CheckCircle,
-  ArrowUpRight,
-  ArrowLeft,
+  Globe,
+  Home,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Phone,
 } from "lucide-react";
 
 import { useLanguage } from "@/context/LanguageContext";
 import { mapListingData } from "@/utils/mapListingData";
 
 import styles from "./RealtorPublicProfile.module.css";
-import Link from "next/link";
 import ListingCard from "@/components/ui/ListingCard/ListingCard";
 
 export default function RealtorPublicProfile({
@@ -41,21 +42,38 @@ export default function RealtorPublicProfile({
 
   const name =
     `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
+    user.name ||
+    user.full_name ||
     t("realtorPublicProfile.defaults.realtor");
 
   const company = profile.company_name || "";
 
-  const phone = user.phone || "";
-  const email = user.email || "";
+  const phone = String(user.phone || profile.phone || "").trim();
+  const email = String(user.email || profile.email || "").trim();
+  const website = String(profile.website || "").trim();
+  const officeAddress = String(profile.office_address || "").trim();
+
   const whatsapp = phone.replace(/\D/g, "");
 
-  const website = profile.website || "";
-  const officeAddress = profile.office_address || "";
-
-  const ads =
-    user.ads || profile.ads || profile.listings || profile.properties || [];
+  const ads = Array.isArray(user.ads)
+    ? user.ads
+    : Array.isArray(profile.ads)
+      ? profile.ads
+      : Array.isArray(profile.listings)
+        ? profile.listings
+        : Array.isArray(profile.properties)
+          ? profile.properties
+          : [];
 
   const adsCount = profile.ads_count ?? ads.length;
+
+  const websiteUrl = website
+    ? /^https?:\/\//i.test(website)
+      ? website
+      : `https://${website}`
+    : "";
+
+  const favorites = favIds instanceof Set ? favIds : new Set();
 
   return (
     <main className={styles.page}>
@@ -63,8 +81,6 @@ export default function RealtorPublicProfile({
       <div className={styles.backgroundGlowTwo} />
 
       <div className={styles.container}>
-        {/* PROFILE */}
-
         <Link href="/" className={styles.backButton}>
           <ArrowLeft size={17} />
           <span>{t("realtorPublicProfile.topBar.home")}</span>
@@ -74,40 +90,43 @@ export default function RealtorPublicProfile({
           className={styles.profileCard}
           initial={{ opacity: 0, y: 25 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
         >
           <div className={styles.cardGlow} />
 
           <div className={styles.profileTop}>
-            {/* AVATAR */}
-
             <motion.div
               className={styles.avatarColumn}
-              initial={{ opacity: 0, scale: 0.92 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
             >
               <div className={styles.avatarRing}>
                 <div className={styles.avatar}>
-                  <img src={avatarUrl} alt={name} />
+                  <img
+                    src={avatarUrl}
+                    alt={name}
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = "/assets/realtorImage.png";
+                    }}
+                  />
                 </div>
               </div>
 
               {user.isVerified && (
                 <div className={styles.avatarVerified}>
-                  <CheckCircle />
-                  {t("realtorPublicProfile.verification.profile")}
+                  <CheckCircle size={16} />
+                  <span>{t("realtorPublicProfile.verification.profile")}</span>
                 </div>
               )}
             </motion.div>
 
-            {/* INFO */}
-
             <motion.div
               className={styles.info}
-              initial={{ opacity: 0, x: 20 }}
+              initial={{ opacity: 0, x: 15 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.15 }}
+              transition={{ duration: 0.4, delay: 0.12 }}
             >
               <div className={styles.topMeta}>
                 <span className={styles.badge}>
@@ -117,17 +136,19 @@ export default function RealtorPublicProfile({
 
                 {user.isVerified && (
                   <span className={styles.verifiedLabel}>
-                    <CheckCircle />
+                    <CheckCircle size={15} />
                     {t("realtorPublicProfile.verification.short")}
                   </span>
                 )}
               </div>
 
-              <h1>{name}</h1>
+              <div className={styles.nameRow}>
+                <h1>{name}</h1>
+              </div>
 
               {company && (
                 <div className={styles.company}>
-                  <Building2 />
+                  <Building2 size={18} />
                   <span>{company}</span>
                 </div>
               )}
@@ -138,10 +159,10 @@ export default function RealtorPublicProfile({
 
               <div className={styles.actions}>
                 {phone && (
-                  <a href={`tel:${phone}`} className={styles.primaryAction}>
-                    <Phone />
-                    {t("realtorPublicProfile.actions.call")}
-                  </a>
+                  <div className={styles.primaryAction}>
+                    <Phone size={18} />
+                    <span>{phone}</span>
+                  </div>
                 )}
 
                 {whatsapp && (
@@ -150,9 +171,11 @@ export default function RealtorPublicProfile({
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.secondaryAction}
+                    aria-label="WhatsApp"
                   >
-                    <MessageCircle />
-                    {t("realtorPublicProfile.actions.whatsapp")}
+                    <MessageCircle size={18} />
+                    <span>WhatsApp</span>
+                    <ArrowUpRight size={14} />
                   </a>
                 )}
 
@@ -160,50 +183,48 @@ export default function RealtorPublicProfile({
                   <a
                     href={`mailto:${email}`}
                     className={styles.secondaryAction}
+                    aria-label="Email"
                   >
-                    <Mail />
-                    {t("realtorPublicProfile.actions.email")}
+                    <Mail size={18} />
+                    <span>Email</span>
+                    <ArrowUpRight size={14} />
                   </a>
                 )}
               </div>
             </motion.div>
           </div>
 
-          {/* DETAILS */}
-
-          {(officeAddress || website) && (
+          {(officeAddress || websiteUrl) && (
             <div className={styles.details}>
               {officeAddress && (
                 <div className={styles.detail}>
                   <div className={styles.detailIcon}>
-                    <MapPin />
+                    <MapPin size={19} />
                   </div>
 
                   <div className={styles.detailContent}>
                     <span>{t("realtorPublicProfile.details.office")}</span>
-
                     <strong>{officeAddress}</strong>
                   </div>
                 </div>
               )}
 
-              {website && (
+              {websiteUrl && (
                 <a
-                  href={
-                    website.startsWith("http") ? website : `https://${website}`
-                  }
+                  href={websiteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={styles.detail}
                 >
                   <div className={styles.detailIcon}>
-                    <Globe />
+                    <Globe size={19} />
                   </div>
 
                   <div className={styles.detailContent}>
                     <span>{t("realtorPublicProfile.details.website")}</span>
-
-                    <strong>{website.replace(/^https?:\/\//, "")}</strong>
+                    <strong>
+                      {website.replace(/^https?:\/\//i, "").replace(/\/$/, "")}
+                    </strong>
                   </div>
 
                   <ArrowUpRight className={styles.detailArrow} />
@@ -213,34 +234,29 @@ export default function RealtorPublicProfile({
           )}
         </motion.section>
 
-        {/* STATS */}
-
         <motion.section
           className={styles.stats}
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.25 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
         >
           <div className={styles.statCard}>
             <div className={styles.statIcon}>
-              <Home />
+              <Home size={21} />
             </div>
 
             <div>
               <strong>{adsCount}</strong>
-
               <span>{t("realtorPublicProfile.stats.activeAds")}</span>
             </div>
           </div>
         </motion.section>
 
-        {/* LISTINGS */}
-
         <motion.section
           className={styles.listingsSection}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
+          transition={{ duration: 0.45, delay: 0.2 }}
         >
           <div className={styles.sectionHeader}>
             <div>
@@ -258,17 +274,17 @@ export default function RealtorPublicProfile({
             <div className={styles.listingsGrid}>
               {ads.map((item, index) => (
                 <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, y: 20 }}
+                  key={item.id ?? item.ad_id ?? index}
+                  initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
-                    duration: 0.35,
-                    delay: 0.08 * index,
+                    duration: 0.3,
+                    delay: Math.min(index * 0.05, 0.3),
                   }}
                 >
                   <ListingCard
                     item={mapListingData(item)}
-                    isFavorite={favIds.has(item.id)}
+                    isFavorite={favorites.has(item.id)}
                     onFavoriteClick={onFavoriteClick}
                   />
                 </motion.div>
@@ -277,7 +293,7 @@ export default function RealtorPublicProfile({
           ) : (
             <div className={styles.empty}>
               <div className={styles.emptyIcon}>
-                <Home />
+                <Home size={25} />
               </div>
 
               <h3>{t("realtorPublicProfile.empty.title")}</h3>

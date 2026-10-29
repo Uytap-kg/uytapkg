@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -29,19 +30,21 @@ export default function PersonalPublicProfile({
 
   const profile = user.profile || {};
 
+  // Тот же источник аватара, что и в личном профиле.
   const avatarUrl =
     profile.avatar_url ||
     profile.avatar ||
     user.avatar_url ||
     user.avatar ||
-    "";
+    null;
 
+  // Тот же источник имени, что и в личном профиле.
   const fullName =
     `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
-    t("personalPublicProfile.defaults.user");
+    t("personalProfile.defaults.user");
 
-  const phone = user.phone || "";
-
+  // Тот же источник телефона.
+  const phone = String(user.phone || profile.phone || "").trim();
   const whatsappNumber = phone.replace(/\D/g, "");
 
   const role =
@@ -49,7 +52,18 @@ export default function PersonalPublicProfile({
 
   const profileType = getProfileType(role, t);
 
-  const ads = user.ads || [];
+  // Используем объявления, переданные вместе с пользователем.
+  const ads = Array.isArray(user.ads)
+    ? user.ads
+    : Array.isArray(profile.ads)
+      ? profile.ads
+      : Array.isArray(profile.listings)
+        ? profile.listings
+        : Array.isArray(profile.properties)
+          ? profile.properties
+          : [];
+
+  const favorites = favIds instanceof Set ? favIds : new Set();
 
   return (
     <main className={styles.page}>
@@ -61,16 +75,12 @@ export default function PersonalPublicProfile({
           <span>{t("personalPublicProfile.topBar.home")}</span>
         </Link>
 
-        {/* PROFILE */}
-
+        {/* Публичная информация пользователя */}
         <motion.section
           className={styles.profileCard}
-          initial={{ opacity: 0, y: 25 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: 0.45,
-            ease: "easeOut",
-          }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
         >
           <div className={styles.profileAccent} />
 
@@ -78,7 +88,14 @@ export default function PersonalPublicProfile({
             <div className={styles.avatarWrapper}>
               <div className={styles.avatar}>
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={fullName} />
+                  <img
+                    src={avatarUrl}
+                    alt={fullName}
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.style.display = "none";
+                    }}
+                  />
                 ) : (
                   <User size={48} />
                 )}
@@ -88,7 +105,7 @@ export default function PersonalPublicProfile({
             <div className={styles.profileInfo}>
               <div className={styles.badge}>
                 {profileType.icon}
-                {profileType.label}
+                <span>{profileType.label}</span>
               </div>
 
               <h1>{fullName}</h1>
@@ -97,41 +114,45 @@ export default function PersonalPublicProfile({
                 <span>{profileType.aboutTitle}</span>
               </div>
 
-              {phone && (
-                <div className={styles.contacts}>
-                  <div className={styles.phone}>
-                    <Phone size={17} />
-                    <span>{phone}</span>
-                  </div>
+              {/* Контакты */}
+              <div className={styles.contacts}>
+                {phone ? (
+                  <>
+                    <div className={styles.phone}>
+                      <Phone size={17} />
+                      <span>{phone}</span>
+                    </div>
 
-                  {whatsappNumber && (
-                    <a
-                      href={`https://wa.me/${whatsappNumber}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={styles.whatsapp}
-                    >
-                      <MessageCircle size={17} />
-                      <span>{t("personalPublicProfile.whatsapp")}</span>
-                      <ArrowUpRight size={14} />
-                    </a>
-                  )}
-                </div>
-              )}
+                    {whatsappNumber && (
+                      <a
+                        href={`https://wa.me/${whatsappNumber}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.whatsapp}
+                        aria-label="WhatsApp"
+                      >
+                        <MessageCircle size={17} />
+                        <span>WhatsApp</span>
+                        <ArrowUpRight size={14} />
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <p className={styles.noContact}>
+                    {t("personalProfile.defaults.noPhone")}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </motion.section>
 
-        {/* ABOUT */}
-
+        {/* Информация о пользователе */}
         <motion.section
           className={styles.aboutCard}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: 0.45,
-            delay: 0.08,
-          }}
+          transition={{ duration: 0.45, delay: 0.08 }}
         >
           <div className={styles.aboutHeader}>
             <span className={styles.aboutEyebrow}>
@@ -141,19 +162,15 @@ export default function PersonalPublicProfile({
             <h2>{profileType.aboutTitle}</h2>
           </div>
 
-          <p>{profile.about || profileType.defaultAbout}</p>
+          <p>{profile.about || t("personalProfile.about.empty")}</p>
         </motion.section>
 
-        {/* LISTINGS */}
-
+        {/* Публичные объявления пользователя */}
         <motion.section
           className={styles.listingsSection}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: 0.45,
-            delay: 0.14,
-          }}
+          transition={{ duration: 0.45, delay: 0.14 }}
         >
           <div className={styles.sectionHeader}>
             <div>
@@ -169,13 +186,22 @@ export default function PersonalPublicProfile({
 
           {ads.length > 0 ? (
             <div className={styles.listingGrid}>
-              {ads.map((item) => (
-                <ListingCard
-                  key={item.id}
-                  item={mapListingData(item)}
-                  isFavorite={favIds.has(item.id)}
-                  onFavoriteClick={onFavoriteClick}
-                />
+              {ads.map((item, index) => (
+                <motion.div
+                  key={item.id ?? item.ad_id ?? index}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: 0.3,
+                    delay: Math.min(index * 0.05, 0.3),
+                  }}
+                >
+                  <ListingCard
+                    item={mapListingData(item)}
+                    isFavorite={favorites.has(item.id)}
+                    onFavoriteClick={onFavoriteClick}
+                  />
+                </motion.div>
               ))}
             </div>
           ) : (
