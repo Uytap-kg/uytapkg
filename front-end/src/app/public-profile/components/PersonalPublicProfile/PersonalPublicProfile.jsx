@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -40,16 +41,15 @@ export default function PersonalPublicProfile({
     `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
     t("personalPublicProfile.defaults.user");
 
-  const phone = user.phone || "";
-
+  // Используем тот же источник телефона, что и в личном профиле.
+  const phone = String(user.phone || profile.phone || "").trim();
   const whatsappNumber = phone.replace(/\D/g, "");
 
   const role =
     user.role || user.user_type || profile.role || profile.user_type || "user";
 
   const profileType = getProfileType(role, t);
-
-  const ads = user.ads || [];
+  const ads = Array.isArray(user.ads) ? user.ads : [];
 
   return (
     <main className={styles.page}>
@@ -61,16 +61,12 @@ export default function PersonalPublicProfile({
           <span>{t("personalPublicProfile.topBar.home")}</span>
         </Link>
 
-        {/* PROFILE */}
-
+        {/* Публичная информация профиля */}
         <motion.section
           className={styles.profileCard}
           initial={{ opacity: 0, y: 25 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: 0.45,
-            ease: "easeOut",
-          }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
         >
           <div className={styles.profileAccent} />
 
@@ -88,7 +84,7 @@ export default function PersonalPublicProfile({
             <div className={styles.profileInfo}>
               <div className={styles.badge}>
                 {profileType.icon}
-                {profileType.label}
+                <span>{profileType.label}</span>
               </div>
 
               <h1>{fullName}</h1>
@@ -97,41 +93,56 @@ export default function PersonalPublicProfile({
                 <span>{profileType.aboutTitle}</span>
               </div>
 
-              {phone && (
-                <div className={styles.contacts}>
-                  <div className={styles.phone}>
-                    <Phone size={17} />
-                    <span>{phone}</span>
-                  </div>
-
-                  {whatsappNumber && (
-                    <a
-                      href={`https://wa.me/${whatsappNumber}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={styles.whatsapp}
-                    >
-                      <MessageCircle size={17} />
-                      <span>{t("personalPublicProfile.whatsapp")}</span>
-                      <ArrowUpRight size={14} />
-                    </a>
-                  )}
+              {/* Контакты всегда отображаются в публичном профиле */}
+              <div className={styles.contacts}>
+                <div className={styles.contactHeading}>
+                  <Phone size={17} />
+                  <span>
+                    {t("personalPublicProfile.contactsTitle") ||
+                      "Контактная информация"}
+                  </span>
                 </div>
-              )}
+
+                {phone ? (
+                  <>
+                    <a
+                      href={`tel:${phone.replace(/[^\d+]/g, "")}`}
+                      className={styles.phone}
+                    >
+                      <Phone size={17} />
+                      <span>{phone}</span>
+                    </a>
+
+                    {whatsappNumber && (
+                      <a
+                        href={`https://wa.me/${whatsappNumber}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.whatsapp}
+                      >
+                        <MessageCircle size={17} />
+                        <span>{t("personalPublicProfile.whatsapp")}</span>
+                        <ArrowUpRight size={14} />
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <p className={styles.noContact}>
+                    {t("personalProfile.defaults.noPhone") ||
+                      "Номер телефона не указан"}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </motion.section>
 
-        {/* ABOUT */}
-
+        {/* О пользователе */}
         <motion.section
           className={styles.aboutCard}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: 0.45,
-            delay: 0.08,
-          }}
+          transition={{ duration: 0.45, delay: 0.08 }}
         >
           <div className={styles.aboutHeader}>
             <span className={styles.aboutEyebrow}>
@@ -144,16 +155,12 @@ export default function PersonalPublicProfile({
           <p>{profile.about || profileType.defaultAbout}</p>
         </motion.section>
 
-        {/* LISTINGS */}
-
+        {/* Объявления пользователя */}
         <motion.section
           className={styles.listingsSection}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: 0.45,
-            delay: 0.14,
-          }}
+          transition={{ duration: 0.45, delay: 0.14 }}
         >
           <div className={styles.sectionHeader}>
             <div>

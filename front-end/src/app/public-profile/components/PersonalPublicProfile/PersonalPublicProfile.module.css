@@ -1637,3 +1637,80 @@
     transition: none;
   }
 }
+
+/* =========================================================
+   CONTACT HEADING
+========================================================= */
+
+.contactHeading {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  margin-bottom: 3px;
+
+  color: #55566a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.contactHeading svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+/* =========================================================
+   NO CONTACT
+========================================================= */
+
+.noContact {
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+
+  color: var(--muted);
+  background: #f8f9fc;
+
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   PHONE LINK
+========================================================= */
+
+.phone {
+  text-decoration: none;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.phone:hover {
+  background: #fff;
+  border-color: var(--border-hover);
+}
+
+@media (max-width: 600px) {
+  .contactHeading {
+    justify-content: center;
+    font-size: 12px;
+  }
+
+  .noContact {
+    font-size: 11px;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone {
+    transition: none;
+  }
+}
