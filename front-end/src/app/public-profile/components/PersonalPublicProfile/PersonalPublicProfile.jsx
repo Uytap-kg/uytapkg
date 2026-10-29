@@ -30,18 +30,20 @@ export default function PersonalPublicProfile({
 
   const profile = user.profile || {};
 
+  // Тот же источник аватара, что и в личном профиле.
   const avatarUrl =
     profile.avatar_url ||
     profile.avatar ||
     user.avatar_url ||
     user.avatar ||
-    "";
+    null;
 
+  // Тот же источник имени, что и в личном профиле.
   const fullName =
     `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
-    t("personalPublicProfile.defaults.user");
+    t("personalProfile.defaults.user");
 
-  // Используем тот же источник телефона, что и в личном профиле.
+  // Тот же источник телефона.
   const phone = String(user.phone || profile.phone || "").trim();
   const whatsappNumber = phone.replace(/\D/g, "");
 
@@ -49,7 +51,19 @@ export default function PersonalPublicProfile({
     user.role || user.user_type || profile.role || profile.user_type || "user";
 
   const profileType = getProfileType(role, t);
-  const ads = Array.isArray(user.ads) ? user.ads : [];
+
+  // Используем объявления, переданные вместе с пользователем.
+  const ads = Array.isArray(user.ads)
+    ? user.ads
+    : Array.isArray(profile.ads)
+      ? profile.ads
+      : Array.isArray(profile.listings)
+        ? profile.listings
+        : Array.isArray(profile.properties)
+          ? profile.properties
+          : [];
+
+  const favorites = favIds instanceof Set ? favIds : new Set();
 
   return (
     <main className={styles.page}>
@@ -61,10 +75,10 @@ export default function PersonalPublicProfile({
           <span>{t("personalPublicProfile.topBar.home")}</span>
         </Link>
 
-        {/* Публичная информация профиля */}
+        {/* Публичная информация пользователя */}
         <motion.section
           className={styles.profileCard}
-          initial={{ opacity: 0, y: 25 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: "easeOut" }}
         >
@@ -74,7 +88,14 @@ export default function PersonalPublicProfile({
             <div className={styles.avatarWrapper}>
               <div className={styles.avatar}>
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={fullName} />
+                  <img
+                    src={avatarUrl}
+                    alt={fullName}
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.style.display = "none";
+                    }}
+                  />
                 ) : (
                   <User size={48} />
                 )}
@@ -93,25 +114,14 @@ export default function PersonalPublicProfile({
                 <span>{profileType.aboutTitle}</span>
               </div>
 
-              {/* Контакты всегда отображаются в публичном профиле */}
+              {/* Контакты */}
               <div className={styles.contacts}>
-                <div className={styles.contactHeading}>
-                  <Phone size={17} />
-                  <span>
-                    {t("personalPublicProfile.contactsTitle") ||
-                      "Контактная информация"}
-                  </span>
-                </div>
-
                 {phone ? (
                   <>
-                    <a
-                      href={`tel:${phone.replace(/[^\d+]/g, "")}`}
-                      className={styles.phone}
-                    >
+                    <div className={styles.phone}>
                       <Phone size={17} />
                       <span>{phone}</span>
-                    </a>
+                    </div>
 
                     {whatsappNumber && (
                       <a
@@ -119,17 +129,17 @@ export default function PersonalPublicProfile({
                         target="_blank"
                         rel="noopener noreferrer"
                         className={styles.whatsapp}
+                        aria-label="WhatsApp"
                       >
                         <MessageCircle size={17} />
-                        <span>{t("personalPublicProfile.whatsapp")}</span>
+                        <span>WhatsApp</span>
                         <ArrowUpRight size={14} />
                       </a>
                     )}
                   </>
                 ) : (
                   <p className={styles.noContact}>
-                    {t("personalProfile.defaults.noPhone") ||
-                      "Номер телефона не указан"}
+                    {t("personalProfile.defaults.noPhone")}
                   </p>
                 )}
               </div>
@@ -137,7 +147,7 @@ export default function PersonalPublicProfile({
           </div>
         </motion.section>
 
-        {/* О пользователе */}
+        {/* Информация о пользователе */}
         <motion.section
           className={styles.aboutCard}
           initial={{ opacity: 0, y: 20 }}
@@ -152,10 +162,10 @@ export default function PersonalPublicProfile({
             <h2>{profileType.aboutTitle}</h2>
           </div>
 
-          <p>{profile.about || profileType.defaultAbout}</p>
+          <p>{profile.about || t("personalProfile.about.empty")}</p>
         </motion.section>
 
-        {/* Объявления пользователя */}
+        {/* Публичные объявления пользователя */}
         <motion.section
           className={styles.listingsSection}
           initial={{ opacity: 0, y: 20 }}
@@ -176,13 +186,22 @@ export default function PersonalPublicProfile({
 
           {ads.length > 0 ? (
             <div className={styles.listingGrid}>
-              {ads.map((item) => (
-                <ListingCard
-                  key={item.id}
-                  item={mapListingData(item)}
-                  isFavorite={favIds.has(item.id)}
-                  onFavoriteClick={onFavoriteClick}
-                />
+              {ads.map((item, index) => (
+                <motion.div
+                  key={item.id ?? item.ad_id ?? index}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: 0.3,
+                    delay: Math.min(index * 0.05, 0.3),
+                  }}
+                >
+                  <ListingCard
+                    item={mapListingData(item)}
+                    isFavorite={favorites.has(item.id)}
+                    onFavoriteClick={onFavoriteClick}
+                  />
+                </motion.div>
               ))}
             </div>
           ) : (
