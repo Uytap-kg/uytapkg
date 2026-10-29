@@ -3,29 +3,30 @@
 ========================================================= */
 
 .page {
-  margin-left: 250px;
-  width: calc(100% - 250px);
   min-height: 100vh;
-  box-sizing: border-box;
-  padding: 28px 32px;
+  background: #f7f8fc;
+  color: #172033;
+  font-family: inherit;
 }
 
 .content {
-  width: 100%;
+  min-height: 100vh;
   min-width: 0;
-  box-sizing: border-box;
+  margin-left: 250px;
+  display: flex;
+  flex-direction: column;
 }
 
 .main {
   width: 100%;
-  max-width: 1700px;
+  max-width: 1800px;
   margin: 0 auto;
-  padding: 28px 30px 40px;
+  padding: 28px 32px 40px;
   box-sizing: border-box;
 }
 
 /* =========================================================
-   TOP / HEADING
+   TOP SECTION
 ========================================================= */
 
 .top {
@@ -48,61 +49,58 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 50px;
-  height: 50px;
-  border: 1px solid #ddd6fe;
+  width: 52px;
+  height: 52px;
+  border: 1px solid #e8ddff;
   border-radius: 15px;
-  background: #f5f3ff;
+  background: linear-gradient(145deg, #f5f0ff, #ede5ff);
   color: #7c3aed;
 }
 
 .headingIcon svg {
-  width: 23px;
-  height: 23px;
+  width: 25px;
+  height: 25px;
+  stroke-width: 1.8;
 }
 
 .heading h1 {
   margin: 0;
-  color: #111827;
-  font-size: 27px;
+  color: #172033;
+  font-size: 26px;
+  line-height: 1.25;
   font-weight: 800;
-  line-height: 1.3;
-  letter-spacing: -0.7px;
+  letter-spacing: -0.8px;
 }
 
 .heading p {
-  max-width: 650px;
-  margin: 6px 0 0;
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
+  max-width: 600px;
+  margin: 7px 0 0;
+  color: #7b8496;
+  font-size: 12px;
+  line-height: 1.65;
 }
-
-/* =========================================================
-   BUTTONS
-========================================================= */
 
 .addButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
   flex-shrink: 0;
+  gap: 9px;
   min-height: 44px;
-  padding: 0 18px;
+  padding: 0 17px;
   border: 1px solid #7c3aed;
   border-radius: 11px;
-  background: #7c3aed;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
   color: #ffffff;
   font-family: inherit;
   font-size: 12px;
   font-weight: 750;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.17);
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
   transition:
-    background 0.2s ease,
+    transform 0.2s ease,
     box-shadow 0.2s ease,
-    transform 0.2s ease;
+    background 0.2s ease;
 }
 
 .addButton svg {
@@ -111,9 +109,9 @@
 }
 
 .addButton:hover {
-  background: #6d28d9;
-  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.23);
   transform: translateY(-1px);
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  box-shadow: 0 7px 18px rgba(124, 58, 237, 0.23);
 }
 
 .addButton:active {
@@ -121,68 +119,59 @@
 }
 
 /* =========================================================
-   CONTROLS / SEARCH
+   SEARCH & STATISTICS
 ========================================================= */
 
 .controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 20px;
   margin-bottom: 18px;
-  padding: 17px 19px;
-  border: 1px solid #e5e7eb;
-  border-radius: 15px;
-  background: #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.025);
 }
 
 .search {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
   width: 100%;
-  max-width: 470px;
-  min-width: 0;
-  height: 43px;
+  max-width: 430px;
+  min-height: 43px;
   padding: 0 13px;
   box-sizing: border-box;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #f8fafc;
+  border: 1px solid #e5e8f0;
+  border-radius: 11px;
+  background: #ffffff;
   transition:
     border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
+    box-shadow 0.2s ease;
 }
 
 .search:focus-within {
   border-color: #a78bfa;
-  background: #ffffff;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08);
 }
 
 .search > svg {
-  flex-shrink: 0;
   width: 17px;
   height: 17px;
-  color: #94a3b8;
+  flex-shrink: 0;
+  color: #929bad;
 }
 
 .search input {
   width: 100%;
   min-width: 0;
-  padding: 0;
   border: none;
   outline: none;
   background: transparent;
-  color: #1e293b;
+  color: #263247;
   font-family: inherit;
   font-size: 12px;
 }
 
 .search input::placeholder {
-  color: #94a3b8;
+  color: #a0a8b7;
 }
 
 .stats {
@@ -193,21 +182,22 @@
   gap: 10px;
 }
 
-.stats span {
+.stats > span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 11px;
-  border: 1px solid #e2e8f0;
+  min-height: 35px;
+  padding: 0 12px;
+  border: 1px solid #e5e8f0;
   border-radius: 9px;
-  background: #f8fafc;
-  color: #64748b;
+  background: #ffffff;
+  color: #7b8496;
   font-size: 11px;
   white-space: nowrap;
 }
 
 .stats strong {
-  color: #1e293b;
+  color: #263247;
   font-size: 12px;
   font-weight: 800;
 }
@@ -218,53 +208,46 @@
 
 .list {
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e6e9f1;
   border-radius: 15px;
   background: #ffffff;
-  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.025);
+  box-shadow: 0 3px 12px rgba(26, 32, 44, 0.025);
 }
 
-.listHeader {
-  display: grid;
-  grid-template-columns:
-    minmax(180px, 1.5fr)
-    minmax(140px, 1.2fr)
-    minmax(85px, 0.65fr)
-    minmax(140px, 1.15fr)
-    minmax(95px, 0.7fr)
-    minmax(95px, 0.65fr);
-  align-items: center;
-  gap: 15px;
-  padding: 15px 20px;
-  border-bottom: 1px solid #e9edf3;
-  background: #f8fafc;
-}
-
-.listHeader span {
-  color: #64748b;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.35px;
-  text-transform: uppercase;
-}
-
-/* =========================================================
-   LAWYER ROW
-========================================================= */
-
+.listHeader,
 .lawyerRow {
   display: grid;
   grid-template-columns:
-    minmax(180px, 1.5fr)
-    minmax(140px, 1.2fr)
-    minmax(85px, 0.65fr)
-    minmax(140px, 1.15fr)
-    minmax(95px, 0.7fr)
-    minmax(95px, 0.65fr);
+    minmax(150px, 1.5fr)
+    minmax(130px, 1.35fr)
+    minmax(75px, 0.7fr)
+    minmax(110px, 1fr)
+    minmax(95px, 0.8fr)
+    82px;
   align-items: center;
   gap: 15px;
-  padding: 17px 20px;
-  border-bottom: 1px solid #f1f5f9;
+}
+
+.listHeader {
+  min-height: 48px;
+  padding: 0 19px;
+  border-bottom: 1px solid #edf0f5;
+  background: #fafbfe;
+  color: #929bad;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.45px;
+  text-transform: uppercase;
+}
+
+.listHeader > span {
+  min-width: 0;
+}
+
+.lawyerRow {
+  min-height: 88px;
+  padding: 13px 19px;
+  border-bottom: 1px solid #f0f2f7;
   transition: background 0.18s ease;
 }
 
@@ -276,13 +259,19 @@
   background: #fcfbff;
 }
 
-.inactive {
-  background: #fafafa;
+.lawyerRow.inactive {
+  background: #fbfbfd;
 }
 
-.inactive .name strong {
-  color: #64748b;
+.inactive .name strong,
+.inactive .specialization,
+.inactive .experience {
+  color: #929bad;
 }
+
+/* =========================================================
+   LAWYER NAME
+========================================================= */
 
 .name {
   display: flex;
@@ -296,12 +285,12 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 42px;
-  height: 42px;
-  border: 1px solid #ddd6fe;
+  width: 39px;
+  height: 39px;
+  border: 1px solid #e5dcff;
   border-radius: 12px;
-  background: linear-gradient(135deg, #f5f3ff, #ede9fe);
-  color: #6d28d9;
+  background: linear-gradient(145deg, #f5f0ff, #ebe3ff);
+  color: #7c3aed;
   font-size: 12px;
   font-weight: 850;
   text-transform: uppercase;
@@ -315,47 +304,39 @@
 }
 
 .name strong {
-  overflow-wrap: anywhere;
-  color: #1e293b;
-  font-size: 12px;
-  font-weight: 800;
+  overflow: hidden;
+  color: #263247;
+  font-size: 11px;
   line-height: 1.5;
+  font-weight: 750;
+  overflow-wrap: anywhere;
 }
 
 .name span {
-  overflow-wrap: anywhere;
-  color: #94a3b8;
-  font-size: 11px;
+  overflow: hidden;
+  color: #929bad;
+  font-size: 10px;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 /* =========================================================
-   SPECIALIZATION / EXPERIENCE
+   SPECIALIZATION & EXPERIENCE
 ========================================================= */
 
 .specialization {
   min-width: 0;
-}
-
-.specialization span {
-  display: inline-block;
-  max-width: 100%;
-  padding: 6px 9px;
-  border: 1px solid #ede9fe;
-  border-radius: 7px;
-  background: #f5f3ff;
-  color: #6d28d9;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.5;
+  color: #4b5568;
+  font-size: 11px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
 .experience {
-  color: #475569;
+  color: #374151;
   font-size: 11px;
+  line-height: 1.5;
   font-weight: 700;
-  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
@@ -367,16 +348,16 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 
 .contacts a {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   max-width: 100%;
-  color: #64748b;
+  color: #6b7280;
   font-size: 10px;
   line-height: 1.5;
   text-decoration: none;
@@ -385,9 +366,9 @@
 }
 
 .contacts a svg {
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
-  width: 14px;
-  height: 14px;
   color: #8b5cf6;
 }
 
@@ -407,9 +388,10 @@
 }
 
 .status > span {
-  color: #64748b;
+  color: #647084;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 .switch {
@@ -417,43 +399,39 @@
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  width: 35px;
-  height: 20px;
+  width: 34px;
+  height: 19px;
   padding: 2px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #dce1e9;
   border-radius: 999px;
-  background: #e2e8f0;
+  background: #e5e7eb;
   cursor: pointer;
   transition:
     background 0.2s ease,
     border-color 0.2s ease;
 }
 
-.switch span {
+.switch > span {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
   transition: transform 0.2s ease;
 }
 
-.switchActive {
+.switch.switchActive {
   border-color: #7c3aed;
   background: #7c3aed;
 }
 
-.switchActive span {
+.switch.switchActive > span {
   transform: translateX(15px);
 }
 
-.switch:hover {
-  border-color: #a78bfa;
-}
-
 .switch:focus-visible {
-  outline: 2px solid #a78bfa;
+  outline: 3px solid rgba(139, 92, 246, 0.2);
   outline-offset: 3px;
 }
 
@@ -464,6 +442,7 @@
 .actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 7px;
 }
 
@@ -472,30 +451,30 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  border: 1px solid #e2e8f0;
+  width: 31px;
+  height: 31px;
+  border: 1px solid #e6e9f1;
   border-radius: 9px;
   background: #ffffff;
-  color: #64748b;
+  color: #7b8496;
   cursor: pointer;
   transition:
-    background 0.2s ease,
     color 0.2s ease,
     border-color 0.2s ease,
-    transform 0.2s ease;
+    background 0.2s ease,
+    transform 0.15s ease;
 }
 
 .actions button svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 .actions button:hover {
-  border-color: #c4b5fd;
+  transform: translateY(-1px);
+  border-color: #ddd6fe;
   background: #f5f3ff;
   color: #7c3aed;
-  transform: translateY(-1px);
 }
 
 .actions button.delete:hover {
@@ -504,13 +483,17 @@
   color: #e11d48;
 }
 
+.actions button:active {
+  transform: scale(0.96);
+}
+
 .actions button:focus-visible {
-  outline: 2px solid #a78bfa;
+  outline: 3px solid rgba(139, 92, 246, 0.2);
   outline-offset: 2px;
 }
 
 /* =========================================================
-   EMPTY / LOADING / ERROR
+   LOADING / EMPTY / ERROR
 ========================================================= */
 
 .empty {
@@ -519,36 +502,39 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 240px;
+  min-height: 230px;
   padding: 30px 20px;
+  box-sizing: border-box;
+  color: #929bad;
   text-align: center;
 }
 
 .empty > svg {
-  width: 32px;
-  height: 32px;
+  width: 29px;
+  height: 29px;
   color: #a78bfa;
+  stroke-width: 1.7;
 }
 
 .empty strong {
-  color: #334155;
+  color: #374151;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 750;
 }
 
-.empty span {
-  max-width: 420px;
-  color: #94a3b8;
-  font-size: 12px;
-  line-height: 1.6;
+.empty > span {
+  max-width: 440px;
+  color: #929bad;
+  font-size: 11px;
+  line-height: 1.7;
   overflow-wrap: anywhere;
 }
 
 .spin {
-  animation: spin 1s linear infinite;
+  animation: lawyerSpin 1s linear infinite;
 }
 
-@keyframes spin {
+@keyframes lawyerSpin {
   to {
     transform: rotate(360deg);
   }
@@ -561,36 +547,45 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
   box-sizing: border-box;
   background: rgba(15, 23, 42, 0.48);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: lawyerFadeIn 0.18s ease;
 }
-
-/* =========================================================
-   MODAL
-========================================================= */
 
 .modal {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 620px;
+  max-width: 590px;
   max-height: calc(100dvh - 40px);
   overflow: hidden;
   border: 1px solid #e5e7eb;
-  border-radius: 20px;
+  border-radius: 19px;
   background: #ffffff;
-  box-shadow: 0 25px 80px rgba(15, 23, 42, 0.24);
-  animation: modalEnter 0.2s ease-out;
+  box-shadow:
+    0 25px 70px rgba(15, 23, 42, 0.2),
+    0 5px 18px rgba(15, 23, 42, 0.06);
+  animation: lawyerModalIn 0.2s ease;
 }
 
-@keyframes modalEnter {
+@keyframes lawyerFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lawyerModalIn {
   from {
     opacity: 0;
     transform: translateY(8px) scale(0.99);
@@ -602,28 +597,32 @@
   }
 }
 
+/* =========================================================
+   MODAL HEADER
+========================================================= */
+
 .modalHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
-  padding: 23px 25px 20px;
+  gap: 20px;
+  padding: 23px 25px 19px;
   border-bottom: 1px solid #edf0f5;
 }
 
 .modalHeader h2 {
   margin: 0;
-  color: #111827;
+  color: #172033;
   font-size: 20px;
+  line-height: 1.35;
   font-weight: 800;
-  line-height: 1.4;
   letter-spacing: -0.4px;
 }
 
 .modalHeader p {
   margin: 6px 0 0;
-  color: #64748b;
-  font-size: 12px;
+  color: #929bad;
+  font-size: 11px;
   line-height: 1.6;
 }
 
@@ -632,16 +631,16 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 35px;
-  height: 35px;
-  border: 1px solid #e2e8f0;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e6e9f1;
   border-radius: 10px;
-  background: #f8fafc;
-  color: #64748b;
+  background: #f9fafb;
+  color: #7b8496;
   cursor: pointer;
   transition:
-    background 0.2s ease,
     color 0.2s ease,
+    background 0.2s ease,
     border-color 0.2s ease;
 }
 
@@ -656,24 +655,42 @@
   color: #e11d48;
 }
 
+.close:focus-visible {
+  outline: 3px solid rgba(139, 92, 246, 0.2);
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   MODAL FORM
+========================================================= */
+
 .modal form {
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
 }
 
-/* =========================================================
-   FORM BODY
-========================================================= */
-
 .formBody {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 17px;
-  padding: 23px 25px;
+  align-content: start;
+  gap: 17px 16px;
+  padding: 22px 25px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d8dce5 transparent;
+}
+
+.formBody::-webkit-scrollbar {
+  width: 6px;
+}
+
+.formBody::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #d8dce5;
 }
 
 .field {
@@ -683,43 +700,54 @@
   min-width: 0;
 }
 
+.field:nth-of-type(1),
+.field:nth-of-type(2),
+.field:nth-of-type(3),
+.field:nth-of-type(4),
+.field:nth-of-type(8),
+.activeField {
+  grid-column: 1 / -1;
+}
+
 .field label {
-  color: #475569;
+  color: #4b5568;
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .field input,
 .field textarea {
+  display: block;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: 11px 12px;
-  border: 1px solid #dfe5ee;
+  border: 1px solid #e1e5ed;
   border-radius: 10px;
   outline: none;
   background: #ffffff;
-  color: #1e293b;
+  color: #263247;
   font-family: inherit;
   font-size: 12px;
-  line-height: 1.6;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
 }
 
 .field input {
-  min-height: 42px;
+  height: 42px;
+  padding: 0 12px;
 }
 
 .field textarea {
-  min-height: 110px;
+  min-height: 105px;
+  padding: 11px 12px;
   resize: vertical;
+  line-height: 1.65;
 }
 
 .field input::placeholder,
 .field textarea::placeholder {
-  color: #a0aec0;
+  color: #a0a8b7;
 }
 
 .field input:focus,
@@ -731,13 +759,8 @@
 .field input:disabled,
 .field textarea:disabled {
   background: #f8fafc;
+  color: #929bad;
   cursor: not-allowed;
-}
-
-/* Description occupies the entire row */
-
-.field:has(textarea) {
-  grid-column: 1 / -1;
 }
 
 /* =========================================================
@@ -745,17 +768,18 @@
 ========================================================= */
 
 .submitError {
+  grid-column: 1 / -1;
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  grid-column: 1 / -1;
-  padding: 12px 13px;
+  padding: 11px 12px;
   border: 1px solid #fecaca;
   border-radius: 10px;
   background: #fef2f2;
   color: #b91c1c;
   font-size: 11px;
   line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .submitError svg {
@@ -768,58 +792,58 @@
 ========================================================= */
 
 .activeField {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
-  grid-column: 1 / -1;
-  padding: 14px;
-  border: 1px solid #e5e7eb;
+  justify-content: space-between;
+  gap: 15px;
+  min-height: 66px;
+  padding: 13px 14px;
+  box-sizing: border-box;
+  border: 1px solid #e7e2f8;
   border-radius: 12px;
-  background: #f8fafc;
+  background: #faf8ff;
   cursor: pointer;
 }
 
 .activeField > div {
   display: flex;
-  flex: 1;
   flex-direction: column;
   gap: 5px;
   min-width: 0;
 }
 
 .activeField strong {
-  color: #334155;
-  font-size: 12px;
-  font-weight: 800;
+  color: #374151;
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .activeField > div > span {
-  color: #64748b;
+  color: #929bad;
   font-size: 10px;
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
-.activeField input {
+.activeField input[type="checkbox"] {
   position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
   opacity: 0;
-  pointer-events: none;
 }
 
 .checkbox {
   position: relative;
-  display: flex;
-  align-items: center;
+  display: block;
   flex-shrink: 0;
-  width: 38px;
-  height: 22px;
+  width: 37px;
+  height: 21px;
   padding: 3px;
   box-sizing: border-box;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #dce1e9;
   border-radius: 999px;
-  background: #e2e8f0;
+  background: #dfe3eb;
   transition:
     background 0.2s ease,
     border-color 0.2s ease;
@@ -827,8 +851,8 @@
 
 .checkbox > span {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
@@ -841,11 +865,11 @@
 }
 
 .activeField input:checked + .checkbox > span {
-  transform: translateX(16px);
+  transform: translateX(15px);
 }
 
 .activeField input:focus-visible + .checkbox {
-  outline: 2px solid #a78bfa;
+  outline: 3px solid rgba(139, 92, 246, 0.22);
   outline-offset: 3px;
 }
 
@@ -871,40 +895,40 @@
   gap: 8px;
   min-height: 41px;
   padding: 0 16px;
-  border: 1px solid transparent;
   border-radius: 10px;
   font-family: inherit;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 750;
   cursor: pointer;
   transition:
+    transform 0.15s ease,
     background 0.2s ease,
     border-color 0.2s ease,
-    color 0.2s ease,
-    transform 0.15s ease;
+    box-shadow 0.2s ease;
 }
 
 .cancelButton {
-  border-color: #e2e8f0;
+  border: 1px solid #e2e6ee;
   background: #ffffff;
-  color: #475569;
+  color: #647084;
 }
 
 .cancelButton:hover:not(:disabled) {
-  border-color: #cbd5e1;
+  border-color: #cbd2de;
   background: #f8fafc;
 }
 
 .saveButton {
-  border-color: #7c3aed;
-  background: #7c3aed;
+  border: 1px solid #7c3aed;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
   color: #ffffff;
-  box-shadow: 0 3px 8px rgba(124, 58, 237, 0.15);
+  box-shadow: 0 3px 9px rgba(124, 58, 237, 0.15);
 }
 
 .saveButton:hover:not(:disabled) {
   border-color: #6d28d9;
-  background: #6d28d9;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  box-shadow: 0 5px 13px rgba(124, 58, 237, 0.22);
 }
 
 .cancelButton:active:not(:disabled),
@@ -914,61 +938,79 @@
 
 .cancelButton:disabled,
 .saveButton:disabled {
-  opacity: 0.55;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 .cancelButton:focus-visible,
-.saveButton:focus-visible,
-.close:focus-visible {
-  outline: 2px solid #a78bfa;
-  outline-offset: 3px;
+.saveButton:focus-visible {
+  outline: 3px solid rgba(139, 92, 246, 0.2);
+  outline-offset: 2px;
 }
 
 /* =========================================================
-   RESPONSIVE: TABLET
+   RESPONSIVE — TABLET
 ========================================================= */
 
 @media (max-width: 1250px) {
   .main {
-    padding: 24px 22px 35px;
-  }
-
-  .list {
-    overflow-x: auto;
+    padding-right: 22px;
+    padding-left: 22px;
   }
 
   .listHeader,
   .lawyerRow {
-    min-width: 950px;
+    grid-template-columns:
+      minmax(135px, 1.4fr)
+      minmax(115px, 1.2fr)
+      minmax(65px, 0.65fr)
+      minmax(95px, 0.95fr)
+      minmax(83px, 0.75fr)
+      72px;
+    gap: 10px;
+  }
+
+  .listHeader {
+    padding-right: 14px;
+    padding-left: 14px;
+    font-size: 8px;
+  }
+
+  .lawyerRow {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  .name {
+    gap: 8px;
+  }
+
+  .status {
+    gap: 5px;
+  }
+
+  .status > span {
+    font-size: 9px;
   }
 }
 
 /* =========================================================
-   RESPONSIVE: MOBILE
+   RESPONSIVE — COMPACT DESKTOP
 ========================================================= */
 
-@media (max-width: 700px) {
+@media (max-width: 1000px) and (min-width: 701px) {
   .main {
-    padding: 20px 14px 28px;
+    padding: 23px 18px 32px;
   }
 
   .top {
     align-items: flex-start;
-    flex-direction: column;
-    gap: 17px;
-    margin-bottom: 20px;
-  }
-
-  .heading {
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .headingIcon {
-    width: 43px;
-    height: 43px;
-    border-radius: 12px;
+    gap: 15px;
   }
 
   .heading h1 {
@@ -976,18 +1018,17 @@
   }
 
   .heading p {
-    font-size: 12px;
+    max-width: 400px;
   }
 
   .addButton {
-    width: 100%;
-    min-height: 44px;
+    padding: 0 12px;
+    font-size: 11px;
   }
 
   .controls {
-    align-items: stretch;
+    align-items: flex-start;
     flex-direction: column;
-    padding: 13px;
     gap: 12px;
   }
 
@@ -1000,26 +1041,204 @@
   }
 
   .list {
-    border-radius: 12px;
+    overflow-x: auto;
   }
 
   .listHeader,
   .lawyerRow {
-    min-width: 900px;
+    min-width: 790px;
+  }
+}
+
+/* =========================================================
+   RESPONSIVE — MOBILE
+   Sidebar becomes a top navigation at 700px.
+========================================================= */
+
+@media (max-width: 700px) {
+  .content {
+    margin-left: 0;
+    min-height: auto;
+    width: 100%;
+  }
+
+  .main {
+    padding: 22px 16px 30px;
+  }
+
+  .top {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 17px;
+    margin-bottom: 21px;
+  }
+
+  .heading {
+    gap: 12px;
+  }
+
+  .headingIcon {
+    width: 45px;
+    height: 45px;
+    border-radius: 13px;
+  }
+
+  .headingIcon svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .heading h1 {
+    font-size: 23px;
+  }
+
+  .heading p {
+    font-size: 11px;
+  }
+
+  .addButton {
+    width: 100%;
+    min-height: 43px;
+  }
+
+  .controls {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 15px;
+  }
+
+  .search {
+    max-width: none;
+  }
+
+  .stats {
+    justify-content: flex-start;
+  }
+
+  .list {
+    overflow: visible;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .listHeader {
+    display: none;
+  }
+
+  .lawyerRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 15px 12px;
+    margin-bottom: 12px;
+    padding: 15px;
+    border: 1px solid #e6e9f1;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(26, 32, 44, 0.025);
+  }
+
+  .lawyerRow:last-child {
+    border-bottom: 1px solid #e6e9f1;
+  }
+
+  .lawyerRow:hover {
+    background: #ffffff;
+  }
+
+  .name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .name strong {
+    font-size: 12px;
+  }
+
+  .name span {
+    font-size: 10px;
+  }
+
+  .actions {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  .specialization {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-top: 11px;
+    border-top: 1px solid #f0f2f7;
+    font-size: 11px;
+  }
+
+  .specialization::before {
+    display: block;
+    margin-bottom: 4px;
+    color: #929bad;
+    content: "Специализация";
+    font-size: 9px;
+    font-weight: 750;
+  }
+
+  .experience {
+    grid-column: 1;
+    grid-row: 3;
+    font-size: 11px;
+  }
+
+  .experience::before {
+    display: block;
+    margin-bottom: 4px;
+    color: #929bad;
+    content: "Опыт работы";
+    font-size: 9px;
+    font-weight: 750;
+  }
+
+  .contacts {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    padding-top: 11px;
+    border-top: 1px solid #f0f2f7;
+  }
+
+  .contacts a {
+    font-size: 11px;
+  }
+
+  .status {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: end;
+    align-self: center;
+  }
+
+  .status > span {
+    font-size: 10px;
+  }
+
+  .empty {
+    min-height: 190px;
+    border: 1px solid #e6e9f1;
+    border-radius: 14px;
+    background: #ffffff;
   }
 
   .overlay {
     align-items: center;
-    padding: 10px;
+    padding: 12px;
   }
 
   .modal {
-    max-height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 24px);
     border-radius: 16px;
   }
 
   .modalHeader {
-    padding: 19px 17px 16px;
+    padding: 19px 19px 16px;
   }
 
   .modalHeader h2 {
@@ -1027,23 +1246,22 @@
   }
 
   .formBody {
-    gap: 14px;
-    padding: 18px 17px;
+    gap: 15px 12px;
+    padding: 19px;
   }
 
   .modalFooter {
-    padding: 14px 17px 17px;
+    padding: 15px 19px 18px;
   }
 }
 
 /* =========================================================
-   SMALL MOBILE
+   RESPONSIVE — SMALL MOBILE
 ========================================================= */
 
 @media (max-width: 480px) {
   .main {
-    padding-right: 10px;
-    padding-left: 10px;
+    padding: 18px 12px 25px;
   }
 
   .heading h1 {
@@ -1051,68 +1269,100 @@
   }
 
   .heading p {
-    font-size: 11px;
+    max-width: 100%;
+    font-size: 10px;
+  }
+
+  .stats {
+    gap: 7px;
+  }
+
+  .stats > span {
+    flex: 1;
+    justify-content: center;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .lawyerRow {
+    gap: 13px 8px;
+    padding: 13px;
+  }
+
+  .avatar {
+    width: 35px;
+    height: 35px;
+    border-radius: 10px;
+  }
+
+  .actions {
+    gap: 5px;
+  }
+
+  .actions button {
+    width: 29px;
+    height: 29px;
   }
 
   .formBody {
     grid-template-columns: minmax(0, 1fr);
     gap: 14px;
+    padding: 17px;
   }
 
-  .field:has(textarea),
-  .submitError,
+  .field:nth-of-type(n),
   .activeField {
-    grid-column: auto;
+    grid-column: 1;
   }
 
   .modalHeader {
-    gap: 10px;
-    padding: 17px 14px 14px;
+    padding: 17px 16px 14px;
+  }
+
+  .modalHeader p {
+    font-size: 10px;
   }
 
   .formBody {
-    padding: 16px 14px;
+    padding: 16px;
   }
 
   .modalFooter {
     flex-direction: column-reverse;
-    padding: 13px 14px 15px;
+    align-items: stretch;
+    padding: 13px 16px 16px;
   }
 
   .cancelButton,
   .saveButton {
     width: 100%;
-    min-height: 43px;
+    min-height: 42px;
   }
 }
 
 /* =========================================================
-   REDUCED MOTION
+   ACCESSIBILITY
 ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
   .addButton,
   .search,
   .lawyerRow,
-  .contacts a,
   .switch,
-  .switch span,
+  .switch > span,
   .actions button,
+  .contacts a,
   .close,
-  .field input,
-  .field textarea,
-  .checkbox,
-  .checkbox > span,
   .cancelButton,
-  .saveButton {
+  .saveButton,
+  .checkbox,
+  .checkbox > span {
     transition: none;
-  }
-
-  .modal {
     animation: none;
   }
 
-  .spin {
-    animation-duration: 2s;
+  .overlay,
+  .modal {
+    animation: none;
   }
 }
