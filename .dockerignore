@@ -1,0 +1,15 @@
+_cleanup
+.git
+.github
+.env*
+*.env
+back-end.env
+node_modules
+**/node_modules
+.next
+dist
+build
+coverage
+*.log
+.DS_Store
+Thumbs.db
