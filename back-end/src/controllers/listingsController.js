@@ -1152,10 +1152,18 @@ export const createListing = async (req, res) => {
       verifiedComplexId = complexRow.id;
     }
 
+    const cleanType = String(propertyType).trim().toLowerCase();
+    const isCottage = cleanType === "cottage";
+    const mappedPropertyType = UI_TO_DB_PROPERTY_TYPE[cleanType] || cleanType;
+    const sanitizedFeats = sanitizeFeatures(features);
+    if (isCottage && !sanitizedFeats.houseType) {
+      sanitizedFeats.houseType = COTTAGE_HOUSE_TYPE;
+    }
+
     const listingPayload = {
       title,
       description,
-      property_type: propertyType,
+      property_type: mappedPropertyType,
       deal_type: dealType,
       rent_period: dealType === "rent" ? rentPeriod : null,
       region,
@@ -1171,9 +1179,9 @@ export const createListing = async (req, res) => {
       rooms: rooms ? Number(rooms) : null,
       floor: floor ? Number(floor) : null,
       total_floors: totalFloors ? Number(totalFloors) : null,
-      is_resort: Boolean(isResort),
+      is_resort: Boolean(isResort) || isCottage,
       resort_filters: mergedResortFilters,
-      features: { ...sanitizeFeatures(features), residentialComplexId: verifiedComplexId },
+      features: { ...sanitizedFeats, residentialComplexId: verifiedComplexId },
       status: initialStatus,
       promotion_status,
       is_urgent,
@@ -1562,7 +1570,14 @@ export const updateListing = async (req, res) => {
 
     if (data.title !== undefined) updates.title = data.title;
     if (data.description !== undefined) updates.description = data.description;
-    if (data.propertyType !== undefined) updates.property_type = data.propertyType;
+    if (data.propertyType !== undefined) {
+      const cleanType = String(data.propertyType).trim().toLowerCase();
+      const isCottage = cleanType === "cottage";
+      updates.property_type = UI_TO_DB_PROPERTY_TYPE[cleanType] || cleanType;
+      if (isCottage && data.isResort === undefined && existingListing.is_resort === undefined) {
+        updates.is_resort = true;
+      }
+    }
     if (data.dealType !== undefined) updates.deal_type = data.dealType;
     if (data.rentPeriod !== undefined) updates.rent_period = data.rentPeriod;
     if (data.region !== undefined) updates.region = data.region;
@@ -1585,11 +1600,16 @@ export const updateListing = async (req, res) => {
     // создании, не доверяем сырому значению внутри присланного features (его
     // легко подделать в обход проверки), а валидируем отдельное поле
     // residentialComplexId и подставляем в features только проверенный ID.
-    if (data.features !== undefined || data.residentialComplexId !== undefined) {
+    if (data.features !== undefined || data.residentialComplexId !== undefined || (data.propertyType && String(data.propertyType).trim().toLowerCase() === "cottage")) {
       const nextFeatures =
         data.features !== undefined
           ? sanitizeFeatures(data.features)
           : sanitizeFeatures(existingListing.features || {});
+
+      const cleanType = data.propertyType ? String(data.propertyType).trim().toLowerCase() : null;
+      if (cleanType === "cottage" && !nextFeatures.houseType) {
+        nextFeatures.houseType = COTTAGE_HOUSE_TYPE;
+      }
 
       if (data.residentialComplexId !== undefined) {
         if (data.residentialComplexId === null) {

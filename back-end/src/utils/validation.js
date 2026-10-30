@@ -170,7 +170,7 @@ export const createListingSchema = z
       .max(255, "Заголовок не должен превышать 255 символов"),
     description: z.string().optional().nullable(),
     propertyType: z.enum(
-      ["apartment", "house", "land", "commercial", "room", "garage"],
+      ["apartment", "house", "land", "commercial", "room", "garage", "cottage", "parking"],
       {
         errorMap: () => ({ message: "Укажите корректный тип недвижимости" }),
       }
@@ -276,7 +276,7 @@ export const updateListingSchema = z
       .optional(),
     description: z.string().optional().nullable(),
     propertyType: z
-      .enum(["apartment", "house", "land", "commercial", "room", "garage"], {
+      .enum(["apartment", "house", "land", "commercial", "room", "garage", "cottage", "parking"], {
         errorMap: () => ({ message: "Укажите корректный тип недвижимости" }),
       })
       .optional(),

@@ -1,6 +1,15 @@
 const API_URL = "/api";
 
 import { saveAuth } from "@/utils/auth";
+import { compressImageFile } from "@/utils/imageResize";
+
+async function parseSafeJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
 // 1. register
 export async function registerUser(formData) {
@@ -593,9 +602,15 @@ export async function uploadImage(file) {
     body: form,
   });
 
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.message || "Ошибка при загрузке изображения");
+  const data = await parseSafeJson(response);
+  if (!response.ok || !data?.success) {
+    if (response.status === 413) {
+      throw new Error("Файл слишком большой. Пожалуйста, выберите файл до 2 МБ.");
+    }
+    if (response.status === 502 || response.status === 504) {
+      throw new Error("Сервер временно недоступен. Попробуйте позже.");
+    }
+    throw new Error(data?.message || "Ошибка при загрузке изображения");
   }
   return data.url;
 }
@@ -613,9 +628,15 @@ export async function uploadListingPhoto(token, file) {
     body: form,
   });
 
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.message || "Ошибка при загрузке фотографии");
+  const data = await parseSafeJson(response);
+  if (!response.ok || !data?.success) {
+    if (response.status === 413) {
+      throw new Error("Фото слишком большое. Пожалуйста, выберите фото до 8 МБ.");
+    }
+    if (response.status === 502 || response.status === 504) {
+      throw new Error("Сервер временно недоступен. Попробуйте позже.");
+    }
+    throw new Error(data?.message || "Ошибка при загрузке фотографии");
   }
   return data.url;
 }
@@ -633,16 +654,23 @@ export async function uploadComplexPhoto(token, file) {
     body: form,
   });
 
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.message || "Ошибка при загрузке фотографии ЖК");
+  const data = await parseSafeJson(response);
+  if (!response.ok || !data?.success) {
+    if (response.status === 413) {
+      throw new Error("Фото слишком большое. Пожалуйста, выберите фото до 8 МБ.");
+    }
+    if (response.status === 502 || response.status === 504) {
+      throw new Error("Сервер временно недоступен. Попробуйте позже.");
+    }
+    throw new Error(data?.message || "Ошибка при загрузке фотографии ЖК");
   }
   return data.url;
 }
 
 export async function uploadAvatar(token, file) {
   const form = new FormData();
-  form.append("avatar", file);
+  const readyFile = await compressImageFile(file);
+  form.append("avatar", readyFile);
 
   const response = await fetch(`${API_URL}/auth/avatar`, {
     method: "POST",
@@ -652,9 +680,15 @@ export async function uploadAvatar(token, file) {
     body: form,
   });
 
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.message || "Ошибка при загрузке аватара");
+  const data = await parseSafeJson(response);
+  if (!response.ok || !data?.success) {
+    if (response.status === 413) {
+      throw new Error("Файл слишком большой. Пожалуйста, выберите изображение до 5 МБ.");
+    }
+    if (response.status === 502 || response.status === 504) {
+      throw new Error("Сервер временно недоступен. Попробуйте позже.");
+    }
+    throw new Error(data?.message || "Ошибка при загрузке аватара");
   }
   return data;
 }
@@ -667,9 +701,9 @@ export async function deleteAvatar(token) {
     },
   });
 
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.message || "Ошибка при удалении аватара");
+  const data = await parseSafeJson(response);
+  if (!response.ok || !data?.success) {
+    throw new Error(data?.message || "Ошибка при удалении аватара");
   }
   return data;
 }
@@ -1269,9 +1303,15 @@ export async function uploadVerificationDocument(token, file) {
     body: form,
   });
 
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(data.message || "Ошибка при загрузке документа");
+  const data = await parseSafeJson(response);
+  if (!response.ok || !data?.success) {
+    if (response.status === 413) {
+      throw new Error("Документ слишком большой. Пожалуйста, выберите файл до 10 МБ.");
+    }
+    if (response.status === 502 || response.status === 504) {
+      throw new Error("Сервер временно недоступен. Попробуйте позже.");
+    }
+    throw new Error(data?.message || "Ошибка при загрузке документа");
   }
   return data;
 }

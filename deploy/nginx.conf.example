@@ -118,7 +118,7 @@ server {
     # --------------------------------------------------------------------------
     # 2. Тяжёлые и платные эндпоинты: AI-поиск и загрузка файлов (2 req/s, burst=6)
     # --------------------------------------------------------------------------
-    location ~ ^/api/(ai|upload) {
+    location ~ ^/api/(ai|upload|auth/avatar) {
         limit_req zone=uytap_api_heavy burst=6 nodelay;
         client_max_body_size 12m;
 

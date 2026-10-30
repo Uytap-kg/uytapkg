@@ -471,7 +471,10 @@ export default function AddProductPage() {
         offerType: form.offerType || null,
 
         // Дом
-        houseType: form.houseType || null,
+        houseType:
+          form.category === "cottage"
+            ? (form.houseType || "Коттедж")
+            : form.houseType || null,
 
         floors: form.floors || null,
 
@@ -651,7 +654,7 @@ export default function AddProductPage() {
         features,
 
         // Resort
-        isResort: isIssykKul,
+        isResort: isIssykKul || form.category === "cottage",
 
         resortFilters: {
           beachDistanceFrom: beachDistanceValue,

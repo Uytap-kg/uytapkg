@@ -20,7 +20,7 @@ import {
 
 import styles from "./DeveloperEditModal.module.css";
 
-import { getMe, updateMe } from "@/utils/api";
+import { getMe, updateMe, uploadAvatar as uploadAvatarRequest } from "@/utils/api";
 import { useLanguage } from "@/context/LanguageContext";
 
 export default function DeveloperEditModal({ user, close }) {
@@ -172,27 +172,7 @@ export default function DeveloperEditModal({ user, close }) {
        */
 
       if (logoFile) {
-        const formData = new FormData();
-
-        formData.append("avatar", logoFile);
-
-        const response = await fetch("/api/auth/avatar", {
-          method: "POST",
-
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-
-          body: formData,
-        });
-
-        const result = await response.json().catch(() => ({}));
-
-        if (!response.ok || !result.success) {
-          throw new Error(
-            result.message || t("developerEditModal.errors.logoUpload"),
-          );
-        }
+        await uploadAvatarRequest(token, logoFile);
       }
 
       /*
