@@ -290,7 +290,7 @@ export const register = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Ошибка валидации данных",
-        errors: validationResult.error.errors.map((e) => e.message),
+        errors: (validationResult.error.issues || validationResult.error.errors || []).map((e) => e.message),
       });
     }
 
@@ -799,7 +799,7 @@ export const updateMe = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Ошибка валидации данных",
-        errors: validationResult.error.errors.map((e) => e.message),
+        errors: (validationResult.error.issues || validationResult.error.errors || []).map((e) => e.message),
       });
     }
 
