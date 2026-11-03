@@ -441,7 +441,7 @@
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 14px;
 
-  background: rgba(20, 22, 30, 0.56);
+  background: transparent;
 
   color: #fff;
 
@@ -463,13 +463,6 @@
 
 .mainImage:hover .galleryArrow {
   opacity: 1;
-}
-
-.galleryArrow:hover {
-  background: #483df6;
-  border-color: #483df6;
-
-  box-shadow: 0 8px 25px rgba(72, 61, 246, 0.25);
 }
 
 .left {
