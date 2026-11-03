@@ -1259,7 +1259,6 @@ export default function ProductInfo({ product, router }) {
                   rel="noopener noreferrer"
                   className={styles.mapLink}
                 >
-                  <MapPin size={17} />
                   <span>Посмотреть на карте</span>
                   <ExternalLink size={14} />
                 </a>

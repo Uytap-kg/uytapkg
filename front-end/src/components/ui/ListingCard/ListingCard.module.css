@@ -2,26 +2,19 @@
   position: relative;
   display: flex;
   flex-direction: column;
-
   width: 100%;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-
   overflow: hidden;
-
   border: 1px solid #e1e5e2;
-  border-radius: 22px;
-
+  border-radius: 19px;
   background: #fff;
   color: #1f2421;
-
   cursor: pointer;
-
   box-shadow:
-    0 8px 28px rgba(31, 36, 33, 0.055),
-    0 2px 7px rgba(31, 36, 33, 0.025);
-
+    0 7px 23px rgba(31, 36, 33, 0.05),
+    0 2px 6px rgba(31, 36, 33, 0.025);
   transition:
     transform 0.25s ease,
     box-shadow 0.25s ease,
@@ -29,36 +22,29 @@
 }
 
 .card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-4px);
   border-color: rgba(72, 61, 246, 0.28);
-
   box-shadow:
-    0 18px 42px rgba(31, 36, 33, 0.09),
-    0 4px 12px rgba(72, 61, 246, 0.06);
+    0 15px 34px rgba(31, 36, 33, 0.085),
+    0 4px 10px rgba(72, 61, 246, 0.06);
 }
 
 .cardSelected {
   border-color: #483df6;
-
   box-shadow:
     0 0 0 2px rgba(72, 61, 246, 0.14),
-    0 18px 42px rgba(72, 61, 246, 0.14);
+    0 15px 34px rgba(72, 61, 246, 0.12);
 }
 
-/* =========================================================
-   IMAGE
-========================================================= */
+/* IMAGE */
 
 .image {
   position: relative;
-
   width: 100%;
   min-width: 0;
-  height: clamp(205px, 21vw, 270px);
-
+  height: clamp(185px, 19vw, 235px);
   overflow: hidden;
   isolation: isolate;
-
   background: #eef0ef;
 }
 
@@ -71,25 +57,20 @@
   transform: scale(1.035);
 }
 
-/* =========================================================
-   BADGES
-========================================================= */
+/* BADGES */
 
 .badges {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  top: 13px;
+  left: 13px;
   z-index: 3;
-
   display: flex;
   align-items: flex-start;
   flex-wrap: wrap;
-  gap: 7px;
-
+  gap: 6px;
   width: auto;
-  max-width: calc(100% - 75px);
+  max-width: calc(100% - 65px);
   min-width: 0;
-
   overflow: visible;
   pointer-events: none;
 }
@@ -98,122 +79,90 @@
 .type {
   min-width: 0;
   max-width: 100%;
-  min-height: 34px;
+  min-height: 30px;
   box-sizing: border-box;
-
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-
   flex: 0 1 auto;
-
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 10px;
-
-  font-size: 12px;
+  border-radius: 9px;
+  font-size: 11px;
   font-weight: 750;
   line-height: 1.2;
-
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-
-  box-shadow: 0 5px 15px rgba(31, 36, 33, 0.12);
-
+  box-shadow: 0 5px 13px rgba(31, 36, 33, 0.11);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
 .status svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
 }
 
-/* =========================================================
-   VIP
-========================================================= */
+/* VIP */
 
 .vip {
   background: linear-gradient(135deg, #fff9df, #f3df91);
   color: #795600;
-
   border-color: #dfbb42;
-
-  box-shadow: 0 5px 16px rgba(180, 137, 21, 0.22);
+  box-shadow: 0 5px 14px rgba(180, 137, 21, 0.2);
 }
 
-/* =========================================================
-   URGENT
-========================================================= */
+/* URGENT */
 
 .urgent {
   background: linear-gradient(135deg, #fff0ef, #ffc8c4);
   color: #b42318;
-
   border-color: #ef7770;
-
-  box-shadow: 0 5px 16px rgba(180, 35, 24, 0.18);
+  box-shadow: 0 5px 14px rgba(180, 35, 24, 0.16);
 }
 
-/* =========================================================
-   TOP
-========================================================= */
+/* TOP */
 
 .top {
   background: linear-gradient(135deg, #eef4ff, #c9dcff);
   color: #1747a6;
-
   border-color: #7ca7f8;
-
-  box-shadow: 0 5px 16px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 5px 14px rgba(37, 99, 235, 0.18);
 }
 
-/* =========================================================
-   PROPERTY TYPE
-========================================================= */
+/* PROPERTY TYPE */
 
 .type {
   background: rgba(255, 255, 255, 0.96);
   color: #483df6;
-
   border-color: rgba(72, 61, 246, 0.2);
 }
 
-/* =========================================================
-   FAVORITE
-========================================================= */
+/* FAVORITE */
 
 .favorite {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 12px;
+  right: 12px;
   z-index: 8;
-
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   padding: 0;
-
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-
   background: rgba(255, 255, 255, 0.95);
   color: #68716b;
-
   cursor: pointer;
-
-  box-shadow: 0 6px 18px rgba(31, 36, 33, 0.12);
-
+  box-shadow: 0 5px 15px rgba(31, 36, 33, 0.11);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-
   transition:
     background 0.2s ease,
     color 0.2s ease,
@@ -225,8 +174,7 @@
   background: #483df6;
   color: #fff;
   transform: scale(1.07);
-
-  box-shadow: 0 8px 22px rgba(72, 61, 246, 0.22);
+  box-shadow: 0 7px 18px rgba(72, 61, 246, 0.22);
 }
 
 .favorite:active {
@@ -234,70 +182,56 @@
 }
 
 .favorite svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
-/* =========================================================
-   CONTENT
-========================================================= */
+/* CONTENT */
 
 .content {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-
   display: flex;
   flex-direction: column;
-
-  padding: 22px;
+  padding: 18px;
 }
 
-/* =========================================================
-   TITLE
-========================================================= */
+/* TITLE */
 
 .content h2 {
   width: 100%;
   min-width: 0;
   margin: 0;
-
   color: #1f2421;
-
-  font-size: clamp(17px, 1.55vw, 20px);
+  font-size: clamp(15px, 1.4vw, 18px);
   line-height: 1.3;
   font-weight: 800;
-
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-
   overflow-wrap: anywhere;
 }
 
-/* =========================================================
-   LOCATION
-========================================================= */
+/* LOCATION */
 
 .location {
   width: 100%;
   min-width: 0;
-  margin-top: 12px;
-
+  margin-top: 10px;
   display: flex;
   align-items: center;
-  gap: 7px;
-
+  gap: 6px;
   color: #727b75;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.4;
 }
 
 .location svg {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
   color: #483df6;
 }
 
@@ -308,97 +242,74 @@
   white-space: nowrap;
 }
 
-/* =========================================================
-   DETAILS
-========================================================= */
+/* DETAILS */
 
 .details {
   width: 100%;
   min-width: 0;
-  margin-top: 17px;
-
+  margin-top: 14px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 6px;
 }
 
 .details span {
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-
-  padding: 7px 10px;
-
+  padding: 6px 9px;
   border: 1px solid #e1e5e2;
-  border-radius: 9px;
-
+  border-radius: 8px;
   background: #f7f8f7;
   color: #68716b;
-
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 650;
-
   overflow-wrap: anywhere;
 }
 
-/* =========================================================
-   BOTTOM
-========================================================= */
+/* BOTTOM */
 
 .bottom {
   width: 100%;
   min-width: 0;
-  margin-top: 20px;
-  padding-top: 17px;
-
+  margin-top: 16px;
+  padding-top: 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-
+  gap: 10px;
   border-top: 1px solid #e8ebe9;
 }
 
 .bottom strong {
   min-width: 0;
-
   color: #1f2421;
-
-  font-size: clamp(17px, 1.6vw, 20px);
+  font-size: clamp(15px, 1.45vw, 18px);
   line-height: 1.2;
   font-weight: 850;
-
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* =========================================================
-   MORE
-========================================================= */
+/* MORE */
 
 .more {
   min-width: 0;
-  height: 42px;
+  height: 38px;
   flex-shrink: 0;
   box-sizing: border-box;
-
-  padding: 0 17px;
-
+  padding: 0 14px;
   border: 1px solid #483df6;
-  border-radius: 11px;
-
+  border-radius: 10px;
   background: #483df6;
   color: #fff;
-
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 750;
   white-space: nowrap;
-
   cursor: pointer;
-
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
@@ -410,54 +321,41 @@
   background: #392ee0;
   border-color: #392ee0;
   transform: translateY(-2px);
-
-  box-shadow: 0 8px 20px rgba(72, 61, 246, 0.2);
+  box-shadow: 0 7px 17px rgba(72, 61, 246, 0.2);
 }
 
 .more:active {
   transform: translateY(0);
 }
 
-/* =========================================================
-   COMPARE SELECT
-========================================================= */
+/* COMPARE SELECT */
 
 .compareSelect {
   position: absolute;
-  top: 14px;
-  left: 14px;
+  top: 12px;
+  left: 12px;
   z-index: 10;
-
-  max-width: calc(100% - 75px);
-  min-height: 42px;
+  max-width: calc(100% - 65px);
+  min-height: 38px;
   box-sizing: border-box;
-
   display: flex;
   align-items: center;
-  gap: 8px;
-
-  padding: 6px 12px 6px 7px;
-
+  gap: 7px;
+  padding: 5px 10px 5px 6px;
   border: 1px solid rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-
+  border-radius: 11px;
   background: rgba(255, 255, 255, 0.96);
   color: #1f2421;
-
   font-family: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 750;
   white-space: nowrap;
-
   cursor: pointer;
-
   box-shadow:
-    0 7px 20px rgba(31, 36, 33, 0.18),
-    0 2px 6px rgba(31, 36, 33, 0.08);
-
+    0 6px 17px rgba(31, 36, 33, 0.16),
+    0 2px 5px rgba(31, 36, 33, 0.07);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-
   transition:
     background 0.2s ease,
     color 0.2s ease,
@@ -469,10 +367,9 @@
 .compareSelect:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: #483df6;
-
   box-shadow:
-    0 9px 24px rgba(72, 61, 246, 0.2),
-    0 3px 8px rgba(31, 36, 33, 0.08);
+    0 8px 20px rgba(72, 61, 246, 0.18),
+    0 3px 7px rgba(31, 36, 33, 0.07);
 }
 
 .compareSelect:active:not(:disabled) {
@@ -483,35 +380,29 @@
   background: #483df6;
   border-color: #483df6;
   color: #fff;
-
   box-shadow:
-    0 8px 22px rgba(72, 61, 246, 0.3),
-    0 2px 7px rgba(72, 61, 246, 0.18);
+    0 7px 19px rgba(72, 61, 246, 0.28),
+    0 2px 6px rgba(72, 61, 246, 0.16);
 }
 
 .compareSelectDisabled {
   opacity: 0.48;
   cursor: not-allowed;
-
   background: rgba(255, 255, 255, 0.8);
-  box-shadow: 0 5px 14px rgba(31, 36, 33, 0.08);
+  box-shadow: 0 5px 12px rgba(31, 36, 33, 0.07);
 }
 
 .compareCheckbox {
-  width: 27px;
-  height: 27px;
-  flex: 0 0 27px;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
   box-sizing: border-box;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   border: 2px solid #68716b;
-  border-radius: 8px;
-
+  border-radius: 7px;
   background: #fff;
-
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
@@ -525,8 +416,8 @@
 }
 
 .compareCheckbox svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   stroke-width: 3;
 }
 
@@ -537,18 +428,14 @@
   white-space: nowrap;
 }
 
-/* =========================================================
-   COMPARE MODE — MOVE BADGES
-========================================================= */
+/* COMPARE MODE */
 
 .badgesCompare,
 .image:has(.compareSelect) .badges {
-  top: 68px;
+  top: 61px;
 }
 
-/* =========================================================
-   FOCUS
-========================================================= */
+/* FOCUS */
 
 .card:focus-within {
   border-color: rgba(72, 61, 246, 0.35);
@@ -561,86 +448,23 @@
   outline-offset: 2px;
 }
 
-/* =========================================================
-   TABLET
-========================================================= */
+/* TABLET */
 
 @media (max-width: 900px) {
   .image {
-    height: 235px;
+    height: 215px;
   }
 
   .content {
-    padding: 20px;
+    padding: 17px;
   }
 
   .content h2 {
-    font-size: 19px;
+    font-size: 17px;
   }
 
   .location {
-    font-size: 13px;
-  }
-
-  .bottom strong {
-    font-size: 18px;
-  }
-
-  .more {
-    height: 40px;
-    padding: 0 15px;
-    font-size: 12px;
-  }
-}
-
-/* =========================================================
-   MOBILE
-========================================================= */
-
-@media (max-width: 700px) {
-  .card {
-    border-radius: 18px;
-  }
-
-  .image {
-    height: 230px;
-  }
-
-  .content {
-    padding: 18px;
-  }
-
-  .content h2 {
-    font-size: 18px;
-  }
-
-  .location {
-    margin-top: 10px;
-    gap: 6px;
     font-size: 12.5px;
-  }
-
-  .location svg {
-    width: 17px;
-    height: 17px;
-    flex-basis: 17px;
-  }
-
-  .details {
-    margin-top: 14px;
-    gap: 6px;
-  }
-
-  .details span {
-    padding: 6px 9px;
-    border-radius: 8px;
-    font-size: 11px;
-  }
-
-  .bottom {
-    margin-top: 18px;
-    padding-top: 14px;
-    gap: 9px;
   }
 
   .bottom strong {
@@ -648,88 +472,21 @@
   }
 
   .more {
-    height: 39px;
+    height: 37px;
     padding: 0 13px;
-    border-radius: 10px;
     font-size: 11.5px;
-  }
-
-  .badges {
-    top: 13px;
-    left: 13px;
-    gap: 6px;
-    max-width: calc(100% - 68px);
-  }
-
-  .status,
-  .type {
-    min-height: 31px;
-    padding: 0 9px;
-    border-radius: 9px;
-    font-size: 10.5px;
-  }
-
-  .status svg {
-    width: 13px;
-    height: 13px;
-  }
-
-  .favorite {
-    top: 12px;
-    right: 12px;
-    width: 40px;
-    height: 40px;
-  }
-
-  .favorite svg {
-    width: 19px;
-    height: 19px;
-  }
-
-  .compareSelect {
-    top: 12px;
-    left: 12px;
-    max-width: calc(100% - 68px);
-    min-height: 40px;
-    padding: 5px 10px 5px 6px;
-    gap: 7px;
-    border-radius: 11px;
-    font-size: 10.5px;
-  }
-
-  .compareCheckbox {
-    width: 26px;
-    height: 26px;
-    flex-basis: 26px;
-    border-radius: 7px;
-  }
-
-  .compareCheckbox svg {
-    width: 16px;
-    height: 16px;
-  }
-
-  .badgesCompare,
-  .image:has(.compareSelect) .badges {
-    top: 61px;
   }
 }
 
-/* =========================================================
-   SMALL MOBILE
-========================================================= */
+/* MOBILE */
 
-@media (max-width: 480px) {
-  .card:hover {
-    transform: none;
-
-    box-shadow:
-      0 8px 28px rgba(31, 36, 33, 0.055),
-      0 2px 7px rgba(31, 36, 33, 0.025);
+@media (max-width: 700px) {
+  .card {
+    border-radius: 17px;
   }
 
   .image {
-    height: 220px;
+    height: 210px;
   }
 
   .content {
@@ -741,21 +498,32 @@
   }
 
   .location {
+    margin-top: 9px;
+    gap: 6px;
     font-size: 12px;
+  }
+
+  .location svg {
+    width: 16px;
+    height: 16px;
+    flex-basis: 16px;
   }
 
   .details {
     margin-top: 12px;
+    gap: 5px;
   }
 
   .details span {
+    padding: 5px 8px;
+    border-radius: 7px;
     font-size: 10.5px;
   }
 
   .bottom {
-    margin-top: 16px;
+    margin-top: 15px;
     padding-top: 13px;
-    gap: 7px;
+    gap: 8px;
   }
 
   .bottom strong {
@@ -763,15 +531,17 @@
   }
 
   .more {
-    height: 37px;
-    padding: 0 11px;
-    font-size: 10.5px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 9px;
+    font-size: 11px;
   }
 
   .badges {
-    top: 11px;
-    left: 11px;
-    max-width: calc(100% - 63px);
+    top: 12px;
+    left: 12px;
+    gap: 5px;
+    max-width: calc(100% - 65px);
   }
 
   .status,
@@ -779,7 +549,7 @@
     min-height: 29px;
     padding: 0 8px;
     border-radius: 8px;
-    font-size: 9.5px;
+    font-size: 10px;
   }
 
   .status svg {
@@ -790,8 +560,8 @@
   .favorite {
     top: 10px;
     right: 10px;
-    width: 38px;
-    height: 38px;
+    width: 37px;
+    height: 37px;
   }
 
   .favorite svg {
@@ -802,17 +572,24 @@
   .compareSelect {
     top: 10px;
     left: 10px;
-    max-width: calc(100% - 61px);
-    min-height: 38px;
-    padding: 4px 8px 4px 5px;
+    max-width: calc(100% - 65px);
+    min-height: 37px;
+    padding: 5px 9px 5px 6px;
+    gap: 6px;
     border-radius: 10px;
-    font-size: 9.5px;
+    font-size: 10px;
   }
 
   .compareCheckbox {
-    width: 25px;
-    height: 25px;
-    flex-basis: 25px;
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+    border-radius: 7px;
+  }
+
+  .compareCheckbox svg {
+    width: 15px;
+    height: 15px;
   }
 
   .badgesCompare,
@@ -821,17 +598,22 @@
   }
 }
 
-/* =========================================================
-   360px
-========================================================= */
+/* SMALL MOBILE */
 
-@media (max-width: 360px) {
+@media (max-width: 480px) {
+  .card:hover {
+    transform: none;
+    box-shadow:
+      0 7px 23px rgba(31, 36, 33, 0.05),
+      0 2px 6px rgba(31, 36, 33, 0.025);
+  }
+
   .image {
-    height: 205px;
+    height: 195px;
   }
 
   .content {
-    padding: 14px;
+    padding: 15px;
   }
 
   .content h2 {
@@ -839,14 +621,110 @@
   }
 
   .location {
-    margin-top: 9px;
-    font-size: 11px;
+    font-size: 11.5px;
+  }
+
+  .details {
+    margin-top: 11px;
+  }
+
+  .details span {
+    font-size: 10px;
+  }
+
+  .bottom {
+    margin-top: 14px;
+    padding-top: 12px;
+    gap: 7px;
+  }
+
+  .bottom strong {
+    font-size: 15px;
+  }
+
+  .more {
+    height: 35px;
+    padding: 0 10px;
+    font-size: 10.5px;
+  }
+
+  .badges {
+    top: 10px;
+    left: 10px;
+    max-width: calc(100% - 60px);
+  }
+
+  .status,
+  .type {
+    min-height: 27px;
+    padding: 0 7px;
+    border-radius: 7px;
+    font-size: 9px;
+  }
+
+  .status svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  .favorite {
+    top: 9px;
+    right: 9px;
+    width: 35px;
+    height: 35px;
+  }
+
+  .favorite svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .compareSelect {
+    top: 9px;
+    left: 9px;
+    max-width: calc(100% - 60px);
+    min-height: 35px;
+    padding: 4px 8px 4px 5px;
+    border-radius: 9px;
+    font-size: 9px;
+  }
+
+  .compareCheckbox {
+    width: 23px;
+    height: 23px;
+    flex-basis: 23px;
+  }
+
+  .badgesCompare,
+  .image:has(.compareSelect) .badges {
+    top: 53px;
+  }
+}
+
+/* 360px */
+
+@media (max-width: 360px) {
+  .image {
+    height: 180px;
+  }
+
+  .content {
+    padding: 13px;
+  }
+
+  .content h2 {
+    font-size: 15px;
+  }
+
+  .location {
+    margin-top: 8px;
+    font-size: 10.5px;
   }
 
   .location svg {
-    width: 16px;
-    height: 16px;
-    flex-basis: 16px;
+    width: 15px;
+    height: 15px;
+    flex-basis: 15px;
   }
 
   .details {
@@ -857,11 +735,11 @@
   .details span {
     padding: 5px 7px;
     border-radius: 7px;
-    font-size: 9.5px;
+    font-size: 9px;
   }
 
   .bottom {
-    margin-top: 14px;
+    margin-top: 12px;
     gap: 6px;
   }
 
@@ -870,140 +748,17 @@
   }
 
   .more {
-    height: 35px;
+    height: 33px;
     padding: 0 9px;
-    border-radius: 9px;
-    font-size: 9.5px;
+    border-radius: 8px;
+    font-size: 9px;
   }
 
   .badges {
-    top: 9px;
-    left: 9px;
-    gap: 5px;
-    max-width: calc(100% - 57px);
-  }
-
-  .status,
-  .type {
-    min-height: 27px;
-    padding: 0 7px;
-    border-radius: 7px;
-    font-size: 8.5px;
-  }
-
-  .status svg {
-    width: 11px;
-    height: 11px;
-  }
-
-  .favorite {
-    top: 8px;
-    right: 8px;
-    width: 36px;
-    height: 36px;
-  }
-
-  .favorite svg {
-    width: 17px;
-    height: 17px;
-  }
-
-  .compareSelect {
     top: 8px;
     left: 8px;
-    max-width: calc(100% - 57px);
-    min-height: 36px;
-    padding: 4px 7px 4px 4px;
-    gap: 5px;
-    border-radius: 9px;
-    font-size: 8.5px;
-  }
-
-  .compareCheckbox {
-    width: 24px;
-    height: 24px;
-    flex-basis: 24px;
-    border-radius: 6px;
-  }
-
-  .compareCheckbox svg {
-    width: 15px;
-    height: 15px;
-  }
-
-  .badgesCompare,
-  .image:has(.compareSelect) .badges {
-    top: 51px;
-  }
-}
-
-/* =========================================================
-   320px
-========================================================= */
-
-@media (max-width: 320px) {
-  .card {
-    border-radius: 15px;
-  }
-
-  .image {
-    height: 185px;
-  }
-
-  .content {
-    padding: 12px;
-  }
-
-  .content h2 {
-    font-size: 14px;
-    line-height: 1.28;
-  }
-
-  .location {
-    margin-top: 8px;
-    gap: 5px;
-    font-size: 10px;
-  }
-
-  .location svg {
-    width: 14px;
-    height: 14px;
-    flex-basis: 14px;
-  }
-
-  .details {
-    margin-top: 9px;
     gap: 4px;
-  }
-
-  .details span {
-    padding: 4px 6px;
-    border-radius: 6px;
-    font-size: 8.5px;
-  }
-
-  .bottom {
-    margin-top: 12px;
-    padding-top: 11px;
-    gap: 5px;
-  }
-
-  .bottom strong {
-    font-size: 12.5px;
-  }
-
-  .more {
-    height: 32px;
-    padding: 0 7px;
-    border-radius: 8px;
-    font-size: 8.5px;
-  }
-
-  .badges {
-    top: 7px;
-    left: 7px;
-    gap: 4px;
-    max-width: calc(100% - 51px);
+    max-width: calc(100% - 55px);
   }
 
   .status,
@@ -1011,7 +766,7 @@
     min-height: 25px;
     padding: 0 6px;
     border-radius: 6px;
-    font-size: 7.5px;
+    font-size: 8px;
   }
 
   .status svg {
@@ -1034,20 +789,19 @@
   .compareSelect {
     top: 7px;
     left: 7px;
-    max-width: calc(100% - 49px);
+    max-width: calc(100% - 55px);
     min-height: 33px;
-    padding: 3px 6px 3px 3px;
-    gap: 4px;
+    padding: 4px 7px 4px 4px;
+    gap: 5px;
     border-radius: 8px;
-    font-size: 7.5px;
+    font-size: 8px;
   }
 
   .compareCheckbox {
-    width: 22px;
-    height: 22px;
-    flex-basis: 22px;
-    border-width: 1.5px;
-    border-radius: 5px;
+    width: 21px;
+    height: 21px;
+    flex-basis: 21px;
+    border-radius: 6px;
   }
 
   .compareCheckbox svg {
@@ -1061,9 +815,129 @@
   }
 }
 
-/* =========================================================
-   REDUCED MOTION
-========================================================= */
+/* 320px */
+
+@media (max-width: 320px) {
+  .card {
+    border-radius: 14px;
+  }
+
+  .image {
+    height: 165px;
+  }
+
+  .content {
+    padding: 11px;
+  }
+
+  .content h2 {
+    font-size: 14px;
+    line-height: 1.28;
+  }
+
+  .location {
+    margin-top: 7px;
+    gap: 4px;
+    font-size: 9.5px;
+  }
+
+  .location svg {
+    width: 13px;
+    height: 13px;
+    flex-basis: 13px;
+  }
+
+  .details {
+    margin-top: 8px;
+    gap: 4px;
+  }
+
+  .details span {
+    padding: 4px 5px;
+    border-radius: 6px;
+    font-size: 8px;
+  }
+
+  .bottom {
+    margin-top: 11px;
+    padding-top: 10px;
+    gap: 5px;
+  }
+
+  .bottom strong {
+    font-size: 12px;
+  }
+
+  .more {
+    height: 30px;
+    padding: 0 7px;
+    border-radius: 7px;
+    font-size: 8px;
+  }
+
+  .badges {
+    top: 6px;
+    left: 6px;
+    gap: 4px;
+    max-width: calc(100% - 48px);
+  }
+
+  .status,
+  .type {
+    min-height: 23px;
+    padding: 0 5px;
+    border-radius: 5px;
+    font-size: 7px;
+  }
+
+  .status svg {
+    width: 9px;
+    height: 9px;
+  }
+
+  .favorite {
+    top: 6px;
+    right: 6px;
+    width: 31px;
+    height: 31px;
+  }
+
+  .favorite svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .compareSelect {
+    top: 6px;
+    left: 6px;
+    max-width: calc(100% - 48px);
+    min-height: 31px;
+    padding: 3px 5px 3px 3px;
+    gap: 4px;
+    border-radius: 7px;
+    font-size: 7px;
+  }
+
+  .compareCheckbox {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+    border-width: 1.5px;
+    border-radius: 5px;
+  }
+
+  .compareCheckbox svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .badgesCompare,
+  .image:has(.compareSelect) .badges {
+    top: 43px;
+  }
+}
+
+/* REDUCED MOTION */
 
 @media (prefers-reduced-motion: reduce) {
   .card,
