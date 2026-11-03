@@ -327,7 +327,6 @@ export default function ProductSummary({ product }) {
               rel="noopener noreferrer"
               className={styles.mapLink}
             >
-              <MapPin size={16} />
               <span>Посмотреть на карте</span>
               <ExternalLink size={13} />
             </a>
