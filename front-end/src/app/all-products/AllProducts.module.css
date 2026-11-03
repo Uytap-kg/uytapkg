@@ -34,6 +34,9 @@
   );
 
   color: var(--text);
+
+  padding-left: 50px;
+  padding-right: 50px;
 }
 
 .page *,
