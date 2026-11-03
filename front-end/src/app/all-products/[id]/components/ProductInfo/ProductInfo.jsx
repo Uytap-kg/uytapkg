@@ -1252,14 +1252,6 @@ export default function ProductInfo({ product, router }) {
                 <p>{product.address}</p>
               )}
 
-              {getRawValue(product, "latitude", "lat") != null &&
-                getRawValue(product, "longitude", "lng", "lon") != null && (
-                  <div className={styles.coordinates}>
-                    <Compass size={14} />
-                    {t("productInfo.coordinatesSpecified")}
-                  </div>
-                )}
-
               {twoGisUrl && (
                 <a
                   href={twoGisUrl}
@@ -1268,7 +1260,7 @@ export default function ProductInfo({ product, router }) {
                   className={styles.mapLink}
                 >
                   <MapPin size={17} />
-                  <span>Посмотреть на карте 2ГИС</span>
+                  <span>Посмотреть на карте</span>
                   <ExternalLink size={14} />
                 </a>
               )}

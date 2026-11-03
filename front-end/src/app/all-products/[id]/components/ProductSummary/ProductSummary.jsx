@@ -9,6 +9,7 @@ import {
   BedDouble,
   Building2,
   Waves,
+  ExternalLink,
 } from "lucide-react";
 
 import { useLanguage } from "@/context/LanguageContext";
@@ -45,13 +46,17 @@ function getRawValue(product, ...keys) {
 }
 
 function canShowRooms(product) {
-  const type = normalizeType(getRawValue(product, "type", "category"));
+  const type = normalizeType(
+    getRawValue(product, "type", "category", "property_type", "propertyType"),
+  );
 
   return ROOM_TYPES.some((allowedType) => type.includes(allowedType));
 }
 
 function isLand(product) {
-  const type = normalizeType(getRawValue(product, "type", "category"));
+  const type = normalizeType(
+    getRawValue(product, "type", "category", "property_type", "propertyType"),
+  );
 
   return type.includes("участ");
 }
@@ -99,6 +104,47 @@ function formatSeries(value, t) {
   );
 }
 
+/*
+|--------------------------------------------------------------------------
+| 2GIS URL
+|--------------------------------------------------------------------------
+*/
+
+function getTwoGisUrl(product, displayLocation) {
+  const rawLatitude = getRawValue(product, "latitude", "lat");
+  const rawLongitude = getRawValue(product, "longitude", "lng", "lon");
+
+  const latitude =
+    rawLatitude !== null && rawLatitude !== "" ? Number(rawLatitude) : NaN;
+
+  const longitude =
+    rawLongitude !== null && rawLongitude !== "" ? Number(rawLongitude) : NaN;
+
+  const hasCoordinates =
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
+
+  if (hasCoordinates) {
+    return `https://2gis.kg/geo/${longitude},${latitude}`;
+  }
+
+  const address = [product?.address, displayLocation]
+    .filter(Boolean)
+    .map((item) => String(item).trim())
+    .filter((item, index, array) => array.indexOf(item) === index)
+    .join(", ");
+
+  if (address) {
+    return `https://2gis.kg/search/${encodeURIComponent(address)}`;
+  }
+
+  return null;
+}
+
 export default function ProductSummary({ product }) {
   const { t } = useLanguage();
 
@@ -111,23 +157,31 @@ export default function ProductSummary({ product }) {
 
   const isBishkek =
     city.toLowerCase() === "бишкек" || region.toLowerCase().includes("бишкек");
+
   const isOshCity =
-    (city.toLowerCase() === "ош" && !region.toLowerCase().includes("область")) ||
+    (city.toLowerCase() === "ош" &&
+      !region.toLowerCase().includes("область")) ||
     region.toLowerCase() === "ош";
 
   if (isBishkek) {
     parts.push("Бишкек");
+
     if (district && district.toLowerCase() !== "бишкек") {
       parts.push(district);
     }
   } else if (isOshCity) {
     parts.push("Ош");
+
     if (district && district.toLowerCase() !== "ош") {
       parts.push(district);
     }
   } else {
     if (city) parts.push(city);
-    if (district && district !== city) parts.push(district);
+
+    if (district && district !== city) {
+      parts.push(district);
+    }
+
     if (
       region &&
       region !== "Кыргызстан" &&
@@ -144,15 +198,25 @@ export default function ProductSummary({ product }) {
         ? product.location
         : product.address || "";
 
+  const twoGisUrl = getTwoGisUrl(product, displayLocation);
+
   const area = getRawValue(product, "area");
 
-  const landArea = getRawValue(product, "landArea", "areaSotka", "plotArea");
+  const landArea = getRawValue(
+    product,
+    "landArea",
+    "land_area",
+    "areaSotka",
+    "area_sotka",
+    "plotArea",
+    "plot_area",
+  );
 
-  const floor = getRawValue(product, "floor", "currentFloor");
+  const floor = getRawValue(product, "floor", "currentFloor", "current_floor");
 
-  const floors = getRawValue(product, "floors", "totalFloors");
+  const floors = getRawValue(product, "floors", "totalFloors", "total_floors");
 
-  const rooms = getRawValue(product, "rooms");
+  const rooms = getRawValue(product, "rooms", "roomCount", "room_count");
 
   const series = getRawValue(
     product,
@@ -161,7 +225,7 @@ export default function ProductSummary({ product }) {
     "apartment_series",
   );
 
-  const beachDistance = getRawValue(product, "beachDistance");
+  const beachDistance = getRawValue(product, "beachDistance", "beach_distance");
 
   const quickInfo = [];
 
@@ -202,7 +266,11 @@ export default function ProductSummary({ product }) {
     });
   }
 
-  if (normalizeType(product.type).includes("квартир")) {
+  if (
+    normalizeType(
+      getRawValue(product, "type", "propertyType", "property_type"),
+    ).includes("квартир")
+  ) {
     const formattedSeries = formatSeries(series, t);
 
     if (formattedSeries) {
@@ -250,6 +318,19 @@ export default function ProductSummary({ product }) {
 
           {product.address && displayLocation !== product.address && (
             <span>{product.address}</span>
+          )}
+
+          {twoGisUrl && (
+            <a
+              href={twoGisUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.mapLink}
+            >
+              <MapPin size={16} />
+              <span>Посмотреть на карте</span>
+              <ExternalLink size={13} />
+            </a>
           )}
         </div>
       </div>
