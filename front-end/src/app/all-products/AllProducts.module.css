@@ -34,6 +34,9 @@
   );
 
   color: var(--text);
+
+  padding-left: 50px;
+  padding-right: 50px;
 }
 
 .page *,
@@ -952,7 +955,7 @@
 .grid {
   display: grid;
 
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 
   gap: 18px;
 

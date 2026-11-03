@@ -289,7 +289,9 @@ export default function DeveloperPublicProfile({
           <div className={styles.actions}>
             {whatsapp && (
               <a
-                href={`https://wa.me/${whatsapp}`}
+                href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(
+                  "Здравствуйте! Я нашёл вашу компанию на сайте uytap.kg и хотел бы узнать подробнее о ваших жилых комплексах и недвижимости. Подскажите, пожалуйста, с кем можно обсудить этот вопрос?",
+                )}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={styles.primaryAction}

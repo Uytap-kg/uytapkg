@@ -1111,7 +1111,9 @@ export default function MyProductDetails() {
         price: Number.isFinite(priceVal) && priceVal > 0 ? priceVal : 1000,
         area: Number.isFinite(areaVal) && areaVal > 0 ? areaVal : undefined,
         rooms: updatedProduct.rooms ? Number(updatedProduct.rooms) : undefined,
-        totalFloors: updatedProduct.floors ? Number(updatedProduct.floors) : undefined,
+        totalFloors: updatedProduct.floors
+          ? Number(updatedProduct.floors)
+          : undefined,
         address: updatedProduct.address || undefined,
       };
 
@@ -1386,11 +1388,6 @@ export default function MyProductDetails() {
                 </span>
               )}
 
-              <span className={styles.published}>
-                <CheckCircle2 size={13} />
-
-                {t("myAdsDetails.published")}
-              </span>
               <span
                 className={`${styles.published} ${
                   product.publicationStatus === "active" ? "" : styles.pending
@@ -1401,6 +1398,7 @@ export default function MyProductDetails() {
                 ) : (
                   <AlertCircle size={13} />
                 )}
+
                 {PUBLICATION_STATUS_LABELS[product.publicationStatus] ||
                   "Опубликовано"}
               </span>

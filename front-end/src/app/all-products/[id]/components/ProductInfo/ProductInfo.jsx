@@ -29,6 +29,7 @@ import {
   PawPrint,
   CircleDollarSign,
   Waves,
+  ExternalLink,
 } from "lucide-react";
 
 import { useLanguage } from "@/context/LanguageContext";
@@ -489,13 +490,8 @@ function getCategoryKey(product) {
     getRawValue(product, "property_type", "propertyType", "category", "type"),
   );
 
-  if (rawCategory.includes("квартир")) {
-    return "apartment";
-  }
-
-  if (rawCategory.includes("коттедж")) {
-    return "cottage";
-  }
+  if (rawCategory.includes("квартир")) return "apartment";
+  if (rawCategory.includes("коттедж")) return "cottage";
 
   if (rawCategory.includes("дом") || rawCategory.includes("особняк")) {
     return "house";
@@ -727,7 +723,6 @@ function buildCharacteristics(product, t) {
     const formatted = formatValue(value, t);
 
     if (!formatted) return;
-
     if (usedKeys.has(key)) return;
 
     usedKeys.add(key);
@@ -740,12 +735,6 @@ function buildCharacteristics(product, t) {
     });
   };
 
-  /*
-   * --------------------------------------------------------
-   * CATEGORY FIELDS
-   * --------------------------------------------------------
-   */
-
   for (const [key, label, Icon] of config) {
     if (rent && (key === "documents" || key === "offerType")) {
       continue;
@@ -753,21 +742,11 @@ function buildCharacteristics(product, t) {
 
     let value = getRawValue(product, key);
 
-    if (!hasValue(value)) {
-      continue;
-    }
+    if (!hasValue(value)) continue;
 
-    if (key === "series") {
-      value = formatSeries(value, t);
-    }
-
-    if (key === "ceilingHeight") {
-      value = formatHeight(value, t);
-    }
-
-    if (key === "area") {
-      value = formatArea(value, t);
-    }
+    if (key === "series") value = formatSeries(value, t);
+    if (key === "ceilingHeight") value = formatHeight(value, t);
+    if (key === "area") value = formatArea(value, t);
 
     if (key === "landArea" || key === "areaSotka" || key === "plotArea") {
       value = formatArea(value, t, true);
@@ -777,9 +756,7 @@ function buildCharacteristics(product, t) {
   }
 
   /*
-   * --------------------------------------------------------
    * RESIDENTIAL COMPLEX
-   * --------------------------------------------------------
    */
 
   const complex = getRawValue(
@@ -803,21 +780,21 @@ function buildCharacteristics(product, t) {
       icon: Building2,
     });
 
-    usedKeys.add("residentialComplex");
-    usedKeys.add("residential_complex");
-    usedKeys.add("residentialComplexName");
-    usedKeys.add("residential_complex_name");
-    usedKeys.add("complex");
-    usedKeys.add("complexName");
-    usedKeys.add("complex_name");
-    usedKeys.add("zhk");
-    usedKeys.add("zhkName");
+    [
+      "residentialComplex",
+      "residential_complex",
+      "residentialComplexName",
+      "residential_complex_name",
+      "complex",
+      "complexName",
+      "complex_name",
+      "zhk",
+      "zhkName",
+    ].forEach((key) => usedKeys.add(key));
   }
 
   /*
-   * --------------------------------------------------------
    * DEVELOPER
-   * --------------------------------------------------------
    */
 
   const developer = getRawValue(
@@ -831,7 +808,7 @@ function buildCharacteristics(product, t) {
     addCharacteristic(
       "developer",
       t("productInfo.fields.developer"),
-      Building,
+      Building2,
       developer,
     );
 
@@ -840,9 +817,7 @@ function buildCharacteristics(product, t) {
   }
 
   /*
-   * --------------------------------------------------------
    * PETS
-   * --------------------------------------------------------
    */
 
   if (categoryKey === "apartment" && rent) {
@@ -854,9 +829,7 @@ function buildCharacteristics(product, t) {
   }
 
   /*
-   * --------------------------------------------------------
    * GENERIC RAW FEATURES
-   * --------------------------------------------------------
    */
 
   const raw = product?.rawFeatures || {};
@@ -872,18 +845,14 @@ function buildCharacteristics(product, t) {
         "longitude",
         "lat",
         "lng",
+        "lon",
       ].includes(key)
     ) {
       return;
     }
 
-    if (usedKeys.has(key)) {
-      return;
-    }
-
-    if (!hasValue(value)) {
-      return;
-    }
+    if (usedKeys.has(key)) return;
+    if (!hasValue(value)) return;
 
     const normalizedKey = normalize(key);
 
@@ -980,10 +949,10 @@ function getAmenities(product) {
 */
 
 function getLocationParts(product) {
-  const city = String(getRawValue(product, "city") || product?.city || "").trim();
-  const region = String(getRawValue(product, "region") || product?.region || "").trim();
-  const district = String(getRawValue(product, "district") || product?.district || "").trim();
-  const settlement = String(getRawValue(product, "settlement") || product?.settlement || "").trim();
+  const city = String(getRawValue(product, "city") || "").trim();
+  const region = String(getRawValue(product, "region") || "").trim();
+  const district = String(getRawValue(product, "district") || "").trim();
+  const settlement = String(getRawValue(product, "settlement") || "").trim();
 
   const parts = [];
 
@@ -991,26 +960,33 @@ function getLocationParts(product) {
     city.toLowerCase() === "бишкек" ||
     region.toLowerCase() === "бишкек" ||
     region.toLowerCase().includes("бишкек");
+
   const isOshCity =
-    (city.toLowerCase() === "ош" && !region.toLowerCase().includes("область")) ||
+    (city.toLowerCase() === "ош" &&
+      !region.toLowerCase().includes("область")) ||
     region.toLowerCase() === "ош";
 
   if (isBishkek) {
     parts.push("Бишкек");
+
     if (district && district.toLowerCase() !== "бишкек") {
       parts.push(district);
     }
   } else if (isOshCity) {
     parts.push("Ош");
+
     if (district && district.toLowerCase() !== "ош") {
       parts.push(district);
     }
   } else {
     const mainCity = city || settlement;
+
     if (mainCity) parts.push(mainCity);
+
     if (district && district.toLowerCase() !== mainCity.toLowerCase()) {
       parts.push(district);
     }
+
     if (
       region &&
       region !== "Кыргызстан" &&
@@ -1037,6 +1013,7 @@ function getLocationParts(product) {
 
 function getLocationDetails(product, t) {
   const items = [];
+
   const country = getRawValue(product, "country");
   const region = getRawValue(product, "region");
   const city = getRawValue(product, "city");
@@ -1044,22 +1021,84 @@ function getLocationDetails(product, t) {
   const district = getRawValue(product, "district");
 
   if (hasValue(country)) {
-    items.push({ label: t("productInfo.location.country"), value: String(country).trim() });
+    items.push({
+      label: t("productInfo.location.country"),
+      value: String(country).trim(),
+    });
   }
+
   if (hasValue(region) && region !== "Кыргызстан") {
-    items.push({ label: t("productInfo.location.region"), value: String(region).trim() });
+    items.push({
+      label: t("productInfo.location.region"),
+      value: String(region).trim(),
+    });
   }
+
   if (hasValue(city)) {
-    items.push({ label: t("productInfo.location.city"), value: String(city).trim() });
+    items.push({
+      label: t("productInfo.location.city"),
+      value: String(city).trim(),
+    });
   }
+
   if (hasValue(settlement)) {
-    items.push({ label: t("productInfo.location.settlement"), value: String(settlement).trim() });
+    items.push({
+      label: t("productInfo.location.settlement"),
+      value: String(settlement).trim(),
+    });
   }
+
   if (hasValue(district)) {
-    items.push({ label: t("productInfo.location.district"), value: String(district).trim() });
+    items.push({
+      label: t("productInfo.location.district"),
+      value: String(district).trim(),
+    });
   }
 
   return items;
+}
+
+/*
+|--------------------------------------------------------------------------
+| 2GIS URL
+|--------------------------------------------------------------------------
+*/
+
+function getTwoGisUrl(product, locationParts) {
+  const rawLatitude = getRawValue(product, "latitude", "lat");
+  const rawLongitude = getRawValue(product, "longitude", "lng", "lon");
+
+  const latitude =
+    rawLatitude !== null && rawLatitude !== "" ? Number(rawLatitude) : NaN;
+
+  const longitude =
+    rawLongitude !== null && rawLongitude !== "" ? Number(rawLongitude) : NaN;
+
+  const hasCoordinates =
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
+
+  if (hasCoordinates) {
+    return `https://2gis.kg/geo/${longitude},${latitude}`;
+  }
+
+  const addressParts = [product?.address, ...locationParts].filter((part) =>
+    hasValue(part),
+  );
+
+  const address = [
+    ...new Set(addressParts.map((part) => String(part).trim())),
+  ].join(", ");
+
+  if (address) {
+    return `https://2gis.kg/search/${encodeURIComponent(address)}`;
+  }
+
+  return null;
 }
 
 /*
@@ -1072,24 +1111,22 @@ export default function ProductInfo({ product, router }) {
   const { t } = useLanguage();
 
   const characteristics = buildCharacteristics(product, t);
-
   const amenities = getAmenities(product);
 
   const locationParts = getLocationParts(product);
   const locationDetails = getLocationDetails(product, t);
 
+  const twoGisUrl = getTwoGisUrl(product, locationParts);
+
   const beachDistance = getRawValue(product, "beachDistance", "beach_distance");
 
   const category = getRawValue(product, "category");
-
   const type = getRawValue(product, "type", "propertyType", "property_type");
-
   const dealType = getRawValue(product, "dealType", "deal_type");
 
   const rentalPeriod = getRawValue(product, "rentalPeriod", "rental_period");
 
   const listingType = getRawValue(product, "listingType", "listing_type");
-
   const createdAt = getRawValue(product, "createdAt", "created_at");
 
   return (
@@ -1215,11 +1252,16 @@ export default function ProductInfo({ product, router }) {
                 <p>{product.address}</p>
               )}
 
-              {product.latitude != null && product.longitude != null && (
-                <div className={styles.coordinates}>
-                  <Compass size={14} />
-                  {t("productInfo.coordinatesSpecified")}
-                </div>
+              {twoGisUrl && (
+                <a
+                  href={twoGisUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.mapLink}
+                >
+                  <span>Посмотреть на карте</span>
+                  <ExternalLink size={14} />
+                </a>
               )}
             </div>
           </div>
@@ -1337,7 +1379,14 @@ export default function ProductInfo({ product, router }) {
 
             {product.owner.phone && (
               <a
-                href={`tel:${product.owner.phone}`}
+                href={`https://wa.me/${String(product.owner.phone).replace(
+                  /\D/g,
+                  "",
+                )}?text=${encodeURIComponent(
+                  "Здравствуйте! Я пишу вам по поводу вашего объявления на сайте uytap.kg. Подскажите, пожалуйста, оно ещё актуально?",
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className={styles.phoneButton}
               >
                 <Phone size={16} />

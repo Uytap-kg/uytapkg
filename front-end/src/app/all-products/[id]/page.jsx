@@ -38,6 +38,20 @@ export default function ProductDetails() {
 
   /*
    * ========================================================
+   * BACK NAVIGATION
+   * ========================================================
+   */
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/all-products");
+    }
+  };
+
+  /*
+   * ========================================================
    * LOAD PRODUCT
    * ========================================================
    */
@@ -75,27 +89,23 @@ export default function ProductDetails() {
 
     const token = localStorage.getItem("uytap_token");
 
-    if (!token) {
-      return () => {
-        mounted = false;
-      };
+    if (token) {
+      getFavorites(token)
+        .then((res) => {
+          if (!mounted) return;
+
+          if (res.success && Array.isArray(res.data)) {
+            const favorite = res.data.some(
+              (listing) => String(listing.id) === String(id),
+            );
+
+            setIsFavorite(favorite);
+          }
+        })
+        .catch((err) => {
+          console.error("Error fetching favorites:", err);
+        });
     }
-
-    getFavorites(token)
-      .then((res) => {
-        if (!mounted) return;
-
-        if (res.success && Array.isArray(res.data)) {
-          const favorite = res.data.some(
-            (listing) => String(listing.id) === String(id),
-          );
-
-          setIsFavorite(favorite);
-        }
-      })
-      .catch((err) => {
-        console.error("Error fetching favorites:", err);
-      });
 
     return () => {
       mounted = false;
@@ -182,7 +192,7 @@ export default function ProductDetails() {
           <button
             type="button"
             className={styles.primaryButton}
-            onClick={() => router.push("/all-products")}
+            onClick={handleBack}
           >
             <ArrowLeft size={18} />
             {t("productDetails.backToListings")}
@@ -205,30 +215,35 @@ export default function ProductDetails() {
           "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?q=80&w=1200",
         ];
 
+  /*
+   * ========================================================
+   * RENDER
+   * ========================================================
+   */
+
   return (
     <main className={styles.page}>
       <div className={styles.container}>
         {/* BACK */}
 
-        <button
-          type="button"
-          className={styles.back}
-          onClick={() => router.push("/all-products")}
-        >
+        <button type="button" className={styles.back} onClick={handleBack}>
           <ArrowLeft size={18} />
           {t("productDetails.backToListings")}
         </button>
 
         {/* EXPIRED BANNER */}
+
         {product.isExpired && (
           <div className={styles.expiredBanner}>
             <AlertCircle size={22} className={styles.expiredBannerIcon} />
+
             <div className={styles.expiredBannerContent}>
               <strong className={styles.expiredBannerTitle}>
                 {language === "ky"
                   ? "Бул кулактандыруунун жарыялоо мөөнөтү бүттү"
                   : "Срок публикации данного объявления истёк"}
               </strong>
+
               <p className={styles.expiredBannerText}>
                 {language === "ky"
                   ? "Ал архивде жана актуалдуу болбой калышы мүмкүн."

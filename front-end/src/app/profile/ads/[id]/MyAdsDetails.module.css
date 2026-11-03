@@ -163,7 +163,7 @@
   border: 1px solid #e2e5ec;
   border-radius: 30px;
 
-  background: #e9ebf2;
+  background: transparent;
 
   box-shadow:
     0 25px 65px rgba(24, 30, 55, 0.1),
@@ -274,12 +274,6 @@
 .urgent {
   background: #dc3545;
   color: #fff;
-}
-
-.top {
-  background: linear-gradient(135deg, #1747a6, #2563eb);
-  color: #fff;
-  box-shadow: 0 8px 25px rgba(37, 99, 235, 0.28);
 }
 
 .categoryBadge {
@@ -441,7 +435,7 @@
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 14px;
 
-  background: rgba(20, 22, 30, 0.56);
+  background: transparent;
 
   color: #fff;
 
@@ -463,13 +457,6 @@
 
 .mainImage:hover .galleryArrow {
   opacity: 1;
-}
-
-.galleryArrow:hover {
-  background: #483df6;
-  border-color: #483df6;
-
-  box-shadow: 0 8px 25px rgba(72, 61, 246, 0.25);
 }
 
 .left {

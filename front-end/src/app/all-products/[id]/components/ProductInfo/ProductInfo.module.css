@@ -1786,3 +1786,31 @@
     font-size: 9.5px;
   }
 }
+
+.mapLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: #1684e8;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.mapLink:hover {
+  color: #0864bd;
+}
+
+.mapLink svg {
+  flex-shrink: 0;
+}
+
+.mapLink:focus-visible {
+  outline: 2px solid #1684e8;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
