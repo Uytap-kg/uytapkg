@@ -980,10 +980,18 @@ function getAmenities(product) {
 */
 
 function getLocationParts(product) {
-  const city = String(getRawValue(product, "city") || product?.city || "").trim();
-  const region = String(getRawValue(product, "region") || product?.region || "").trim();
-  const district = String(getRawValue(product, "district") || product?.district || "").trim();
-  const settlement = String(getRawValue(product, "settlement") || product?.settlement || "").trim();
+  const city = String(
+    getRawValue(product, "city") || product?.city || "",
+  ).trim();
+  const region = String(
+    getRawValue(product, "region") || product?.region || "",
+  ).trim();
+  const district = String(
+    getRawValue(product, "district") || product?.district || "",
+  ).trim();
+  const settlement = String(
+    getRawValue(product, "settlement") || product?.settlement || "",
+  ).trim();
 
   const parts = [];
 
@@ -992,7 +1000,8 @@ function getLocationParts(product) {
     region.toLowerCase() === "бишкек" ||
     region.toLowerCase().includes("бишкек");
   const isOshCity =
-    (city.toLowerCase() === "ош" && !region.toLowerCase().includes("область")) ||
+    (city.toLowerCase() === "ош" &&
+      !region.toLowerCase().includes("область")) ||
     region.toLowerCase() === "ош";
 
   if (isBishkek) {
@@ -1044,19 +1053,34 @@ function getLocationDetails(product, t) {
   const district = getRawValue(product, "district");
 
   if (hasValue(country)) {
-    items.push({ label: t("productInfo.location.country"), value: String(country).trim() });
+    items.push({
+      label: t("productInfo.location.country"),
+      value: String(country).trim(),
+    });
   }
   if (hasValue(region) && region !== "Кыргызстан") {
-    items.push({ label: t("productInfo.location.region"), value: String(region).trim() });
+    items.push({
+      label: t("productInfo.location.region"),
+      value: String(region).trim(),
+    });
   }
   if (hasValue(city)) {
-    items.push({ label: t("productInfo.location.city"), value: String(city).trim() });
+    items.push({
+      label: t("productInfo.location.city"),
+      value: String(city).trim(),
+    });
   }
   if (hasValue(settlement)) {
-    items.push({ label: t("productInfo.location.settlement"), value: String(settlement).trim() });
+    items.push({
+      label: t("productInfo.location.settlement"),
+      value: String(settlement).trim(),
+    });
   }
   if (hasValue(district)) {
-    items.push({ label: t("productInfo.location.district"), value: String(district).trim() });
+    items.push({
+      label: t("productInfo.location.district"),
+      value: String(district).trim(),
+    });
   }
 
   return items;
@@ -1337,14 +1361,18 @@ export default function ProductInfo({ product, router }) {
 
             {product.owner.phone && (
               <a
-                href={`tel:${product.owner.phone}`}
+                href={`https://wa.me/${String(product.owner.phone).replace(/\D/g, "")}?text=${encodeURIComponent(
+                  `Здравствуйте! Я пишу вам по поводу вашего объявления на сайте uytap.kg. Подскажите, пожалуйста, оно ещё актуально?`,
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className={styles.phoneButton}
               >
                 <Phone size={16} />
                 {product.owner.phone}
               </a>
             )}
-
+            
             {product.owner.id && (
               <button
                 type="button"
