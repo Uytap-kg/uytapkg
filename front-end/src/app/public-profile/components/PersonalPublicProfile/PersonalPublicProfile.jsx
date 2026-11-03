@@ -125,7 +125,9 @@ export default function PersonalPublicProfile({
 
                     {whatsappNumber && (
                       <a
-                        href={`https://wa.me/${whatsappNumber}`}
+                        href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
+                          "Здравствуйте! Я нашёл ваш профиль на сайте uytap.kg и хотел бы связаться с вами по поводу недвижимости. Подскажите, пожалуйста, можете ли вы мне помочь?",
+                        )}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={styles.whatsapp}

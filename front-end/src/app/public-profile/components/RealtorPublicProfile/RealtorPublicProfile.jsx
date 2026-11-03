@@ -167,7 +167,9 @@ export default function RealtorPublicProfile({
 
                 {whatsapp && (
                   <a
-                    href={`https://wa.me/${whatsapp}`}
+                    href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(
+                      "Здравствуйте! Я нашёл ваш профиль на сайте uytap.kg и хотел бы связаться с вами по поводу недвижимости. Подскажите, пожалуйста, можете ли вы мне помочь?",
+                    )}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.secondaryAction}
