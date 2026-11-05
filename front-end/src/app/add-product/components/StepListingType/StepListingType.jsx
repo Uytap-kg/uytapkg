@@ -86,6 +86,69 @@ const categoryLabels = {
   parking: "Паркинг / гараж",
 };
 
+/*
+|--------------------------------------------------------------------------
+| Проверка заголовка в зависимости от типа сделки
+|--------------------------------------------------------------------------
+*/
+
+const FORBIDDEN_TITLE_WORDS = {
+  sale: [
+    "аренд\\w*",
+    "сдаю",
+    "сдаем",
+    "сдаём",
+    "сдает",
+    "сдаёт",
+    "сдается",
+    "сдаётся",
+    "сдать",
+    "сдам",
+    "rent",
+    "rental",
+    "for rent",
+    "lease",
+  ],
+
+  rent: [
+    "продаж\\w*",
+    "продаю",
+    "продаем",
+    "продаём",
+    "продает",
+    "продаёт",
+    "продается",
+    "продаётся",
+    "продать",
+    "продам",
+    "sell",
+    "sale",
+    "for sale",
+  ],
+};
+
+function getTitleDealError(title, dealType) {
+  if (!title.trim() || !["sale", "rent"].includes(dealType)) {
+    return "";
+  }
+
+  const normalizedTitle = title.toLowerCase().replace(/ё/g, "е");
+
+  const forbiddenWords = FORBIDDEN_TITLE_WORDS[dealType];
+
+  const hasForbiddenWord = forbiddenWords.some((word) => {
+    const regex = new RegExp(`(^|[^а-яa-z])(?:${word})(?=$|[^а-яa-z])`, "i");
+
+    return regex.test(normalizedTitle);
+  });
+
+  if (!hasForbiddenWord) return "";
+
+  return dealType === "sale"
+    ? "Для продажи нельзя использовать слова, связанные с арендой."
+    : "Для аренды нельзя использовать слова, связанные с продажей.";
+}
+
 export default function StepListingType({
   form,
   updateForm,
@@ -98,7 +161,9 @@ export default function StepListingType({
   const title = form.title || "";
   const description = form.description || "";
 
-  const isTitleValid = title.trim().length > 0;
+  const titleDealError = getTitleDealError(title, form.dealType);
+
+  const isTitleValid = title.trim().length > 0 && !titleDealError;
   const isDescriptionValid = description.trim().length > 0;
   const isListingTypeValid = Boolean(form.listingType);
 
@@ -130,17 +195,10 @@ export default function StepListingType({
     });
   };
 
-  // Публикация (в т.ч. для платных типов) полностью решается на бэкенде
-  // (см. add-product/page.jsx submitProduct и
-  // back-end/src/controllers/listingsController.js createListing):
-  // - бесплатные типы (обычное/Instagram) публикуются сразу;
-  // - VIP/ТОП сначала пробуют списаться с лимита тарифа — если получилось,
-  //   тоже публикуются сразу, уже продвинутыми;
-  // - иначе (в т.ч. всегда для "Срочно") объявление создаётся, но не
-  //   публикуется, пока не пройдёт оплата — родитель сам уводит на
-  //   /payment.
+  // Публикация и оплата полностью обрабатываются на бэкенде.
   const handlePublish = () => {
     if (!isReady || isSubmitting) return;
+
     onSubmit();
   };
 
@@ -245,11 +303,13 @@ export default function StepListingType({
           <div className={styles.titleFooter}>
             <span>{t("stepListingType.titleField.hint")}</span>
 
-            {!isTitleValid && (
+            {titleDealError ? (
+              <strong className={styles.dealError}>{titleDealError}</strong>
+            ) : !isTitleValid ? (
               <strong className={styles.required}>
                 {t("stepListingType.required")}
               </strong>
-            )}
+            ) : null}
           </div>
         </div>
       </section>
@@ -316,7 +376,6 @@ export default function StepListingType({
         <div className={styles.typeGrid}>
           {types.map((item) => {
             const isSelected = form.listingType === item.id;
-
             const Icon = item.icon;
 
             return (
