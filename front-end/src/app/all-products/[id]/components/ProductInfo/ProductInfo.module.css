@@ -1814,3 +1814,102 @@
   outline-offset: 4px;
   border-radius: 4px;
 }
+
+.locationSection {
+  width: 100%;
+  margin-top: 32px;
+}
+
+.locationIcon {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: #fff3eb;
+  color: #f97316;
+}
+
+.locationSubtitle {
+  margin: 5px 0 0;
+  color: #8b8b8b;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.mapContainer {
+  position: relative;
+  width: 100%;
+  height: 340px;
+  margin-top: 20px;
+  overflow: hidden;
+  border: 1px solid #e8e8e8;
+  border-radius: 18px;
+  background: #f3f4f6;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
+}
+
+.mapFrame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.mapBadge {
+  position: absolute;
+  z-index: 2;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #252525;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+}
+
+.mapBadgeIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f97316;
+}
+
+.mapAddress {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.mapAddress svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #f97316;
+}
+
+@media (max-width: 640px) {
+  .mapContainer {
+    height: 260px;
+    border-radius: 14px;
+  }
+
+  .mapBadge {
+    top: 10px;
+    left: 10px;
+    padding: 8px 11px;
+    font-size: 12px;
+  }
+}
