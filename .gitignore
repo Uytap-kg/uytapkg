@@ -55,3 +55,5 @@ desktop.ini
 .vercel/
 
 
+# Локальные инструкции для Claude Code (не коммитить)
+CLAUDE.md

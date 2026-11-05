@@ -241,10 +241,14 @@ test("P1-3: Наличие маршрута /api/listings/map и хелпера 
 // P1-4: Корректное сохранение этажности totalFloors на странице редактирования объявления
 // =======================================================
 test("P1-4: Редактирование объявления передает totalFloors, а не затирает floor", () => {
-  const pageSource = fs.readFileSync(
-    path.resolve(__dirname, "../../front-end/src/app/profile/ads/[id]/page.jsx"),
-    "utf8"
-  );
+  // Пробелы/переносы схлопываем: проверяем смысл payload, а не форматирование
+  // (prettier может переносить тернарник на несколько строк).
+  const pageSource = fs
+    .readFileSync(
+      path.resolve(__dirname, "../../front-end/src/app/profile/ads/[id]/page.jsx"),
+      "utf8"
+    )
+    .replace(/\s+/g, " ");
 
   assert.ok(
     pageSource.includes("totalFloors: updatedProduct.floors ? Number(updatedProduct.floors) : undefined"),

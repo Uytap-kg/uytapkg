@@ -72,3 +72,20 @@
   font-size: 11px;
   font-weight: 700;
 }
+
+/* Кликабельная карточка (передан href) */
+.link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.link:hover .top > svg {
+  color: #7c3aed;
+}
+
+.link:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}

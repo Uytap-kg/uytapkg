@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getDashboardStats,
+  listUsersAdmin,
   listPayments,
   updatePricing,
   listLawyers,
@@ -65,6 +66,9 @@ router.put("/pricing", authenticateToken, requireAdmin, updatePricing);
 
 // Поиск пользователя по номеру телефона (модалка выдачи тарифа)
 router.get("/users/search", authenticateToken, requireAdmin, searchUsersByPhone);
+
+// Полный список пользователей с поиском/фильтрами/пагинацией
+router.get("/users", authenticateToken, requireAdmin, listUsersAdmin);
 
 // Дефолтные тарифы (start/optimal/business), купленные через оплату
 router.get("/tariffs/default", authenticateToken, requireAdmin, listDefaultTariffs);
