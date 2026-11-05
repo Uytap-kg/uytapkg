@@ -663,6 +663,33 @@ export const userPhoneSearchSchema = z.object({
     .max(30, "Слишком длинный номер"),
 });
 
+// Список пользователей для админ-панели (GET /api/admin/users).
+// Все параметры приходят строками из query, поэтому числа — через coerce.
+// search ограничен по длине; безопасная очистка символов выполняется в
+// контроллере перед построением фильтра PostgREST.
+export const ADMIN_USERS_PERIODS = ["7", "30", "90", "all"];
+export const ADMIN_USERS_ACCOUNT_TYPES = ["personal", "realtor", "agency", "developer"];
+
+export const adminUsersQuerySchema = z.object({
+  page: z.coerce
+    .number({ invalid_type_error: "Некорректный номер страницы" })
+    .int("Некорректный номер страницы")
+    .min(1, "Некорректный номер страницы")
+    .max(1000, "Слишком большой номер страницы")
+    .default(1),
+  limit: z.coerce
+    .number({ invalid_type_error: "Некорректный размер страницы" })
+    .int("Некорректный размер страницы")
+    .min(1, "Некорректный размер страницы")
+    .max(100, "Размер страницы не должен превышать 100")
+    .default(20),
+  search: z.string().trim().max(100, "Слишком длинный поисковый запрос").optional().default(""),
+  accountType: z
+    .enum(ADMIN_USERS_ACCOUNT_TYPES, { message: "Некорректный тип аккаунта" })
+    .optional(),
+  period: z.enum(ADMIN_USERS_PERIODS, { message: "Некорректный период" }).optional().default("all"),
+});
+
 // Разовая покупка продвижения объявления (POST /api/payments/promotion/create).
 // Сумма считается на сервере по актуальным ценам (см. createPromotionPayment) —
 // здесь только проверяем форму запроса.

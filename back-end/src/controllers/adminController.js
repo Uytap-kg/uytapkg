@@ -1,6 +1,11 @@
 import { supabase } from "../config/db.js";
 import { getTariff, calculateTariffTotal } from "../constants/tariffs.js";
-import { createLawyerSchema, updateLawyerSchema, pricingSchema } from "../utils/validation.js";
+import {
+  createLawyerSchema,
+  updateLawyerSchema,
+  pricingSchema,
+  adminUsersQuerySchema,
+} from "../utils/validation.js";
 import { toPublicLawyer } from "./lawyersController.js";
 import { getVerificationDocumentSignedUrl } from "../utils/storage.js";
 import { getPricingSettings, savePricingSettings } from "../utils/pricingSettings.js";
@@ -85,6 +90,163 @@ export const getDashboardStats = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Не удалось получить статистику дашборда",
+    });
+  }
+};
+
+// =======================================================
+// Список пользователей для админ-панели (GET /api/admin/users)
+//
+// Доступ: authenticateToken + requireAdmin в роуте.
+// Query: page, limit (<=100), search, accountType, period (7|30|90|all).
+//
+// Безопасность:
+//  - отдаём только явный белый список полей (никаких password_hash,
+//    token_version и т.п.) — см. ADMIN_USER_SELECT / toAdminUserDto;
+//  - поисковая строка не подставляется в .or() «как есть»: для фильтра
+//    по имени оставляем только буквы/цифры/дефис/пробелы, поэтому
+//    внедрить в строку фильтра PostgREST запятые, скобки или операторы
+//    нельзя; телефон и email фильтруются через .ilike() с экранированием
+//    LIKE-спецсимволов.
+// =======================================================
+const ADMIN_USER_SELECT =
+  "id, email, phone, account_type, role, is_verified, is_email_verified, created_at, user_profiles(first_name, last_name, company_name)";
+const ADMIN_USER_SELECT_NAME_SEARCH =
+  "id, email, phone, account_type, role, is_verified, is_email_verified, created_at, user_profiles!inner(first_name, last_name, company_name)";
+const ADMIN_USERS_MAX_SEARCH_WORDS = 3;
+
+function escapeLikePattern(value) {
+  return String(value).replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+// Определяет тип поиска и возвращает безопасные значения для фильтра.
+export function parseAdminUserSearch(rawSearch) {
+  const search = String(rawSearch || "").trim();
+  if (!search) return { type: "none" };
+
+  if (search.includes("@")) {
+    const email = search.toLowerCase().replace(/[^\p{L}\p{N}@._+-]/gu, "");
+    return email ? { type: "email", value: escapeLikePattern(email) } : { type: "none" };
+  }
+
+  // Номер телефона: только цифры и типичные разделители (+, пробел, -, скобки)
+  if (/^[\d\s+\-()]+$/.test(search)) {
+    const digits = search.replace(/\D/g, "");
+    return digits.length >= 3 ? { type: "phone", value: digits } : { type: "none" };
+  }
+
+  const words = search
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .split(/\s+/)
+    .map((w) => w.replace(/^-+|-+$/g, ""))
+    .filter((w) => w.length > 0)
+    .slice(0, ADMIN_USERS_MAX_SEARCH_WORDS);
+
+  return words.length > 0 ? { type: "name", words } : { type: "none" };
+}
+
+// Каждое слово должно встретиться хотя бы в одном из полей профиля.
+export function buildAdminUserNameFilter(words) {
+  const perWord = words.map(
+    (w) => `or(first_name.ilike.*${w}*,last_name.ilike.*${w}*,company_name.ilike.*${w}*)`
+  );
+  return perWord.length === 1 ? perWord[0].slice(3, -1) : `and(${perWord.join(",")})`;
+}
+
+function toAdminUserDto(user) {
+  const profile = Array.isArray(user?.user_profiles) ? user.user_profiles[0] : user?.user_profiles;
+  const firstName = profile?.first_name || null;
+  const lastName = profile?.last_name || null;
+  const companyName = profile?.company_name || null;
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+
+  return {
+    id: user.id,
+    name: fullName || companyName || null,
+    firstName,
+    lastName,
+    companyName,
+    phone: user.phone || null,
+    email: user.email || null,
+    accountType: user.account_type || null,
+    role: user.role || "user",
+    isVerified: Boolean(user.is_verified),
+    isEmailVerified: Boolean(user.is_email_verified),
+    createdAt: user.created_at || null,
+  };
+}
+
+export const listUsersAdmin = async (req, res) => {
+  try {
+    const parsed = adminUsersQuerySchema.safeParse(req.query || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsed.error.issues[0]?.message || "Некорректные параметры запроса",
+      });
+    }
+
+    const { page, limit, search, accountType, period } = parsed.data;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    const searchInfo = parseAdminUserSearch(search);
+
+    let query = supabase
+      .from("users")
+      .select(searchInfo.type === "name" ? ADMIN_USER_SELECT_NAME_SEARCH : ADMIN_USER_SELECT, {
+        count: "exact",
+      });
+
+    if (accountType) {
+      query = query.eq("account_type", accountType);
+    }
+
+    if (period !== "all") {
+      const periodStart = new Date(Date.now() - Number(period) * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte("created_at", periodStart);
+    }
+
+    if (searchInfo.type === "phone") {
+      query = query.ilike("phone", `%${searchInfo.value}%`);
+    } else if (searchInfo.type === "email") {
+      query = query.ilike("email", `%${searchInfo.value}%`);
+    } else if (searchInfo.type === "name") {
+      query = query.or(buildAdminUserNameFilter(searchInfo.words), {
+        referencedTable: "user_profiles",
+      });
+    }
+
+    const { data, error, count } = await query
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      console.error("Admin List Users Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Ошибка при получении списка пользователей",
+        requestId: req?.id,
+      });
+    }
+
+    const total = count || 0;
+
+    return res.json({
+      success: true,
+      data: (data || []).slice(0, limit).map(toAdminUserDto),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    });
+  } catch (error) {
+    console.error("Admin List Users Controller Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Ошибка сервера при получении списка пользователей",
+      requestId: req?.id,
     });
   }
 };

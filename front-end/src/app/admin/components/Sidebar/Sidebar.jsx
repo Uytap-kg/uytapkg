@@ -14,6 +14,7 @@ import {
   Monitor,
   Database,
   ChevronRight,
+  Users,
 } from "lucide-react";
 
 import styles from "./Sidebar.module.css";
@@ -23,6 +24,11 @@ const navigation = [
     title: "Dashboard",
     href: "/admin",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Пользователи",
+    href: "/admin/users",
+    icon: Users,
   },
   {
     title: "Застройщики",

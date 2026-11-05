@@ -1052,6 +1052,39 @@ export async function searchAdminUsers(token, phone) {
   return data.data;
 }
 
+// Список пользователей для админки: пагинация, поиск (ФИО/телефон/email),
+// фильтр по типу аккаунта и периоду регистрации (7 | 30 | 90 | all).
+export async function getAdminUsers(
+  token,
+  { page = 1, limit = 20, search = "", accountType = "", period = "all" } = {},
+  { signal } = {},
+) {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    period,
+  });
+  if (search.trim()) params.set("search", search.trim());
+  if (accountType) params.set("accountType", accountType);
+
+  const response = await fetch(`${API_URL}/admin/users?${params.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    signal,
+  });
+
+  const data = await parseSafeJson(response);
+
+  if (!response.ok || !data?.success) {
+    const err = new Error(data?.message || "Ошибка получения списка пользователей");
+    err.status = response.status;
+    throw err;
+  }
+
+  return { users: data.data || [], pagination: data.pagination };
+}
+
 // Дефолтные тарифы (start/optimal/business), купленные через оплату
 export async function getDefaultTariffs(token) {
   const response = await fetch(`${API_URL}/admin/tariffs/default`, {

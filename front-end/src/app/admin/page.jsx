@@ -52,6 +52,8 @@ export default function AdminPage() {
       title: "Новые пользователи",
       value: stats ? stats.newUsersCount.toLocaleString("ru-RU") : "—",
       icon: Users,
+      // Тот же период, что и у счётчика на бэкенде (последние 30 дней)
+      href: "/admin/users?period=30",
     },
     {
       title: "Оплаты",
