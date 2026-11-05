@@ -2120,3 +2120,12 @@
     transition: none;
   }
 }
+
+.dealError {
+  display: block;
+  margin-top: 5px;
+  color: #e5484d;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}

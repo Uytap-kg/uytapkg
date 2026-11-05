@@ -270,7 +270,9 @@ export default function Lawyers() {
 
                       {lawyer.whatsapp && (
                         <a
-                          href={`https://wa.me/${lawyer.whatsapp.replace(/\D/g, "")}`}
+                          href={`https://wa.me/${lawyer.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
+                            "Здравствуйте! Я нашёл ваш профиль на сайте uytap.kg и хотел бы связаться с вами по поводу проверки недвижимости.",
+                          )}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className={styles.whatsapp}

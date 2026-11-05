@@ -144,7 +144,7 @@ export default function AgencyPublicProfile({
                 {whatsappNumber && (
                   <a
                     href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
-                      "Здравствуйте! Я нашёл ваше агентство на сайте uytap.kg и хотел бы узнать подробнее о ваших услугах и объектах недвижимости. Подскажите, пожалуйста, как можно с вами связаться?",
+                      "Здравствуйте! Я нашёл ваше агентство на сайте uytap.kg и хотел бы узнать подробнее о ваших услугах и объектах недвижимости",
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
