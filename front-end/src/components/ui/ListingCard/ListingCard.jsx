@@ -7,6 +7,14 @@ import { useLanguage } from "@/context/LanguageContext";
 
 import styles from "./ListingCard.module.css";
 
+const EXCHANGE_RATE = 87.8;
+
+function formatPrice(value, locale = "ru-RU") {
+  return Number(value || 0).toLocaleString(locale, {
+    maximumFractionDigits: 0,
+  });
+}
+
 export default function ListingCard({
   item,
   isFavorite,
@@ -20,6 +28,23 @@ export default function ListingCard({
 }) {
   const router = useRouter();
   const { t, language } = useLanguage();
+
+  // PRICE CONVERSION
+  const currency = String(
+    item?.currency || item?.raw?.currency || "USD",
+  ).toUpperCase();
+
+  const rawPrice = Number(item?.rawPrice ?? item?.raw?.price ?? 0);
+
+  const isUSD = currency === "USD";
+
+  const mainPrice = isUSD
+    ? `$${formatPrice(rawPrice, "en-US")}`
+    : `${formatPrice(rawPrice)} сом`;
+
+  const secondaryPrice = isUSD
+    ? `≈ ${formatPrice(rawPrice * EXCHANGE_RATE)} сом`
+    : `≈ $${formatPrice(rawPrice / EXCHANGE_RATE, "en-US")}`;
 
   // Normalize status values received from the API or mapped listing.
   const status = String(item?.status ?? "")
@@ -77,6 +102,7 @@ export default function ListingCard({
     }
 
     const n = Math.abs(Number(rooms));
+
     if (Number.isNaN(n)) {
       return "";
     }
@@ -87,12 +113,15 @@ export default function ListingCard({
     if (count > 10 && count < 20) {
       return t("listingCard.rooms.many", "комнат");
     }
+
     if (lastDigit > 1 && lastDigit < 5) {
       return t("listingCard.rooms.few", "комнаты");
     }
+
     if (lastDigit === 1) {
       return t("listingCard.rooms.one", "комната");
     }
+
     return t("listingCard.rooms.many", "комнат");
   }
 
@@ -225,7 +254,11 @@ export default function ListingCard({
         {/* BOTTOM */}
 
         <div className={styles.bottom}>
-          <strong>{item.price}</strong>
+          <div className={styles.priceBlock}>
+            <strong>{mainPrice}</strong>
+
+            <span className={styles.secondaryPrice}>{secondaryPrice}</span>
+          </div>
 
           <button
             type="button"
