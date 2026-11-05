@@ -43,6 +43,35 @@ export default function ProductDetails() {
    */
 
   const handleBack = () => {
+    try {
+      const savedState = sessionStorage.getItem("uytap_return_state");
+
+      if (savedState) {
+        const parsedState = JSON.parse(savedState);
+
+        const returnUrl = parsedState?.url;
+        const scrollY = Number(parsedState?.scrollY) || 0;
+
+        // Проверяем, что URL является внутренним маршрутом
+        if (
+          typeof returnUrl === "string" &&
+          returnUrl.startsWith("/") &&
+          !returnUrl.startsWith("//")
+        ) {
+          sessionStorage.setItem(
+            "uytap_restore_scroll",
+            JSON.stringify({ scrollY }),
+          );
+
+          router.push(returnUrl);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Error restoring previous page:", err);
+    }
+
+    // Если сохранённой страницы нет, используем обычный возврат
     if (window.history.length > 1) {
       router.back();
     } else {
