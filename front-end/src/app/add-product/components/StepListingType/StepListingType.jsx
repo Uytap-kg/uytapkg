@@ -94,7 +94,8 @@ const categoryLabels = {
 
 const FORBIDDEN_TITLE_WORDS = {
   sale: [
-    "аренд\\w*",
+    "аренда",
+    "арендуется",
     "сдаю",
     "сдаем",
     "сдаём",
@@ -108,10 +109,13 @@ const FORBIDDEN_TITLE_WORDS = {
     "rental",
     "for rent",
     "lease",
+    "ижара",
+    "ижарага берилет"
   ],
 
   rent: [
-    "продаж\\w*",
+    "продажа",
+    "покупка",
     "продаю",
     "продаем",
     "продаём",
@@ -121,6 +125,7 @@ const FORBIDDEN_TITLE_WORDS = {
     "продаётся",
     "продать",
     "продам",
+    "сатуу",
     "sell",
     "sale",
     "for sale",
