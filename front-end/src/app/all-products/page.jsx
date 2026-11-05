@@ -706,18 +706,16 @@ export default function AllProducts() {
 
           if (targetScrollY > 0) {
             requestAnimationFrame(() => {
-              window.scrollTo({ top: targetScrollY, behavior: "instant" });
+              window.scrollTo({
+                top: Math.max(0, targetScrollY - 250),
+                behavior: "instant",
+              });
             });
           }
         }
 
-        if (
-          favRes?.success &&
-          Array.isArray(favRes.data)
-        ) {
-          setFavIds(
-            new Set(favRes.data.map((item) => String(item.id))),
-          );
+        if (favRes?.success && Array.isArray(favRes.data)) {
+          setFavIds(new Set(favRes.data.map((item) => String(item.id))));
         }
       } catch (err) {
         if (err.name === "AbortError") return;
