@@ -707,7 +707,7 @@ export default function AllProducts() {
           if (targetScrollY > 0) {
             requestAnimationFrame(() => {
               window.scrollTo({
-                top: Math.max(0, targetScrollY - 250),
+                top: Math.max(0, savedScrollY - 250),
                 behavior: "instant",
               });
             });
@@ -752,6 +752,7 @@ export default function AllProducts() {
             JSON.stringify({
               filterKey: searchParamsRef.current,
               loadedCount: listingsRef.current.length,
+              listings: listingsRef.current,
               scrollY: window.scrollY || 0,
               timestamp: Date.now(),
             }),
