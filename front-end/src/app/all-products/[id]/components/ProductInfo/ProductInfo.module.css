@@ -1829,7 +1829,7 @@
   flex-shrink: 0;
   border-radius: 12px;
   background: #fff3eb;
-  color: #f97316;
+  color: #1684e8;
 }
 
 .locationSubtitle {
@@ -1881,7 +1881,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #f97316;
+  color: #1684e8;
 }
 
 .mapAddress {
@@ -1897,7 +1897,7 @@
 .mapAddress svg {
   flex-shrink: 0;
   margin-top: 2px;
-  color: #f97316;
+  color: #1684e8;
 }
 
 @media (max-width: 640px) {
