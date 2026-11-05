@@ -851,3 +851,23 @@
   outline-offset: 4px;
   border-radius: 4px;
 }
+
+.priceBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.price {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.secondaryPrice {
+  font-size: 13px;
+  font-weight: 500;
+  color: #858585;
+  line-height: 1.3;
+}

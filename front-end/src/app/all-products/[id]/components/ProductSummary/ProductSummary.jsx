@@ -16,6 +16,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import styles from "./ProductSummary.module.css";
 
 const ROOM_TYPES = ["квартира", "дом", "коттедж", "комната"];
+const EXCHANGE_RATE = 87.8;
 
 function normalizeType(value) {
   if (!value) return "";
@@ -102,6 +103,67 @@ function formatSeries(value, t) {
     labels[normalized.replace(/\s+/g, "_")] ||
     String(value).trim()
   );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Форматирование цены
+|--------------------------------------------------------------------------
+*/
+
+function formatPrice(value, locale = "ru-RU") {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return "0";
+
+  return Math.round(number).toLocaleString(locale);
+}
+
+function getPriceInfo(product) {
+  const currency = String(product?.currency || product?.raw?.currency || "USD")
+    .trim()
+    .toUpperCase();
+
+  // Приоритет — числовая цена из исходных данных
+  let rawPrice =
+    product?.rawPrice ??
+    product?.raw?.price ??
+    product?.priceValue ??
+    product?.rawFeatures?.price;
+
+  // Если числового поля нет, пробуем извлечь число из отображаемой цены
+  if (rawPrice === undefined || rawPrice === null || rawPrice === "") {
+    const priceText = String(product?.price || "");
+
+    const parsed = priceText.replace(/[^\d.,]/g, "").replace(",", ".");
+    rawPrice = parsed ? Number(parsed) : 0;
+  }
+
+  rawPrice = Number(rawPrice);
+
+  if (!Number.isFinite(rawPrice) || rawPrice <= 0) {
+    return null;
+  }
+
+  if (currency === "USD") {
+    return {
+      main: `$${formatPrice(rawPrice, "en-US")}`,
+      secondary: `≈ ${formatPrice(rawPrice * EXCHANGE_RATE)} сом`,
+    };
+  }
+
+  if (currency === "KGS" || currency === "KGS ") {
+    return {
+      main: `${formatPrice(rawPrice)} сом`,
+      secondary: `≈ $${formatPrice(rawPrice / EXCHANGE_RATE, "en-US")}`,
+    };
+  }
+
+  // Для неизвестной валюты не подменяем её сомами или долларами
+  return {
+    main: product?.price || `${formatPrice(rawPrice)} ${currency}`,
+    secondary: null,
+  };
 }
 
 /*
@@ -199,6 +261,8 @@ export default function ProductSummary({ product }) {
         : product.address || "";
 
   const twoGisUrl = getTwoGisUrl(product, displayLocation);
+
+  const priceInfo = getPriceInfo(product);
 
   const area = getRawValue(product, "area");
 
@@ -334,7 +398,15 @@ export default function ProductSummary({ product }) {
         </div>
       </div>
 
-      {product.price && <div className={styles.price}>{product.price}</div>}
+      {priceInfo && (
+        <div className={styles.priceBlock}>
+          <div className={styles.price}>{priceInfo.main}</div>
+
+          {priceInfo.secondary && (
+            <span className={styles.secondaryPrice}>{priceInfo.secondary}</span>
+          )}
+        </div>
+      )}
 
       {product.rentalPeriod && (
         <div className={styles.rentalInfo}>
