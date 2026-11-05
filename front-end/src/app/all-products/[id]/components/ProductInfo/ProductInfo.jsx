@@ -1383,7 +1383,7 @@ export default function ProductInfo({ product, router }) {
                   /\D/g,
                   "",
                 )}?text=${encodeURIComponent(
-                  "Здравствуйте! Я пишу вам по поводу вашего объявления на сайте uytap.kg. Подскажите, пожалуйста, оно ещё актуально?",
+                  "Здравствуйте, пишу Вам по поводу объявления на сайте uytap.kg",
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
