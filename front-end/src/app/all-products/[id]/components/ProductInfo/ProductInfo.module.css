@@ -1828,7 +1828,7 @@
   justify-content: center;
   flex-shrink: 0;
   border-radius: 12px;
-  background: #fff3eb;
+  background: #edebff;
   color: #1684e8;
 }
 
@@ -1845,9 +1845,9 @@
   height: 340px;
   margin-top: 20px;
   overflow: hidden;
-  border: 1px solid #e8e8e8;
+  border: 1px solid #edebff;
   border-radius: 18px;
-  background: #f3f4f6;
+  background: #edebff;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
 }
 
