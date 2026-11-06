@@ -46,7 +46,6 @@
   width: min(760px, 100%);
   margin: 20px;
 
-
   min-width: 0;
   max-height: calc(100dvh - 48px);
 
@@ -1340,5 +1339,122 @@
   .close:hover,
   .submit:hover:not(:disabled) {
     transform: none;
+  }
+}
+
+/* DAYS COUNTER */
+
+.daysCounter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.daysCounterButton {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font-size: 25px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.daysCounterButton:hover:not(:disabled) {
+  border-color: #f97316;
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.daysCounterButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.daysInputWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.daysInputWrap span {
+  color: #888;
+  font-size: 12px;
+}
+
+.daysInputWrap input {
+  width: 100px;
+  height: 42px;
+  padding: 0 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+}
+
+.daysInputWrap input:focus {
+  border-color: #f97316;
+}
+
+.daysInputWrap input::-webkit-inner-spin-button,
+.daysInputWrap input::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+.daysHint {
+  margin: 12px 0 0;
+  color: #888;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* INSTAGRAM ONE-TIME SERVICE */
+
+.oneTimeInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 14px;
+  text-align: center;
+}
+
+.oneTimeInfo strong {
+  font-size: 15px;
+}
+
+.oneTimeInfo span {
+  color: #888;
+  font-size: 13px;
+}
+
+/* MOBILE */
+
+@media (max-width: 560px) {
+  .daysCounter {
+    gap: 12px;
+  }
+
+  .daysCounterButton {
+    width: 38px;
+    height: 38px;
+  }
+
+  .daysInputWrap input {
+    width: 85px;
   }
 }

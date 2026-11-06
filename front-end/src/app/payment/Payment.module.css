@@ -2483,7 +2483,7 @@
 
 .dayOption:hover {
   border-color: #1a16f9;
-  background: rgba(249, 115, 22, 0.04);
+  background: rgba(26, 22, 249, 0.04);
 }
 
 .dayOption strong {
@@ -2498,7 +2498,7 @@
 
 .dayOptionActive {
   border: 1.5px solid #161df9;
-  background: rgba(249, 115, 22, 0.08);
+  background: rgba(22, 26, 249, 0.08);
   color: #170cea;
 }
 
