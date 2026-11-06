@@ -2425,14 +2425,14 @@
   align-items: center;
   justify-content: center;
   border-radius: 15px;
-  background: rgba(249, 115, 22, 0.1);
-  color: #f97316;
+  background: rgba(22, 33, 249, 0.1);
+  color: #1a16f9;
 }
 
 .selectionEyebrow {
   display: block;
   margin-bottom: 6px;
-  color: #f97316;
+  color: #1a16f9;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 1px;
@@ -2482,7 +2482,7 @@
 }
 
 .dayOption:hover {
-  border-color: #f97316;
+  border-color: #1a16f9;
   background: rgba(249, 115, 22, 0.04);
 }
 
@@ -2497,13 +2497,13 @@
 }
 
 .dayOptionActive {
-  border: 1.5px solid #f97316;
+  border: 1.5px solid #161df9;
   background: rgba(249, 115, 22, 0.08);
-  color: #ea580c;
+  color: #170cea;
 }
 
 .dayOptionActive span {
-  color: #ea580c;
+  color: #0c17ea;
 }
 
 .customDays {
@@ -2526,7 +2526,7 @@
 }
 
 .customDaysHeader span {
-  color: #888;
+  color: #888888;
   font-size: 11px;
 }
 
@@ -2553,8 +2553,8 @@
 }
 
 .daysCounter button:hover:not(:disabled) {
-  border-color: #f97316;
-  color: #f97316;
+  border-color: #161af9;
+  color: #1a16f9;
 }
 
 .daysCounter button:disabled {
@@ -2613,10 +2613,10 @@
   gap: 15px;
   margin-top: 22px;
   padding: 15px 17px;
-  border: 1px solid rgba(249, 115, 22, 0.2);
+  border: 1px solid rgba(22, 45, 249, 0.2);
   border-radius: 13px;
-  background: rgba(249, 115, 22, 0.055);
-  color: #ea580c;
+  background: rgba(26, 22, 249, 0.055);
+  color: #0c17ea;
 }
 
 .selectionSummary div {
@@ -2646,7 +2646,7 @@
   gap: 10px;
   border: none;
   border-radius: 13px;
-  background: #f97316;
+  background: #2516f9;
   color: #fff;
   font-size: 14px;
   font-weight: 800;
@@ -2655,7 +2655,7 @@
 }
 
 .continuePayment:hover {
-  background: #ea580c;
+  background: #130cea;
   transform: translateY(-1px);
 }
 
@@ -2674,10 +2674,10 @@
   align-items: center;
   gap: 13px;
   padding: 18px;
-  border: 1px solid rgba(249, 115, 22, 0.25);
+  border: 1px solid rgba(26, 22, 249, 0.25);
   border-radius: 14px;
-  background: rgba(249, 115, 22, 0.06);
-  color: #ea580c;
+  background: rgba(37, 22, 249, 0.06);
+  color: #130cea;
 }
 
 .oneTimeIcon {
@@ -2687,7 +2687,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  background: rgba(249, 115, 22, 0.12);
+  background: rgba(26, 22, 249, 0.12);
 }
 
 .oneTimeService div:nth-child(2) {
