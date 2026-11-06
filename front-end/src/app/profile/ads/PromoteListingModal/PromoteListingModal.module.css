@@ -1368,8 +1368,8 @@
 }
 
 .daysCounterButton:hover:not(:disabled) {
-  border-color: #f97316;
-  background: rgba(249, 115, 22, 0.08);
+  border-color: #2916f9;
+  background: rgba(26, 22, 249, 0.08);
 }
 
 .daysCounterButton:disabled {
@@ -1404,7 +1404,7 @@
 }
 
 .daysInputWrap input:focus {
-  border-color: #f97316;
+  border-color: #161df9;
 }
 
 .daysInputWrap input::-webkit-inner-spin-button,
