@@ -8,17 +8,20 @@ import {
   Check,
   Clock3,
   Copy,
-  ExternalLink,
   FileCheck2,
   LoaderCircle,
   ShieldCheck,
   Smartphone,
   Sparkles,
   XCircle,
+  Minus,
+  Plus,
+  CalendarDays,
 } from "lucide-react";
 
 import styles from "./Payment.module.css";
 import PaymentReceiptModal from "./PaymentReceiptModal/PaymentReceiptModal";
+
 import {
   createPayment,
   createPromotionPayment,
@@ -27,6 +30,10 @@ import {
 } from "@/utils/api";
 
 const POLL_INTERVAL_MS = 3000;
+const MIN_DAYS = 1;
+const MAX_DAYS = 30;
+
+const DAY_OPTIONS = [1, 3, 7, 14, 30];
 
 export default function PaymentPage() {
   const router = useRouter();
@@ -40,13 +47,21 @@ export default function PaymentPage() {
 
   const listingId = searchParams.get("listingId");
   const serviceType = searchParams.get("serviceType");
-  const days = Number(searchParams.get("days") || 1);
 
   const isPromotion = type === "promotion";
+  const isInstagram = serviceType === "instagram";
+
   const backHref = isPromotion ? "/profile/ads" : "/pricing";
 
-  // loading -> создаём счёт в O!Dengi | ready -> счёт создан, ждём/показываем оплату | error
-  const [loadState, setLoadState] = useState("loading");
+  // Для продвижения по умолчанию 1 день
+  const [selectedDays, setSelectedDays] = useState(1);
+
+  // selecting -> выбор периода | loading -> создание платежа
+  // ready -> QR-код | error -> ошибка
+  const [loadState, setLoadState] = useState(
+    isPromotion ? "selecting" : "loading",
+  );
+
   const [errorMessage, setErrorMessage] = useState("");
   const [payment, setPayment] = useState(null);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -62,6 +77,32 @@ export default function PaymentPage() {
     }
   }, []);
 
+  // Запуск автоматической проверки статуса платежа
+  const startPolling = useCallback(
+    (token, orderId) => {
+      stopPolling();
+
+      pollRef.current = setInterval(async () => {
+        try {
+          const fresh = await getPaymentStatus(token, orderId);
+
+          setPayment((prev) => (prev ? { ...prev, ...fresh } : fresh));
+
+          if (fresh.status === "approved") {
+            setShowReceipt(true);
+            stopPolling();
+          } else if (fresh.status === "canceled" || fresh.status === "failed") {
+            stopPolling();
+          }
+        } catch (error) {
+          console.error("Ошибка проверки статуса платежа:", error);
+        }
+      }, POLL_INTERVAL_MS);
+    },
+    [stopPolling],
+  );
+
+  // Инициализация страницы
   useEffect(() => {
     const token = localStorage.getItem("uytap_token");
 
@@ -70,13 +111,28 @@ export default function PaymentPage() {
       return undefined;
     }
 
-    if (isPromotion ? !listingId || !serviceType : !tariffId || !months) {
+    // Продвижение: сначала пользователь выбирает период
+    if (isPromotion) {
+      if (!listingId || !serviceType) {
+        setLoadState("error");
+        setErrorMessage(
+          "Не удалось определить объявление или услугу продвижения. Вернитесь в «Мои объявления».",
+        );
+        return undefined;
+      }
+
+      setLoadState("selecting");
+
+      return undefined;
+    }
+
+    // Обычная оплата тарифа
+    if (!tariffId || !months) {
       setLoadState("error");
       setErrorMessage(
-        isPromotion
-          ? "Не удалось определить объявление или услугу продвижения. Вернитесь в «Мои объявления»."
-          : "Не удалось определить тариф. Вернитесь на страницу тарифов.",
+        "Не удалось определить тариф. Вернитесь на страницу тарифов.",
       );
+
       return undefined;
     }
 
@@ -84,13 +140,10 @@ export default function PaymentPage() {
 
     const init = async () => {
       try {
-        const data = isPromotion
-          ? await createPromotionPayment(token, {
-              listingId,
-              serviceType,
-              days,
-            })
-          : await createPayment(token, { tariffId, months });
+        const data = await createPayment(token, {
+          tariffId,
+          months,
+        });
 
         if (cancelled) return;
 
@@ -102,24 +155,7 @@ export default function PaymentPage() {
           return;
         }
 
-        pollRef.current = setInterval(async () => {
-          try {
-            const fresh = await getPaymentStatus(token, data.orderId);
-
-            if (cancelled) return;
-
-            setPayment((prev) => (prev ? { ...prev, ...fresh } : fresh));
-
-            if (fresh.status === "approved") {
-              setShowReceipt(true);
-              stopPolling();
-            } else if (fresh.status === "canceled") {
-              stopPolling();
-            }
-          } catch (pollError) {
-            console.error("Ошибка проверки статуса платежа:", pollError);
-          }
-        }, POLL_INTERVAL_MS);
+        startPolling(token, data.orderId);
       } catch (error) {
         if (cancelled) return;
 
@@ -138,14 +174,79 @@ export default function PaymentPage() {
     };
   }, [
     isPromotion,
-    tariffId,
-    months,
     listingId,
     serviceType,
-    days,
+    tariffId,
+    months,
     router,
+    startPolling,
     stopPolling,
   ]);
+
+  // Изменение количества дней
+  const handleDaysChange = (value) => {
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) return;
+
+    setSelectedDays(Math.min(MAX_DAYS, Math.max(MIN_DAYS, Math.floor(number))));
+  };
+
+  const handleDecreaseDays = () => {
+    setSelectedDays((prev) => Math.max(MIN_DAYS, prev - 1));
+  };
+
+  const handleIncreaseDays = () => {
+    setSelectedDays((prev) => Math.min(MAX_DAYS, prev + 1));
+  };
+
+  // Создание платежа за продвижение после выбора периода
+  const handleStartPromotionPayment = async () => {
+    if (!isPromotion || loadState === "loading") return;
+
+    const token = localStorage.getItem("uytap_token");
+
+    if (!token) {
+      router.replace("/auth-required");
+      return;
+    }
+
+    if (!listingId || !serviceType) {
+      setLoadState("error");
+      setErrorMessage(
+        "Не удалось определить объявление или услугу продвижения.",
+      );
+      return;
+    }
+
+    const days = isInstagram ? 1 : selectedDays;
+
+    setLoadState("loading");
+    setErrorMessage("");
+
+    try {
+      const data = await createPromotionPayment(token, {
+        listingId,
+        serviceType,
+        days,
+      });
+
+      setPayment(data);
+      setLoadState("ready");
+
+      if (data.status === "approved") {
+        setShowReceipt(true);
+        return;
+      }
+
+      startPolling(token, data.orderId);
+    } catch (error) {
+      setLoadState("error");
+      setErrorMessage(
+        error.message || "Не удалось создать платёж. Попробуйте позже.",
+      );
+    }
+  };
 
   const copyPaymentId = async () => {
     if (!payment) return;
@@ -153,6 +254,7 @@ export default function PaymentPage() {
     try {
       await navigator.clipboard.writeText(payment.orderId);
       setCopied(true);
+
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
@@ -177,22 +279,25 @@ export default function PaymentPage() {
   };
 
   const formatMoney = (value) => {
-    return `${Number(value).toLocaleString("ru-RU")} сом`;
+    return `${Number(value || 0).toLocaleString("ru-RU")} сом`;
   };
 
   const getMonthsText = (value) => {
     if (value === 1) return "месяц";
-
     if (value >= 2 && value <= 4) return "месяца";
-
     return "месяцев";
   };
 
   const pluralDays = (n) => {
     const mod10 = n % 10;
     const mod100 = n % 100;
+
     if (mod10 === 1 && mod100 !== 11) return "день";
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "дня";
+
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+      return "дня";
+    }
+
     return "дней";
   };
 
@@ -201,18 +306,16 @@ export default function PaymentPage() {
       ? {
           heading: "Оплата продвижения",
           tariffLabel: "Услуга",
-          tariff: `${payment.serviceTitle || payment.tariffId} — ${
-            payment.listingTitle || "объявление"
-          }`,
-          priceLabel:
-            payment.serviceType === "instagram"
-              ? "Стоимость"
-              : "Стоимость / день",
+          tariff: `${
+            payment.serviceTitle || payment.tariffId
+          } — ${payment.listingTitle || "объявление"}`,
+          priceLabel: isInstagram ? "Стоимость" : "Стоимость / день",
           price: payment.pricePerUnit ?? payment.amount,
-          periodLabel:
-            payment.serviceType === "instagram"
-              ? "разово"
-              : `${payment.days} ${pluralDays(payment.days || 1)}`,
+          periodLabel: isInstagram
+            ? "1 раз"
+            : `${payment.days ?? selectedDays} ${pluralDays(
+                payment.days ?? selectedDays,
+              )}`,
           discount: 0,
           total: payment.amount,
           paymentId: payment.orderId,
@@ -232,7 +335,9 @@ export default function PaymentPage() {
   const isPending =
     payment &&
     (payment.status === "pending" || payment.status === "processing");
+
   const isApproved = payment?.status === "approved";
+
   const isCanceled =
     payment?.status === "canceled" || payment?.status === "failed";
 
@@ -261,6 +366,147 @@ export default function PaymentPage() {
       </header>
 
       <section className={styles.container}>
+        {/* ВЫБОР ПРОДОЛЖИТЕЛЬНОСТИ */}
+
+        {loadState === "selecting" && isPromotion && (
+          <div className={styles.selectionCard}>
+            <div className={styles.selectionHeader}>
+              <div className={styles.selectionIcon}>
+                <CalendarDays size={22} />
+              </div>
+
+              <div>
+                <span className={styles.selectionEyebrow}>UyTap Promotion</span>
+
+                <h1>Продолжительность продвижения</h1>
+
+                <p>
+                  Выберите, на какой период вы хотите продвинуть своё
+                  объявление.
+                </p>
+              </div>
+            </div>
+
+            {isInstagram ? (
+              <div className={styles.oneTimeService}>
+                <div className={styles.oneTimeIcon}>
+                  <Sparkles size={21} />
+                </div>
+
+                <div>
+                  <strong>Разовая услуга</strong>
+
+                  <span>1 публикация — 1 раз</span>
+                </div>
+
+                <Check size={20} />
+              </div>
+            ) : (
+              <>
+                <div className={styles.periodLabel}>Быстрый выбор</div>
+
+                <div className={styles.dayOptions}>
+                  {DAY_OPTIONS.map((day) => (
+                    <button
+                      key={day}
+                      type="button"
+                      className={`${styles.dayOption} ${
+                        selectedDays === day ? styles.dayOptionActive : ""
+                      }`}
+                      onClick={() => setSelectedDays(day)}
+                    >
+                      <strong>
+                        {day === 30 ? "1 месяц" : `${day} ${pluralDays(day)}`}
+                      </strong>
+
+                      {day === 1 && <span>Разово</span>}
+
+                      {day === 30 && <span>30 дней</span>}
+                    </button>
+                  ))}
+                </div>
+
+                <div className={styles.customDays}>
+                  <div className={styles.customDaysHeader}>
+                    <strong>Своё количество дней</strong>
+
+                    <span>От 1 до 30 дней</span>
+                  </div>
+
+                  <div className={styles.daysCounter}>
+                    <button
+                      type="button"
+                      onClick={handleDecreaseDays}
+                      disabled={selectedDays <= MIN_DAYS}
+                      aria-label="Уменьшить количество дней"
+                    >
+                      <Minus size={19} />
+                    </button>
+
+                    <div className={styles.daysValue}>
+                      <input
+                        type="number"
+                        min={MIN_DAYS}
+                        max={MAX_DAYS}
+                        value={selectedDays}
+                        onChange={(event) =>
+                          handleDaysChange(event.target.value)
+                        }
+                      />
+
+                      <span>{pluralDays(selectedDays)}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleIncreaseDays}
+                      disabled={selectedDays >= MAX_DAYS}
+                      aria-label="Увеличить количество дней"
+                    >
+                      <Plus size={19} />
+                    </button>
+                  </div>
+
+                  <div className={styles.daysRange}>
+                    <span>Минимум: 1 день</span>
+                    <span>Максимум: 30 дней</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className={styles.selectionSummary}>
+              <div>
+                <span>Выбранный период</span>
+
+                <strong>
+                  {isInstagram
+                    ? "1 раз"
+                    : `${selectedDays} ${pluralDays(selectedDays)}`}
+                </strong>
+              </div>
+
+              <Check size={20} />
+            </div>
+
+            <button
+              type="button"
+              className={styles.continuePayment}
+              onClick={handleStartPromotionPayment}
+            >
+              Перейти к оплате
+              <ArrowLeft size={18} style={{ transform: "rotate(180deg)" }} />
+            </button>
+
+            <p className={styles.selectionHint}>
+              Сумма будет рассчитана автоматически на основании выбранной
+              продолжительности и стоимости услуги.
+            </p>
+          </div>
+        )}
+
+        {/* СОЗДАНИЕ СЧЁТА */}
+
         {loadState === "loading" && (
           <div
             className={styles.qrCard}
@@ -270,6 +516,7 @@ export default function PaymentPage() {
               <div className={styles.qrIcon}>
                 <LoaderCircle size={20} className={styles.spin} />
               </div>
+
               <div>
                 <h2>Создаём счёт</h2>
                 <p>Подключаемся к O!Dengi...</p>
@@ -277,6 +524,8 @@ export default function PaymentPage() {
             </div>
           </div>
         )}
+
+        {/* ОШИБКА */}
 
         {loadState === "error" && (
           <div
@@ -287,6 +536,7 @@ export default function PaymentPage() {
               <div className={styles.qrIcon}>
                 <XCircle size={20} />
               </div>
+
               <div>
                 <h2>Не удалось начать оплату</h2>
                 <p>{errorMessage}</p>
@@ -296,12 +546,22 @@ export default function PaymentPage() {
             <button
               type="button"
               className={styles.actionButton}
-              onClick={() => router.push(backHref)}
+              onClick={() => {
+                if (isPromotion) {
+                  setLoadState("selecting");
+                } else {
+                  router.push(backHref);
+                }
+              }}
             >
-              {isPromotion ? "Вернуться к объявлениям" : "Вернуться к тарифам"}
+              {isPromotion
+                ? "Вернуться к выбору периода"
+                : "Вернуться к тарифам"}
             </button>
           </div>
         )}
+
+        {/* ГОТОВЫЙ ПЛАТЁЖ */}
 
         {loadState === "ready" && payment && (
           <>
@@ -309,6 +569,7 @@ export default function PaymentPage() {
               <div>
                 <div className={styles.badge}>
                   <Sparkles size={13} />
+
                   {isPromotion ? "Продвижение UyTap" : "UyTap PRO"}
                 </div>
 
@@ -342,7 +603,6 @@ export default function PaymentPage() {
 
                   <div>
                     <h2>Отсканируйте QR</h2>
-
                     <p>Откройте банковское приложение</p>
                   </div>
                 </div>
@@ -432,7 +692,6 @@ export default function PaymentPage() {
               <aside className={styles.summary}>
                 <div className={styles.summaryHeader}>
                   <span>Ваш заказ</span>
-
                   <FileCheck2 size={18} />
                 </div>
 
@@ -460,7 +719,9 @@ export default function PaymentPage() {
 
                     <strong>
                       {paymentData.periodLabel ||
-                        `${paymentData.months} ${getMonthsText(paymentData.months)}`}
+                        `${paymentData.months} ${getMonthsText(
+                          paymentData.months,
+                        )}`}
                     </strong>
                   </div>
 
@@ -486,7 +747,7 @@ export default function PaymentPage() {
 
                   <p>
                     {isPromotion
-                      ? payment.serviceType === "instagram"
+                      ? isInstagram
                         ? "После подтверждения оплаты заявка на публикацию поступит нашей команде."
                         : "После подтверждения оплаты продвижение будет применено к объявлению автоматически."
                       : "После подтверждения оплаты тариф будет активирован автоматически."}
@@ -498,6 +759,8 @@ export default function PaymentPage() {
         )}
       </section>
 
+      {/* ЭЛЕКТРОННЫЙ ЧЕК */}
+
       {paymentData && (
         <PaymentReceiptModal
           open={showReceipt}
@@ -508,7 +771,7 @@ export default function PaymentPage() {
           }
           description={
             isPromotion
-              ? payment?.serviceType === "instagram"
+              ? isInstagram
                 ? "Оплата получена, заявка передана нашей команде на публикацию. Ниже находится электронный чек."
                 : "Продвижение успешно применено к объявлению. Ниже находится электронный чек."
               : undefined

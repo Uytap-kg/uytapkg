@@ -2394,3 +2394,346 @@
     font-size: 9px;
   }
 }
+
+/* =========================================
+   PROMOTION PERIOD SELECTION
+========================================= */
+
+.selectionCard {
+  width: 100%;
+  max-width: 620px;
+  margin: 30px auto;
+  padding: 32px;
+  background: var(--card-bg, #fff);
+  border: 1px solid rgba(128, 128, 128, 0.16);
+  border-radius: 24px;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.06);
+}
+
+.selectionHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  margin-bottom: 30px;
+}
+
+.selectionIcon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  background: rgba(249, 115, 22, 0.1);
+  color: #f97316;
+}
+
+.selectionEyebrow {
+  display: block;
+  margin-bottom: 6px;
+  color: #f97316;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.selectionHeader h1 {
+  margin: 0 0 8px;
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.selectionHeader p {
+  margin: 0;
+  color: #858585;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.periodLabel {
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dayOptions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dayOption {
+  min-height: 76px;
+  padding: 13px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgba(128, 128, 128, 0.22);
+  border-radius: 13px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.dayOption:hover {
+  border-color: #f97316;
+  background: rgba(249, 115, 22, 0.04);
+}
+
+.dayOption strong {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.dayOption span {
+  color: #888;
+  font-size: 11px;
+}
+
+.dayOptionActive {
+  border: 1.5px solid #f97316;
+  background: rgba(249, 115, 22, 0.08);
+  color: #ea580c;
+}
+
+.dayOptionActive span {
+  color: #ea580c;
+}
+
+.customDays {
+  margin-top: 27px;
+  padding: 18px;
+  border-radius: 15px;
+  background: rgba(128, 128, 128, 0.055);
+}
+
+.customDaysHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.customDaysHeader strong {
+  font-size: 13px;
+}
+
+.customDaysHeader span {
+  color: #888;
+  font-size: 11px;
+}
+
+.daysCounter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.daysCounter button {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 12px;
+  background: var(--card-bg, #fff);
+  color: inherit;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.daysCounter button:hover:not(:disabled) {
+  border-color: #f97316;
+  color: #f97316;
+}
+
+.daysCounter button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.daysValue {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 7px;
+}
+
+.daysValue input {
+  width: 65px;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+  font-size: 30px;
+  font-weight: 800;
+  font-family: inherit;
+}
+
+.daysValue input::-webkit-inner-spin-button,
+.daysValue input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.daysValue input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.daysValue span {
+  color: #888;
+  font-size: 13px;
+}
+
+.daysRange {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  color: #888;
+  font-size: 11px;
+}
+
+.selectionSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-top: 22px;
+  padding: 15px 17px;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  border-radius: 13px;
+  background: rgba(249, 115, 22, 0.055);
+  color: #ea580c;
+}
+
+.selectionSummary div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.selectionSummary span {
+  font-size: 11px;
+  color: #888;
+}
+
+.selectionSummary strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.continuePayment {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 20px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: none;
+  border-radius: 13px;
+  background: #f97316;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.continuePayment:hover {
+  background: #ea580c;
+  transform: translateY(-1px);
+}
+
+.selectionHint {
+  margin: 13px 0 0;
+  color: #888;
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* Разовая услуга */
+
+.oneTimeService {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 18px;
+  border: 1px solid rgba(249, 115, 22, 0.25);
+  border-radius: 14px;
+  background: rgba(249, 115, 22, 0.06);
+  color: #ea580c;
+}
+
+.oneTimeIcon {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(249, 115, 22, 0.12);
+}
+
+.oneTimeService div:nth-child(2) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.oneTimeService strong {
+  font-size: 14px;
+}
+
+.oneTimeService span {
+  color: #888;
+  font-size: 12px;
+}
+
+/* Responsive */
+
+@media (max-width: 600px) {
+  .selectionCard {
+    margin: 15px auto;
+    padding: 22px 17px;
+    border-radius: 19px;
+  }
+
+  .selectionHeader h1 {
+    font-size: 19px;
+  }
+
+  .dayOptions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dayOption:last-child {
+    grid-column: span 2;
+  }
+
+  .customDays {
+    padding: 15px;
+  }
+
+  .customDaysHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+}
