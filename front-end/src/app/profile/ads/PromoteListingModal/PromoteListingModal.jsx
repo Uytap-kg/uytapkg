@@ -41,6 +41,8 @@ const SERVICES = [
 ];
 
 const DAY_OPTIONS = [1, 3, 7, 14, 30];
+const MAX_DAYS = 30;
+const MIN_DAYS = 1;
 
 const TARIFF_BOOSTABLE_SERVICES = ["vip", "top"];
 
@@ -56,7 +58,7 @@ export default function PromoteListingModal({
   const [pricing, setPricing] = useState(null);
   const [pricingError, setPricingError] = useState("");
   const [serviceType, setServiceType] = useState("vip");
-  const [days, setDays] = useState(7);
+  const [days, setDays] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
   /*
@@ -67,7 +69,7 @@ export default function PromoteListingModal({
     if (!isOpen) return;
 
     setServiceType("vip");
-    setDays(7);
+    setDays(1);
     setPricing(null);
     setPricingError("");
     setSubmitting(false);
@@ -78,7 +80,6 @@ export default function PromoteListingModal({
       })
       .catch((err) => {
         console.error("Ошибка загрузки цен продвижения:", err);
-
         setPricingError("promoteListingModal.errors.pricing");
       });
   }, [isOpen]);
@@ -134,6 +135,21 @@ export default function PromoteListingModal({
     return service.perDay
       ? t("promoteListingModal.pricing.perDay")
       : t("promoteListingModal.pricing.oneTime");
+  };
+
+  /*
+   * DAYS
+   */
+
+  const updateDays = (value) => {
+    const parsed = Number(value);
+
+    if (!Number.isFinite(parsed)) {
+      setDays(MIN_DAYS);
+      return;
+    }
+
+    setDays(Math.min(MAX_DAYS, Math.max(MIN_DAYS, Math.floor(parsed))));
   };
 
   /*
@@ -204,6 +220,7 @@ export default function PromoteListingModal({
        * пользователь всё равно может перейти
        * к обычной оплате.
        */
+
       goToPayment();
     } finally {
       setSubmitting(false);
@@ -316,6 +333,8 @@ export default function PromoteListingModal({
                 {t("promoteListingModal.days.label")}
               </span>
 
+              {/* QUICK OPTIONS */}
+
               <div className={styles.daysGrid}>
                 {DAY_OPTIONS.map((option) => (
                   <button
@@ -326,10 +345,63 @@ export default function PromoteListingModal({
                     }`}
                     onClick={() => setDays(option)}
                   >
-                    {option} {t("promoteListingModal.days.short")}
+                    {option === 30
+                      ? "1 месяц"
+                      : `${option} ${t("promoteListingModal.days.short")}`}
                   </button>
                 ))}
               </div>
+
+              {/* MANUAL COUNTER */}
+
+              <div className={styles.daysCounter}>
+                <button
+                  type="button"
+                  className={styles.daysCounterButton}
+                  onClick={() => updateDays(days - 1)}
+                  disabled={days <= MIN_DAYS}
+                  aria-label="Уменьшить количество дней"
+                >
+                  −
+                </button>
+
+                <label className={styles.daysInputWrap}>
+                  <span>Количество дней</span>
+
+                  <input
+                    type="number"
+                    min={MIN_DAYS}
+                    max={MAX_DAYS}
+                    step="1"
+                    value={days}
+                    onChange={(event) => updateDays(event.target.value)}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className={styles.daysCounterButton}
+                  onClick={() => updateDays(days + 1)}
+                  disabled={days >= MAX_DAYS}
+                  aria-label="Увеличить количество дней"
+                >
+                  +
+                </button>
+              </div>
+
+              <p className={styles.daysHint}>
+                Вы можете выбрать любой срок от 1 до 30 дней. Стоимость
+                рассчитывается за каждый день продвижения.
+              </p>
+            </div>
+          )}
+
+          {/* INSTAGRAM */}
+
+          {!selected.perDay && (
+            <div className={styles.oneTimeInfo}>
+              <strong>Разовая услуга</strong>
+              <span>Оплата производится один раз, без выбора срока.</span>
             </div>
           )}
         </div>

@@ -106,8 +106,14 @@ export default function Login() {
       }, 1000);
     } catch (err) {
       if (err?.needVerification) {
-        if (err?.verificationMethod === "phone" || (method === "phone" && (err?.phone || identifier))) {
-          const verifyPhone = String(err.phone || identifier).replace(/\D/g, "");
+        if (
+          err?.verificationMethod === "phone" ||
+          (method === "phone" && (err?.phone || identifier))
+        ) {
+          const verifyPhone = String(err.phone || identifier).replace(
+            /\D/g,
+            "",
+          );
           localStorage.setItem("register_phone", verifyPhone);
           router.push(
             `/auth-code?method=phone&phone=${encodeURIComponent(verifyPhone)}&reason=login`,
@@ -213,11 +219,6 @@ export default function Login() {
                       required
                     />
                   </div>
-
-                  <p className={styles.phoneHint}>
-                    <span>⚠</span>
-                    Временно доступны только операторы Beeline и MEGA.
-                  </p>
                 </>
               ) : (
                 <div className={styles.inputBox}>
