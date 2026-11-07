@@ -11,6 +11,8 @@
   --text-muted: #85818d;
 
   position: relative;
+  isolation: isolate;
+
   width: 100%;
   min-width: 0;
   min-height: 100vh;
@@ -19,66 +21,30 @@
   padding: 100px 50px 0;
   overflow-x: clip;
 
-  background:
-    linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
-    url("/assets/listings_main.jpg") center top / 100% auto no-repeat,
-    #fff;
+  background: #fff;
+  color: #ffff;
+}
 
-  color: var(--text);
+.page::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 700px;
+
+  background: url("/assets/listings_main.jpg") center top / 100% auto no-repeat;
+
+  filter: brightness(0.5);
+
+  z-index: -1;
+  pointer-events: none;
 }
 
 .page *,
 .page *::before,
 .page *::after {
   box-sizing: border-box;
-}
-
-/* =========================================================
-   BACKGROUND
-========================================================= */
-
-.glow {
-  position: absolute;
-  z-index: -1;
-
-  top: -260px;
-  left: 50%;
-
-  width: 700px;
-  height: 500px;
-
-  transform: translateX(-50%);
-
-  pointer-events: none;
-
-  background: radial-gradient(circle, rgba(72, 61, 246, 0.12), transparent 68%);
-
-  filter: blur(30px);
-}
-
-.page::after {
-  content: "";
-
-  position: absolute;
-  z-index: -1;
-
-  right: -260px;
-  bottom: 0;
-
-  width: 600px;
-  height: 600px;
-
-  border-radius: 50%;
-
-  background: radial-gradient(
-    circle,
-    rgba(72, 61, 246, 0.055),
-    transparent 70%
-  );
-
-  filter: blur(45px);
-
-  pointer-events: none;
 }
 
 /* =========================================================
@@ -140,7 +106,7 @@
 
   background: rgba(255, 255, 255, 0.88);
 
-  color: #65626e;
+  color: #f5f5f6;
 
   font-family: inherit;
   font-size: 13px;
@@ -191,12 +157,12 @@
 
   padding: 0 13px;
 
-  border: 1px solid rgba(72, 61, 246, 0.16);
+  border: 1px solid rgba(213, 211, 241, 0.814);
   border-radius: 999px;
 
-  background: rgba(72, 61, 246, 0.05);
+  background: rgba(217, 215, 247, 0.05);
 
-  color: #686572;
+  color: #f7f7f8;
 
   font-size: 10px;
   font-weight: 800;
@@ -219,7 +185,7 @@
 
   background: var(--accent);
 
-  box-shadow: 0 0 10px rgba(72, 61, 246, 0.45);
+  box-shadow: 0 0 10px rgba(246, 246, 250, 0.45);
 }
 
 .header h1 {
@@ -227,7 +193,7 @@
 
   margin: 0;
 
-  color: #18171d;
+  color: #ffff;
 
   font-size: clamp(38px, 5vw, 64px);
   line-height: 0.98;
@@ -240,7 +206,7 @@
 }
 
 .header h1 span {
-  color: var(--accent);
+  color: #6581fd;
 }
 
 .header p {
@@ -248,7 +214,7 @@
 
   margin: 20px 0 0;
 
-  color: #74717c;
+  color: #ffff;
 
   font-size: 15px;
   line-height: 1.65;
