@@ -39,7 +39,6 @@
 
   z-index: -1;
   pointer-events: none;
-  margin-bottom: 50px;
 }
 
 .page *,
@@ -61,7 +60,7 @@
   min-width: 0;
 
   margin: 0 auto;
-  margin-bottom: 40px;
+  margin-top: 50px
 }
 
 /* =========================================================
@@ -219,129 +218,6 @@
 
   font-size: 15px;
   line-height: 1.65;
-
-  overflow-wrap: anywhere;
-}
-
-/* =========================================================
-   OLD / CHILD SEARCH MODE STYLES
-   Kept for compatibility with nested components
-========================================================= */
-
-.searchModes {
-  display: grid;
-
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-
-  gap: 12px;
-
-  margin-bottom: 14px;
-
-  min-width: 0;
-}
-
-.searchMode {
-  position: relative;
-
-  display: flex;
-  align-items: center;
-
-  gap: 14px;
-
-  min-width: 0;
-  min-height: 70px;
-
-  padding: 14px 18px;
-
-  border: 1px solid #e3e2e9;
-  border-radius: 16px;
-
-  background: #fff;
-
-  color: #77737f;
-
-  text-align: left;
-
-  cursor: pointer;
-
-  box-shadow: 0 3px 12px rgba(20, 18, 35, 0.025);
-
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    color 0.2s ease,
-    transform 0.15s ease,
-    box-shadow 0.2s ease;
-}
-
-.searchMode:hover {
-  border-color: rgba(72, 61, 246, 0.35);
-
-  color: #403c4b;
-
-  box-shadow: 0 7px 20px rgba(20, 18, 35, 0.06);
-}
-
-.searchModeActive {
-  border-color: rgba(72, 61, 246, 0.55);
-
-  background:
-    linear-gradient(145deg, rgba(72, 61, 246, 0.07), rgba(72, 61, 246, 0.025)),
-    #fff;
-
-  color: #18171d;
-
-  box-shadow:
-    0 0 0 3px rgba(72, 61, 246, 0.055),
-    0 12px 30px rgba(20, 18, 35, 0.07);
-}
-
-.searchModeIcon {
-  width: 40px;
-  height: 40px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  flex: 0 0 40px;
-
-  border-radius: 12px;
-
-  background: #f3f2f7;
-
-  color: #77737f;
-}
-
-.searchModeActive .searchModeIcon {
-  background: rgba(72, 61, 246, 0.1);
-
-  color: var(--accent);
-}
-
-.searchModeContent {
-  min-width: 0;
-
-  display: flex;
-  flex-direction: column;
-
-  gap: 4px;
-}
-
-.searchModeTitle {
-  color: inherit;
-
-  font-size: 14px;
-  font-weight: 800;
-
-  overflow-wrap: anywhere;
-}
-
-.searchModeDescription {
-  color: #94919b;
-
-  font-size: 11px;
-  line-height: 1.4;
 
   overflow-wrap: anywhere;
 }
