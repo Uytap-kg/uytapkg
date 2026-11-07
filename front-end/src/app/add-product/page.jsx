@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { House } from "lucide-react";
@@ -23,6 +23,8 @@ import styles from "./AddProduct.module.css";
 ========================================================= */
 
 const DEFAULT_BOOST_DAYS = 7;
+const MAX_BOOST_DAYS = 30;
+const DRAFT_STORAGE_KEY = "uytap_add_product_draft";
 
 /* =========================================================
    INITIAL FORM
@@ -30,16 +32,7 @@ const DEFAULT_BOOST_DAYS = 7;
 
 const initialForm = {
   title: "",
-
-  // =========================
-  // ФОТО
-  // =========================
-
   images: [],
-
-  // =========================
-  // МЕСТОПОЛОЖЕНИЕ
-  // =========================
 
   country: "Кыргызстан",
   region: "",
@@ -48,50 +41,22 @@ const initialForm = {
   location: "",
   district: "",
 
-  // =========================
-  // СДЕЛКА
-  // =========================
-
   dealType: "",
   rentalPeriod: "",
 
-  // =========================
-  // КАТЕГОРИЯ
-  // =========================
-
   category: "",
-
-  // =========================
-  // ЦЕНА
-  // =========================
 
   priceFrom: "",
   priceTo: "",
   price: "",
 
-  // =========================
-  // ПЛОЩАДЬ
-  // =========================
-
   areaFrom: "",
   areaTo: "",
   area: "",
 
-  // =========================
-  // ИССЫК-КУЛЬ
-  // =========================
-
   beachDistance: "",
 
-  // =========================
-  // ЗАСТРОЙЩИК / ЖК
-  // =========================
-
   developerOrComplex: "",
-
-  // =========================
-  // ХАРАКТЕРИСТИКИ
-  // =========================
 
   series: "",
   residentialComplex: "",
@@ -137,15 +102,7 @@ const initialForm = {
 
   offerType: "",
 
-  // =========================
-  // УДОБСТВА
-  // =========================
-
   amenities: [],
-
-  // =========================
-  // ДОПОЛНИТЕЛЬНЫЕ
-  // =========================
 
   wifi: "",
   pool: "",
@@ -158,30 +115,17 @@ const initialForm = {
   buildingType: "",
   repair: "",
 
-  // =========================
-  // АДРЕС
-  // =========================
-
   address: "",
   latitude: null,
   longitude: null,
 
-  // =========================
-  // ТИП РАЗМЕЩЕНИЯ
-  // =========================
-
   listingType: "",
-
-  // =========================
-  // ОПИСАНИЕ
-  // =========================
 
   description: "",
 };
 
 /* =========================================================
    CATEGORY TITLES
-   Для generatedDescription.
 ========================================================= */
 
 const russianCategoryTitles = {
@@ -200,20 +144,96 @@ const russianCategoryTitles = {
 
 export default function AddProductPage() {
   const router = useRouter();
-
   const { t, language } = useLanguage();
 
   const [step, setStep] = useState(1);
-
   const [form, setForm] = useState(initialForm);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [submitMessage, setSubmitMessage] = useState("");
-
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
+  // ID объявления, которое уже создано
+  const [existingListingId, setExistingListingId] = useState(null);
+
+  // Сервис продвижения, полученный от сервера
+  const [existingServiceType, setExistingServiceType] = useState(null);
+
+  // Продолжительность продвижения
+  const [boostDays, setBoostDays] = useState(DEFAULT_BOOST_DAYS);
+
   const totalSteps = 6;
+
+  /* =========================================================
+     RESTORE DRAFT AFTER RETURN FROM PAYMENT
+  ========================================================= */
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get("resume") !== "1") return;
+
+    const savedDraft = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+
+    if (!savedDraft) {
+      console.error("Черновик объявления не найден.");
+      return;
+    }
+
+    try {
+      const draft = JSON.parse(savedDraft);
+
+      // Восстанавливаем форму
+      if (draft.form) {
+        setForm({
+          ...initialForm,
+          ...draft.form,
+
+          // Фотографии уже загружены на сервер.
+          // Используем их URL вместо старых blob URL.
+          images: Array.isArray(draft.form.images) ? draft.form.images : [],
+        });
+      }
+
+      // Восстанавливаем ID уже созданного объявления
+      const listingId = params.get("listingId") || draft.listingId;
+
+      if (listingId) {
+        setExistingListingId(listingId);
+      }
+
+      // Восстанавливаем тип продвижения
+      const serviceType =
+        params.get("serviceType") || draft.serviceType || null;
+
+      if (serviceType) {
+        setExistingServiceType(serviceType);
+      }
+
+      // Восстанавливаем выбранное количество дней
+      const requestedDays = Number(
+        params.get("days") || draft.boostDays || DEFAULT_BOOST_DAYS,
+      );
+
+      const restoredDays = Number.isFinite(requestedDays)
+        ? Math.min(MAX_BOOST_DAYS, Math.max(1, Math.floor(requestedDays)))
+        : DEFAULT_BOOST_DAYS;
+
+      setBoostDays(restoredDays);
+
+      // Возвращаем пользователя на последний шаг
+      setStep(6);
+
+      setSubmitMessage("");
+      setSubmitSuccess(false);
+
+      // Убираем параметры восстановления из адресной строки
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch (error) {
+      console.error("Ошибка восстановления объявления:", error);
+    }
+  }, []);
 
   /* =========================================================
      FORM UPDATE
@@ -265,13 +285,47 @@ export default function AddProductPage() {
   }
 
   /* =========================================================
+     OPEN PAYMENT FOR EXISTING LISTING
+  ========================================================= */
+
+  function goToExistingPayment() {
+    if (!existingListingId) return;
+
+    const serviceType = existingServiceType || form.listingType;
+
+    if (!serviceType) {
+      setSubmitMessage("Не удалось определить услугу продвижения.");
+      return;
+    }
+
+    const days = serviceType === "instagram" ? 1 : boostDays;
+
+    const params = new URLSearchParams({
+      type: "promotion",
+      listingId: String(existingListingId),
+      serviceType,
+      days: String(days),
+    });
+
+    // Обновляем черновик перед повторным переходом
+    const draft = {
+      form,
+      listingId: existingListingId,
+      serviceType,
+      boostDays: days,
+    };
+
+    sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+
+    router.push(`/payment?${params.toString()}`);
+  }
+
+  /* =========================================================
      SUBMIT
   ========================================================= */
 
   async function submitProduct() {
-    if (isSubmitting) {
-      return null;
-    }
+    if (isSubmitting) return null;
 
     setIsSubmitting(true);
     setSubmitMessage("");
@@ -282,12 +336,21 @@ export default function AddProductPage() {
 
       if (!token) {
         router.push("/auth-required");
-
         return null;
       }
 
       /* =====================================================
-         ВАЛИДАЦИЯ
+         ALREADY CREATED LISTING
+         Повторно объявление не создаём
+      ===================================================== */
+
+      if (existingListingId) {
+        goToExistingPayment();
+        return existingListingId;
+      }
+
+      /* =====================================================
+         VALIDATION
       ===================================================== */
 
       if (!form.title?.trim()) {
@@ -307,23 +370,21 @@ export default function AddProductPage() {
       }
 
       /* =====================================================
-         ЦЕНА
+         PRICE
       ===================================================== */
 
       const price = Number(form.price);
-
       const derivedPrice = price > 0 ? price : 100000;
 
       /* =====================================================
-         ПЛОЩАДЬ
+         AREA
       ===================================================== */
 
       const area = Number(form.area);
-
       const derivedArea = area > 0 ? area : null;
 
       /* =====================================================
-         ИССЫК-КУЛЬ
+         ISSYK-KUL
       ===================================================== */
 
       const isIssykKul =
@@ -338,13 +399,13 @@ export default function AddProductPage() {
           : null;
 
       /* =====================================================
-         КАТЕГОРИЯ
+         CATEGORY
       ===================================================== */
 
       const categoryTitle = getCategoryTitle(form.category);
 
       /* =====================================================
-         ОПИСАНИЕ
+         DESCRIPTION
       ===================================================== */
 
       const locationText =
@@ -360,9 +421,7 @@ export default function AddProductPage() {
         `${t("addProduct.generatedDescription.location")}: ${locationText}.`,
 
         form.district
-          ? `${t(
-              "addProduct.generatedDescription.district",
-            )}: ${form.district}.`
+          ? `${t("addProduct.generatedDescription.district")}: ${form.district}.`
           : "",
 
         form.address
@@ -370,9 +429,7 @@ export default function AddProductPage() {
           : "",
 
         form.developerOrComplex
-          ? `${t(
-              "addProduct.generatedDescription.developer",
-            )}: ${form.developerOrComplex}.`
+          ? `${t("addProduct.generatedDescription.developer")}: ${form.developerOrComplex}.`
           : "",
       ]
         .filter(Boolean)
@@ -381,7 +438,7 @@ export default function AddProductPage() {
       const description = form.description?.trim() || generatedDescription;
 
       /* =====================================================
-         ФОТО
+         UPLOAD PHOTOS
       ===================================================== */
 
       const photos = [];
@@ -392,12 +449,12 @@ export default function AddProductPage() {
             const uploadedUrl = await uploadListingPhoto(token, img.file);
 
             photos.push(uploadedUrl);
-          } catch (e) {
-            console.error("Failed to upload image:", img.file.name, e);
+          } catch (error) {
+            console.error("Failed to upload image:", img.file.name, error);
 
             throw new Error(
               `${t("addProduct.errors.photoUpload")} ${img.file.name}: ${
-                e.message || t("addProduct.errors.unknown")
+                error.message || t("addProduct.errors.unknown")
               }`,
             );
           }
@@ -407,7 +464,7 @@ export default function AddProductPage() {
       }
 
       /* =====================================================
-         УДОБСТВА
+         AMENITIES
       ===================================================== */
 
       const selectedAmenities = Array.isArray(form.amenities)
@@ -428,12 +485,12 @@ export default function AddProductPage() {
         const data = constants?.data || constants;
 
         resortAmenities = data?.amenities?.resort || [];
-      } catch (e) {
-        console.error("Failed to fetch constants for amenities split", e);
+      } catch (error) {
+        console.error("Failed to fetch constants for amenities split", error);
       }
 
       /* =====================================================
-         РАЗДЕЛЕНИЕ УДОБСТВ
+         SPLIT AMENITIES
       ===================================================== */
 
       const resortSelectedAmenities = selectedAmenities.filter((amenity) =>
@@ -672,41 +729,59 @@ export default function AddProductPage() {
 
       const result = await createListing(token, payload);
 
-      setSubmitSuccess(true);
-
-      setSubmitMessage(result?.message || t("addProduct.success"));
-
       /* =====================================================
-         CLEAN BLOB URLS
-      ===================================================== */
-
-      form.images?.forEach((image) => {
-        if (image?.url?.startsWith("blob:")) {
-          URL.revokeObjectURL(image.url);
-        }
-      });
-
-      /* =====================================================
-         RESET
-      ===================================================== */
-
-      setForm(initialForm);
-
-      setStep(1);
-
-      /* =====================================================
-         PAYMENT
+         PAYMENT REQUIRED
       ===================================================== */
 
       if (result?.needsPayment && result?.promotion && result?.data?.id) {
+        const listingId = result.data.id;
+
+        const serviceType = result.promotion.serviceType;
+
+        const days = Number(result.promotion.days || DEFAULT_BOOST_DAYS);
+
+        /*
+         * Сохраняем форму для возврата.
+         *
+         * Важно: сохраняем загруженные URL фотографий,
+         * а не временные blob URL и не File-объекты.
+         */
+
+        const draft = {
+          form: {
+            ...form,
+
+            images: photos.map((url) => ({
+              url,
+            })),
+          },
+
+          listingId,
+
+          serviceType,
+
+          boostDays: days,
+        };
+
+        sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+
+        // Сохраняем состояние и в текущем компоненте
+        setExistingListingId(listingId);
+        setExistingServiceType(serviceType);
+        setBoostDays(days);
+
+        // Освобождаем временные blob URL
+        form.images?.forEach((image) => {
+          if (image?.url?.startsWith("blob:")) {
+            URL.revokeObjectURL(image.url);
+          }
+        });
+
         const params = new URLSearchParams({
           type: "promotion",
-
-          listingId: result.data.id,
-
-          serviceType: result.promotion.serviceType,
-
-          days: String(result.promotion.days),
+          listingId: String(listingId),
+          serviceType,
+          days: String(days),
         });
 
         router.push(`/payment?${params.toString()}`);
@@ -718,7 +793,22 @@ export default function AddProductPage() {
          FREE / ALREADY PAID
       ===================================================== */
 
+      setSubmitSuccess(true);
+
       setSubmitMessage(result?.message || t("addProduct.success"));
+
+      // Освобождаем временные blob URL
+      form.images?.forEach((image) => {
+        if (image?.url?.startsWith("blob:")) {
+          URL.revokeObjectURL(image.url);
+        }
+      });
+
+      // Очищаем черновик
+      sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+
+      setForm(initialForm);
+      setStep(1);
 
       router.push("/profile/ads");
 
@@ -745,7 +835,6 @@ export default function AddProductPage() {
       <div className={styles.container}>
         <Link href="/" className={styles.homeButton}>
           <House size={18} />
-
           {t("addProduct.home")}
         </Link>
 

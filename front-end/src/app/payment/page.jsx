@@ -39,6 +39,10 @@ export default function PaymentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  /* =========================================================
+     URL PARAMETERS
+  ========================================================= */
+
   const type =
     searchParams.get("type") === "promotion" ? "promotion" : "tariff";
 
@@ -53,7 +57,10 @@ export default function PaymentPage() {
 
   const backHref = isPromotion ? "/profile/ads" : "/pricing";
 
-  // Выбранный срок продвижения
+  /* =========================================================
+     DAYS SELECTION
+  ========================================================= */
+
   const [selectedDays, setSelectedDays] = useState(() => {
     if (isPromotion && !isInstagram) {
       const urlDays = Number(searchParams.get("days") || 1);
@@ -66,16 +73,22 @@ export default function PaymentPage() {
     return 1;
   });
 
+  /* =========================================================
+     PAGE STATE
+  ========================================================= */
+
   // selecting -> выбор периода
   // loading -> создание платежа
   // ready -> QR-код
   // error -> ошибка
+
   const [loadState, setLoadState] = useState(
     isPromotion ? "selecting" : "loading",
   );
 
   const [errorMessage, setErrorMessage] = useState("");
   const [payment, setPayment] = useState(null);
+
   const [showReceipt, setShowReceipt] = useState(false);
   const [copied, setCopied] = useState(false);
   const [canceling, setCanceling] = useState(false);
@@ -83,9 +96,9 @@ export default function PaymentPage() {
   const pollRef = useRef(null);
   const requestRef = useRef(false);
 
-  /*
-   * STOP POLLING
-   */
+  /* =========================================================
+     STOP POLLING
+  ========================================================= */
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -94,30 +107,86 @@ export default function PaymentPage() {
     }
   }, []);
 
-  /*
-   * RETURN TO DURATION SELECTION
-   */
+  /* =========================================================
+     BACK TO ADD PRODUCT
+     
+     Возврат с выбора периода на шаг 6 AddProductPage.
+  ========================================================= */
 
-  const returnToDurationSelection = useCallback(() => {
-    if (isPromotion) {
-      stopPolling();
-
-      setPayment(null);
-      setShowReceipt(false);
-      setErrorMessage("");
-      setCopied(false);
-      setCanceling(false);
-      setLoadState("selecting");
-
+  const returnToAddProduct = useCallback(() => {
+    if (!isPromotion || !listingId || !serviceType) {
+      router.push("/profile/ads");
       return;
     }
 
-    router.push(backHref);
-  }, [isPromotion, stopPolling, router, backHref]);
+    stopPolling();
 
-  /*
-   * START PAYMENT STATUS POLLING
-   */
+    const params = new URLSearchParams({
+      resume: "1",
+      listingId: String(listingId),
+      serviceType,
+      days: String(isInstagram ? 1 : selectedDays || 1),
+    });
+
+    router.push(`/add-product?${params.toString()}`);
+  }, [
+    isPromotion,
+    listingId,
+    serviceType,
+    isInstagram,
+    selectedDays,
+    router,
+    stopPolling,
+  ]);
+
+  /* =========================================================
+     RETURN TO DURATION SELECTION
+     
+     Если пользователь на QR-экране:
+     возвращаем его к выбору периода.
+
+     Если пользователь уже на выборе периода:
+     возвращаем его в AddProduct.
+  ========================================================= */
+
+  const returnToDurationSelection = useCallback(() => {
+    if (!isPromotion) {
+      router.push(backHref);
+      return;
+    }
+
+    // На экране выбора периода кнопка "Назад"
+    // возвращает к последнему шагу AddProduct.
+    if (loadState === "selecting") {
+      returnToAddProduct();
+      return;
+    }
+
+    // На экране QR-оплаты возвращаемся
+    // к выбору продолжительности.
+    stopPolling();
+
+    requestRef.current = false;
+
+    setPayment(null);
+    setShowReceipt(false);
+    setErrorMessage("");
+    setCopied(false);
+    setCanceling(false);
+
+    setLoadState("selecting");
+  }, [
+    isPromotion,
+    loadState,
+    returnToAddProduct,
+    stopPolling,
+    router,
+    backHref,
+  ]);
+
+  /* =========================================================
+     START PAYMENT STATUS POLLING
+  ========================================================= */
 
   const startPolling = useCallback(
     (token, orderId) => {
@@ -153,9 +222,9 @@ export default function PaymentPage() {
     [stopPolling],
   );
 
-  /*
-   * PAGE INITIALIZATION
-   */
+  /* =========================================================
+     PAGE INITIALIZATION
+  ========================================================= */
 
   useEffect(() => {
     const token = localStorage.getItem("uytap_token");
@@ -165,7 +234,7 @@ export default function PaymentPage() {
       return;
     }
 
-    // Продвижение: пользователь сначала выбирает период
+    // Продвижение: сначала пользователь выбирает период
     if (isPromotion) {
       if (!listingId || !serviceType) {
         setLoadState("error");
@@ -241,9 +310,9 @@ export default function PaymentPage() {
     stopPolling,
   ]);
 
-  /*
-   * DAYS SELECTION
-   */
+  /* =========================================================
+     DAYS SELECTION HANDLERS
+  ========================================================= */
 
   const handleDaysChange = (value) => {
     if (value === "") {
@@ -276,9 +345,9 @@ export default function PaymentPage() {
     );
   };
 
-  /*
-   * CREATE PROMOTION PAYMENT
-   */
+  /* =========================================================
+     CREATE PROMOTION PAYMENT
+  ========================================================= */
 
   const handleStartPromotionPayment = async () => {
     if (!isPromotion || requestRef.current) return;
@@ -343,9 +412,9 @@ export default function PaymentPage() {
     }
   };
 
-  /*
-   * COPY PAYMENT ID
-   */
+  /* =========================================================
+     COPY PAYMENT ID
+  ========================================================= */
 
   const copyPaymentId = async () => {
     if (!payment) return;
@@ -361,9 +430,9 @@ export default function PaymentPage() {
     }
   };
 
-  /*
-   * CANCEL PAYMENT
-   */
+  /* =========================================================
+     CANCEL PAYMENT
+  ========================================================= */
 
   const handleCancel = async () => {
     if (!payment || canceling) return;
@@ -397,9 +466,9 @@ export default function PaymentPage() {
     }
   };
 
-  /*
-   * FORMATTERS
-   */
+  /* =========================================================
+     FORMATTERS
+  ========================================================= */
 
   const formatMoney = (value) => {
     return `${Number(value || 0).toLocaleString("ru-RU")} сом`;
@@ -427,9 +496,9 @@ export default function PaymentPage() {
     return "дней";
   };
 
-  /*
-   * PAYMENT DATA
-   */
+  /* =========================================================
+     PAYMENT DATA
+  ========================================================= */
 
   const paymentData = payment
     ? isPromotion
@@ -478,9 +547,9 @@ export default function PaymentPage() {
   const isCanceled =
     payment?.status === "canceled" || payment?.status === "failed";
 
-  /*
-   * RENDER
-   */
+  /* =========================================================
+     RENDER
+  ========================================================= */
 
   return (
     <main className={styles.page}>
@@ -509,7 +578,9 @@ export default function PaymentPage() {
       </header>
 
       <section className={styles.container}>
-        {/* ВЫБОР ПРОДОЛЖИТЕЛЬНОСТИ */}
+        {/* =================================================
+            ВЫБОР ПРОДОЛЖИТЕЛЬНОСТИ
+        ================================================= */}
 
         {loadState === "selecting" && isPromotion && (
           <div className={styles.selectionCard}>
@@ -651,7 +722,9 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {/* СОЗДАНИЕ СЧЁТА */}
+        {/* =================================================
+            СОЗДАНИЕ СЧЁТА
+        ================================================= */}
 
         {loadState === "loading" && (
           <div
@@ -671,7 +744,9 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {/* ОШИБКА */}
+        {/* =================================================
+            ОШИБКА
+        ================================================= */}
 
         {loadState === "error" && (
           <div
@@ -707,7 +782,9 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {/* ГОТОВЫЙ ПЛАТЁЖ */}
+        {/* =================================================
+            ГОТОВЫЙ ПЛАТЁЖ
+        ================================================= */}
 
         {loadState === "ready" && payment && (
           <>
@@ -847,6 +924,7 @@ export default function PaymentPage() {
 
                   <div>
                     <span>{paymentData.tariffLabel || "Тариф"}</span>
+
                     <strong>{paymentData.tariff}</strong>
                   </div>
                 </div>
@@ -882,6 +960,7 @@ export default function PaymentPage() {
 
                 <div className={styles.total}>
                   <span>Итого</span>
+
                   <strong>{formatMoney(paymentData.total)}</strong>
                 </div>
 
@@ -902,7 +981,9 @@ export default function PaymentPage() {
         )}
       </section>
 
-      {/* ЭЛЕКТРОННЫЙ ЧЕК */}
+      {/* =====================================================
+          ЭЛЕКТРОННЫЙ ЧЕК
+      ===================================================== */}
 
       {paymentData && (
         <PaymentReceiptModal
