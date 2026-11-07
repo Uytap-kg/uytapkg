@@ -11,32 +11,19 @@
   --text-muted: #85818d;
 
   position: relative;
-
   width: 100%;
   min-width: 0;
   min-height: 100vh;
-
   box-sizing: border-box;
 
-  padding: 100px 0 0;
-
+  padding: 100px 50px 0;
   overflow-x: clip;
 
-  background: linear-gradient(
-    to bottom,
-    #1403d4af 0%,
-    #6d61d679 3%,
-    #9289f049 8%,
-    #d8d4fa 16%,
-    #f4f2ff 28%,
-    #fff 55%,
-    #fff 100%
-  );
+  background:
+    url("/assets/listings_main.jpg") center top / 100% auto no-repeat,
+    #fff;
 
   color: var(--text);
-
-  padding-left: 50px;
-  padding-right: 50px;
 }
 
 .page *,
