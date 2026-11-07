@@ -20,6 +20,7 @@
   overflow-x: clip;
 
   background:
+    linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
     url("/assets/listings_main.jpg") center top / 100% auto no-repeat,
     #fff;
 
