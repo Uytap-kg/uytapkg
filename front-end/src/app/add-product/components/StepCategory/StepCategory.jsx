@@ -28,10 +28,6 @@ import CustomSelect from "@/components/ui/customSelect/CustomSelect";
 import styles from "./StepCategory.module.css";
 import ResidentialComplexSelect from "../ResidentialComplexSelect/ResidentialComplexSelect";
 
-/* =========================================================
-   ICONS
-========================================================= */
-
 const fieldIcons = {
   series: Tag,
   rooms: Building2,
@@ -43,30 +39,25 @@ const fieldIcons = {
   furniture: House,
   offerType: Tag,
   pets: PawPrint,
-
   houseType: House,
   floors: Building2,
   sewerage: Tag,
   water: Tag,
   electricity: Tag,
-
   purpose: Map,
   fence: Tag,
   location: Map,
   landLocation: Map,
   terrain: Map,
   communications: Map,
-
   roomsInApartment: Building2,
   privateBathroom: DoorOpen,
   roomLocation: Map,
-
   premisesType: Store,
   technicalParameters: Tag,
   firstLine: Store,
   separateEntrance: DoorOpen,
   rentalBusiness: Store,
-
   ceilingHeight: Ruler,
   parkingType: CarFront,
   material: Building2,
@@ -76,13 +67,8 @@ const fieldIcons = {
   basement: Building2,
   truckAccess: CarFront,
   gateType: DoorOpen,
-
   residentialComplex: Building2,
 };
-
-/* =========================================================
-   CATEGORY ICONS
-========================================================= */
 
 const categoryIcons = {
   apartment: Building2,
@@ -94,13 +80,6 @@ const categoryIcons = {
   parking: CarFront,
 };
 
-/* =========================================================
-   RUSSIAN CATEGORY TITLES
-   Используются напрямую для RU,
-   чтобы категории больше не зависели
-   от неправильного fallback в переводах.
-========================================================= */
-
 const russianCategoryTitles = {
   apartment: "Квартиры",
   house: "Дома",
@@ -111,10 +90,6 @@ const russianCategoryTitles = {
   parking: "Паркинг",
 };
 
-/* =========================================================
-   RUSSIAN CATEGORY DESCRIPTIONS
-========================================================= */
-
 const russianCategoryDescriptions = {
   apartment: "Квартиры в новостройках и на вторичном рынке",
   house: "Частные дома, особняки и таунхаусы",
@@ -124,10 +99,6 @@ const russianCategoryDescriptions = {
   commercial: "Офисы, магазины, склады и другие помещения",
   parking: "Паркинги, гаражи и места для автомобилей",
 };
-
-/* =========================================================
-   CATEGORIES
-========================================================= */
 
 const categories = {
   apartment: {
@@ -335,10 +306,6 @@ const categories = {
   },
 };
 
-/* =========================================================
-   OPTIONS
-========================================================= */
-
 const options = {
   series: [
     "Любой",
@@ -524,10 +491,6 @@ const options = {
   ],
 };
 
-/* =========================================================
-   ЖК
-========================================================= */
-
 const residentialComplexSeries = [
   "Новостройка",
   "106 обычная",
@@ -539,17 +502,12 @@ const residentialComplexSeries = [
   "Пентхаус",
 ];
 
-/* =========================================================
-   HELPERS
-========================================================= */
-
 function getFieldOptions(field, dynamicOptions) {
   return dynamicOptions[field] || options[field] || [];
 }
 
 function getTranslation(t, key, fallback) {
   const translated = t(key);
-
   return translated === key ? fallback : translated;
 }
 
@@ -564,10 +522,6 @@ function getOptionLabel(name, option, t) {
 function getAmenityLabel(amenity, t) {
   return getTranslation(t, `stepCategory.amenities.items.${amenity}`, amenity);
 }
-
-/* =========================================================
-   CATEGORY TRANSLATION
-========================================================= */
 
 function getCategoryTitle(category, t, language) {
   if (language === "ru") {
@@ -593,26 +547,26 @@ function getCategoryDescription(category, t, language) {
   );
 }
 
-/* =========================================================
-   COMPONENT
-========================================================= */
-
 export default function StepCategory({ form, updateForm, onNext, onBack }) {
   const { t, language } = useLanguage();
 
   const [dynamicOptions, setDynamicOptions] = useState({});
   const [apiError, setApiError] = useState(false);
 
-  /* =========================================================
-     DEAL TYPE
-  ========================================================= */
-
   const isRent = form.dealType === "rent";
   const isApartment = form.category === "apartment";
 
-  /* =========================================================
-     LOAD CONSTANTS
-  ========================================================= */
+  // PRICE VALIDATION
+  const priceValue = String(form.price || "");
+  const numericPrice = Number(priceValue);
+
+  const priceError =
+    priceValue !== "" &&
+    (isRent ? priceValue.length > 4 : numericPrice < 10000);
+
+  const priceErrorText = isRent
+    ? "При аренде цена не должна превышать 4 цифры"
+    : "Минимальная цена при покупке — 10 000";
 
   useEffect(() => {
     getConstants()
@@ -625,7 +579,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
 
         setDynamicOptions((prev) => ({
           ...prev,
-
           apiAmenities: [
             ...(data.amenities.general || []),
             ...(data.amenities.resort || []),
@@ -634,48 +587,28 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
       })
       .catch((err) => {
         console.error("Failed to fetch constants", err);
-
         setApiError(true);
       });
   }, []);
 
-  /* =========================================================
-     RESET RENT-SPECIFIC FIELDS
-  ========================================================= */
-
   useEffect(() => {
     if (!isRent) {
       if (form.pets) {
-        updateForm({
-          pets: "",
-        });
+        updateForm({ pets: "" });
       }
-
       return;
     }
 
     const resetFields = {};
 
-    if (form.documents) {
-      resetFields.documents = "";
-    }
-
-    if (form.offerType) {
-      resetFields.offerType = "";
-    }
-
-    if (!isApartment && form.pets) {
-      resetFields.pets = "";
-    }
+    if (form.documents) resetFields.documents = "";
+    if (form.offerType) resetFields.offerType = "";
+    if (!isApartment && form.pets) resetFields.pets = "";
 
     if (Object.keys(resetFields).length > 0) {
       updateForm(resetFields);
     }
   }, [isRent, isApartment]);
-
-  /* =========================================================
-     REGION
-  ========================================================= */
 
   const isIssykKul =
     form.region === "ISSYK_KUL" ||
@@ -683,33 +616,19 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
     form.region === "ISSYK-KUL" ||
     form.region === "issyk-kul";
 
-  /* =========================================================
-     CATEGORY
-  ========================================================= */
-
   const visibleCategories = Object.entries(categories).filter(
     ([key]) => key !== "cottage" || isIssykKul,
   );
 
   const category = categories[form.category];
-
   const CategoryIcon = categoryIcons[form.category];
-
   const isLand = form.category === "land";
-
-  /* =========================================================
-     ЖК VISIBILITY
-  ========================================================= */
 
   const showResidentialComplex =
     form.category === "apartment" &&
     (!form.series ||
       form.series === "Любая" ||
       residentialComplexSeries.includes(form.series));
-
-  /* =========================================================
-     RESET COTTAGE
-  ========================================================= */
 
   useEffect(() => {
     if (!isIssykKul && form.category === "cottage") {
@@ -720,10 +639,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
       });
     }
   }, [isIssykKul, form.category]);
-
-  /* =========================================================
-     RESET ЖК
-  ========================================================= */
 
   useEffect(() => {
     if (
@@ -741,19 +656,9 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
     form.residentialComplexId,
   ]);
 
-  /* =========================================================
-     UPDATE FIELD
-  ========================================================= */
-
   function updateField(name, value) {
-    updateForm({
-      [name]: value,
-    });
+    updateForm({ [name]: value });
   }
-
-  /* =========================================================
-     CATEGORY SELECT
-  ========================================================= */
 
   function selectCategory(key) {
     updateForm({
@@ -764,10 +669,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
       pets: "",
     });
   }
-
-  /* =========================================================
-     AMENITIES
-  ========================================================= */
 
   const selectedAmenities = Array.isArray(form.amenities) ? form.amenities : [];
 
@@ -780,21 +681,14 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
       ? selectedAmenities.filter((item) => item !== amenity)
       : [...selectedAmenities, amenity];
 
-    updateForm({
-      amenities: nextAmenities,
-    });
+    updateForm({ amenities: nextAmenities });
   }
-
-  /* =========================================================
-     CATEGORY FIELDS
-  ========================================================= */
 
   const visibleFields =
     category?.fields.filter(([name]) => {
       if (isRent && (name === "documents" || name === "offerType")) {
         return false;
       }
-
       return true;
     }) || [];
 
@@ -802,40 +696,52 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
     visibleFields.push(["pets", "Можно с животными"]);
   }
 
-  /* =========================================================
-     RENDER
-  ========================================================= */
+  function handlePriceChange(e) {
+    let value = e.target.value.replace(/\D/g, "");
+
+    if (isRent) {
+      value = value.slice(0, 4);
+    }
+
+    updateForm({ price: value });
+  }
+
+  function handleNext() {
+    const currentPrice = String(form.price || "");
+    const amount = Number(currentPrice);
+
+    if (
+      !currentPrice ||
+      (isRent && currentPrice.length > 4) ||
+      (!isRent && amount < 10000)
+    ) {
+      return;
+    }
+
+    onNext();
+  }
 
   return (
     <div className={styles.step}>
-      {/* HEADER */}
-
       <div className={styles.header}>
         <div className={styles.stepBadge}>
           <span className={styles.stepDot} />
-
           {t("stepCategory.step")}
         </div>
 
         <h1>{t("stepCategory.title")}</h1>
-
         <p>{t("stepCategory.description")}</p>
       </div>
-
-      {/* API ERROR */}
 
       {apiError && (
         <div className={styles.apiError}>{t("stepCategory.apiError")}</div>
       )}
-
-      {/* CATEGORY */}
 
       {!category && (
         <div className={styles.categorySection}>
           <div className={styles.sectionTitle}>
             <div>
               <span>01</span>
-
               <h2>{t("stepCategory.category.title")}</h2>
             </div>
 
@@ -865,7 +771,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
 
                   <div className={styles.categoryContent}>
                     <strong>{getCategoryTitle(key, t, language)}</strong>
-
                     <span>{getCategoryDescription(key, t, language)}</span>
                   </div>
 
@@ -877,8 +782,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
         </div>
       )}
 
-      {/* SELECTED CATEGORY */}
-
       {category && (
         <>
           <div className={styles.selectedCategory}>
@@ -889,7 +792,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
 
               <div className={styles.selectedCategoryInfo}>
                 <span>{t("stepCategory.selectedCategory")}</span>
-
                 <strong>{getCategoryTitle(form.category, t, language)}</strong>
               </div>
             </div>
@@ -907,7 +809,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
               }
             >
               <Pencil size={14} />
-
               {t("stepCategory.change")}
             </button>
           </div>
@@ -918,7 +819,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
             <div className={styles.sectionTitle}>
               <div>
                 <span>02</span>
-
                 <h2>{t("stepCategory.priceArea.title")}</h2>
               </div>
 
@@ -935,26 +835,17 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
                   <label>{t("stepCategory.priceArea.priceLabel")}</label>
 
                   <input
-                    type="number"
-                    min={isRent ? "1" : "10000"}
-                    max={isRent ? "9999" : undefined}
-                    maxLength={isRent ? 4 : undefined}
+                    type="text"
+                    inputMode="numeric"
                     placeholder={t("stepCategory.priceArea.pricePlaceholder")}
                     value={form.price || ""}
-                    onChange={(e) => {
-                      let value = e.target.value;
-
-                      value = value.replace(/\D/g, "");
-
-                      if (isRent) {
-                        value = value.slice(0, 4);
-                      }
-
-                      updateForm({
-                        price: value,
-                      });
-                    }}
+                    onChange={handlePriceChange}
+                    aria-invalid={priceError}
                   />
+
+                  {priceError && (
+                    <span className={styles.priceError}>{priceErrorText}</span>
+                  )}
                 </div>
               </div>
 
@@ -980,11 +871,7 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
                         : t("stepCategory.priceArea.areaPlaceholder")
                     }
                     value={form.area || ""}
-                    onChange={(e) =>
-                      updateForm({
-                        area: e.target.value,
-                      })
-                    }
+                    onChange={(e) => updateForm({ area: e.target.value })}
                   />
                 </div>
               </div>
@@ -998,7 +885,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
               <div className={styles.sectionTitle}>
                 <div>
                   <span>03</span>
-
                   <h2>{t("stepCategory.beachDistance.title")}</h2>
                 </div>
 
@@ -1038,7 +924,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
             <div className={styles.sectionTitle}>
               <div>
                 <span>{isIssykKul ? "04" : "03"}</span>
-
                 <h2>{t("stepCategory.characteristics.title")}</h2>
               </div>
 
@@ -1130,7 +1015,6 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
               <div className={styles.sectionTitle}>
                 <div>
                   <span>{isIssykKul ? "05" : "04"}</span>
-
                   <h2>{t("stepCategory.amenities.title")}</h2>
                 </div>
 
@@ -1174,13 +1058,15 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
           <div className={styles.actions}>
             <button type="button" className={styles.secondary} onClick={onBack}>
               <ArrowLeft size={17} />
-
               {t("common.back")}
             </button>
 
-            <button type="button" className={styles.primary} onClick={onNext}>
+            <button
+              type="button"
+              className={styles.primary}
+              onClick={handleNext}
+            >
               {t("stepCategory.continue")}
-
               <ChevronRight size={18} />
             </button>
           </div>

@@ -1741,3 +1741,32 @@
     transition: none;
   }
 }
+
+.priceError {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 7px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  animation: priceErrorAppear 0.2s ease;
+}
+
+@keyframes priceErrorAppear {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
