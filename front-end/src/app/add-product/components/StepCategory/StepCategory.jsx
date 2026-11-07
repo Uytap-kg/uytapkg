@@ -697,12 +697,7 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
   }
 
   function handlePriceChange(e) {
-    let value = e.target.value.replace(/\D/g, "");
-
-    if (isRent) {
-      value = value.slice(0, 4);
-    }
-
+    const value = e.target.value.replace(/\D/g, "");
     updateForm({ price: value });
   }
 
