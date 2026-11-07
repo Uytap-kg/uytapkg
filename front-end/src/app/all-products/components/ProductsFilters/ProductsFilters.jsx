@@ -54,6 +54,17 @@ const quickOptions = [
   },
 ];
 
+// Нормализация для сравнения названий городов и районов.
+// Не изменяет оригинальные значения в базе данных.
+export const normalizeCity = (value = "") =>
+  String(value)
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]/gi, "");
+
 export default function ProductsFilters({
   searchMode,
   setSearchMode,
@@ -72,18 +83,20 @@ export default function ProductsFilters({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [cityValue, setCityValue] = useState(
-    filters.city === "Все" ? "" : filters.city,
+    filters.city === "Все" ? "" : filters.city || "",
   );
 
   const [priceFrom, setPriceFrom] = useState(filters.priceFrom || "");
   const [priceTo, setPriceTo] = useState(filters.priceTo || "");
 
+  // Синхронизация полей с внешними фильтрами
   useEffect(() => {
-    setCityValue(filters.city === "Все" ? "" : filters.city);
+    setCityValue(filters.city === "Все" ? "" : filters.city || "");
     setPriceFrom(filters.priceFrom || "");
     setPriceTo(filters.priceTo || "");
   }, [filters.city, filters.priceFrom, filters.priceTo]);
 
+  // Закрытие боковой панели по Escape
   useEffect(() => {
     if (!sidebarOpen) return;
 
@@ -104,6 +117,7 @@ export default function ProductsFilters({
     };
   }, [sidebarOpen]);
 
+  // Быстрые варианты поиска
   const handleQuickOption = (option) => {
     const rentPeriod =
       option.id === "long" ? "long" : option.id === "daily" ? "daily" : "";
@@ -136,10 +150,13 @@ export default function ProductsFilters({
     return !filters.rentPeriod;
   };
 
+  // Основной поиск
   const handleSearch = () => {
+    const originalCity = cityValue.trim();
+
     const next = {
       ...filters,
-      city: cityValue.trim() || "Все",
+      city: originalCity || "Все",
       priceFrom,
       priceTo,
     };
@@ -151,11 +168,16 @@ export default function ProductsFilters({
     updateUrl(next);
   };
 
+  // Поиск по Enter
+  const handleCityKeyDown = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleSearch();
+    }
+  };
+
   return (
     <section className={styles.compactSearch}>
-      {/* Стеклянный фон находится в CSS ::before.
-          Все элементы интерфейса находятся над ним. */}
-
       <div className={styles.searchContent}>
         <div className={styles.modeSwitch}>
           <SearchModeSlider value={searchMode} onChange={setSearchMode} />
@@ -220,9 +242,7 @@ export default function ProductsFilters({
                     placeholder="Город или район"
                     value={cityValue}
                     onChange={(e) => setCityValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSearch();
-                    }}
+                    onKeyDown={handleCityKeyDown}
                   />
                 </span>
               </label>
