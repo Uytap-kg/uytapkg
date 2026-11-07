@@ -22,6 +22,7 @@ import SearchModeSlider from "../SearchModeSlider/SearchModeSlider";
 import SmartSearch from "../SmartSearch/SmartSearch";
 
 import styles from "./ProductFilters.module.css";
+import ProductFilterSidebar from "./ProductFiltersSidebar/ProductFilterSidebar";
 
 const quickOptions = [
   {
@@ -283,7 +284,7 @@ export default function ProductsFilters({
 
                   <input
                     type="text"
-                    placeholder="Город"
+                    placeholder="Город, Село или Область"
                     value={cityValue}
                     onChange={(event) => setCityValue(event.target.value)}
                     onKeyDown={handleCityKeyDown}
@@ -351,145 +352,16 @@ export default function ProductsFilters({
 
       {/* FILTER SIDEBAR */}
       {sidebarOpen && (
-        <div
-          className={styles.sidebarOverlay}
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setSidebarOpen(false);
-            }
-          }}
-        >
-          <aside
-            className={styles.filterSidebar}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="filters-title"
-          >
-            {/* HEADER */}
-            <div className={styles.sidebarHeader}>
-              <div>
-                <span>UYTAP • SEARCH</span>
-                <h2 id="filters-title">Все фильтры</h2>
-                <p>Настройте параметры недвижимости</p>
-              </div>
-
-              <button
-                type="button"
-                className={styles.sidebarClose}
-                onClick={() => setSidebarOpen(false)}
-                aria-label="Закрыть"
-              >
-                <X size={21} />
-              </button>
-            </div>
-
-            {/* CONTENT */}
-            <div className={styles.sidebarContent}>
-              <div className={styles.sidebarSection}>
-                <label>Тип недвижимости</label>
-
-                <div className={styles.sidebarCategories}>
-                  {categories.map((category) => (
-                    <button
-                      type="button"
-                      key={category.value}
-                      className={
-                        filters.propertyType === category.value
-                          ? styles.sidebarCategoryActive
-                          : ""
-                      }
-                      onClick={() =>
-                        updateFilter("propertyType", category.value)
-                      }
-                    >
-                      {category.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className={styles.sidebarSection}>
-                <label>Тип сделки</label>
-
-                <div className={styles.sidebarDeal}>
-                  <button
-                    type="button"
-                    className={
-                      filters.dealType === "sale"
-                        ? styles.sidebarCategoryActive
-                        : ""
-                    }
-                    onClick={() => updateFilter("dealType", "sale")}
-                  >
-                    Покупка
-                  </button>
-
-                  <button
-                    type="button"
-                    className={
-                      filters.dealType === "rent"
-                        ? styles.sidebarCategoryActive
-                        : ""
-                    }
-                    onClick={() => updateFilter("dealType", "rent")}
-                  >
-                    Аренда
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.sidebarSection}>
-                <label>Основные параметры</label>
-
-                <CommonFilters
-                  filters={filters}
-                  updateFilter={updateFilter}
-                  showBeachDistance={showBeachDistance}
-                />
-              </div>
-
-              <div className={styles.sidebarSection}>
-                <div className={styles.sidebarCategoryHeading}>
-                  <span>Характеристики</span>
-
-                  <h3>{categoryLabels[filters.propertyType]}</h3>
-                </div>
-
-                <CategoryFilters
-                  filters={filters}
-                  updateFilter={updateFilter}
-                />
-              </div>
-            </div>
-
-            {/* FOOTER */}
-            <div className={styles.sidebarFooter}>
-              <button
-                type="button"
-                className={styles.sidebarReset}
-                onClick={() => {
-                  resetFilters();
-                  setSidebarOpen(false);
-                }}
-              >
-                <RotateCcw size={16} />
-                Сбросить
-              </button>
-
-              <button
-                type="button"
-                className={styles.sidebarApply}
-                onClick={() => {
-                  updateUrl(filters);
-                  setSidebarOpen(false);
-                }}
-              >
-                <Search size={17} />
-                Показать объявления
-              </button>
-            </div>
-          </aside>
-        </div>
+        <ProductFilterSidebar
+          filters={filters}
+          updateFilter={updateFilter}
+          categories={categories}
+          categoryLabels={categoryLabels}
+          CategoryFilters={CategoryFilters}
+          resetFilters={resetFilters}
+          updateUrl={updateUrl}
+          onClose={() => setSidebarOpen(false)}
+        />
       )}
     </section>
   );

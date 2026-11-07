@@ -711,13 +711,8 @@ export default function AllProducts() {
           }
         }
 
-        if (
-          favRes?.success &&
-          Array.isArray(favRes.data)
-        ) {
-          setFavIds(
-            new Set(favRes.data.map((item) => String(item.id))),
-          );
+        if (favRes?.success && Array.isArray(favRes.data)) {
+          setFavIds(new Set(favRes.data.map((item) => String(item.id))));
         }
       } catch (err) {
         if (err.name === "AbortError") return;
@@ -774,40 +769,43 @@ export default function AllProducts() {
   /* =======================================================
      URL SEARCHPARAMS → LOAD LISTINGS
   ======================================================= */
-
   useEffect(() => {
     let initialLimit = 20;
     let initialScrollY = 0;
 
     if (!initialScrollRestoredRef.current) {
       initialScrollRestoredRef.current = true;
+
       try {
         const rawSaved = sessionStorage.getItem("uytap_catalog_state");
+
         if (rawSaved) {
           const saved = JSON.parse(rawSaved);
-          const isFresh = Date.now() - saved.timestamp < 15 * 60 * 1000; // 15 минут TTL
+          const isFresh = Date.now() - saved.timestamp < 15 * 60 * 1000;
           const isSameFilter = saved.filterKey === searchParamsString;
 
           if (isFresh && isSameFilter && saved.loadedCount > 0) {
             initialLimit = Math.min(100, Math.max(20, saved.loadedCount));
             initialScrollY = saved.scrollY || 0;
           }
+
           sessionStorage.removeItem("uytap_catalog_state");
         }
       } catch (e) {
-        // Игнорируем ошибки парсинга
+        // Игнорируем ошибки восстановления состояния
       }
     }
 
-    const nextFilters = parseUrlToFilters(searchParams);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    const currentParams = new URLSearchParams(searchParamsString);
+    const nextFilters = parseUrlToFilters(currentParams);
+
     setFilters(nextFilters);
+
     fetchListings(nextFilters, 1, initialLimit, {
       isLoadMore: false,
       targetScrollY: initialScrollY,
     });
-  }, [searchParamsString, fetchListings, searchParams]);
-
+  }, [searchParamsString, fetchListings]);
   /* =======================================================
      UPDATE FILTER & URL
   ======================================================= */
