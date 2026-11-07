@@ -53,6 +53,21 @@ export default function PaymentPage() {
 
   const backHref = isPromotion ? "/profile/ads" : "/pricing";
 
+  const returnToDurationSelection = () => {
+    if (isPromotion && listingId && serviceType) {
+      const params = new URLSearchParams({
+        type: "promotion",
+        listingId,
+        serviceType,
+      });
+
+      router.push(`/payment?${params.toString()}`);
+      return;
+    }
+
+    router.push(backHref);
+  };
+
   // Для продвижения по умолчанию 1 день
   const [selectedDays, setSelectedDays] = useState(1);
 
@@ -274,7 +289,13 @@ export default function PaymentPage() {
       console.error("Ошибка отмены платежа:", error);
     } finally {
       stopPolling();
-      router.push(backHref);
+      if (isPromotion) {
+        setPayment(null);
+        setShowReceipt(false);
+        setLoadState("selecting");
+      } else {
+        router.push(backHref);
+      }
     }
   };
 
@@ -349,7 +370,7 @@ export default function PaymentPage() {
         <button
           type="button"
           className={styles.backButton}
-          onClick={() => router.back()}
+          onClick={returnToDurationSelection}
         >
           <ArrowLeft size={17} />
           Назад
