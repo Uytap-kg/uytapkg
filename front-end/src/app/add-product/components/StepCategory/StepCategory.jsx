@@ -936,14 +936,24 @@ export default function StepCategory({ form, updateForm, onNext, onBack }) {
 
                   <input
                     type="number"
-                    min="0"
+                    min={isRent ? "1" : "10000"}
+                    max={isRent ? "9999" : undefined}
+                    maxLength={isRent ? 4 : undefined}
                     placeholder={t("stepCategory.priceArea.pricePlaceholder")}
                     value={form.price || ""}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      let value = e.target.value;
+
+                      value = value.replace(/\D/g, "");
+
+                      if (isRent) {
+                        value = value.slice(0, 4);
+                      }
+
                       updateForm({
-                        price: e.target.value,
-                      })
-                    }
+                        price: value,
+                      });
+                    }}
                   />
                 </div>
               </div>
