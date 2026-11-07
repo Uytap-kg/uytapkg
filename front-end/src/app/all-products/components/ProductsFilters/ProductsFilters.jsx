@@ -283,7 +283,7 @@ export default function ProductsFilters({
 
                   <input
                     type="text"
-                    placeholder="Город, район или микрорайон"
+                    placeholder="Город"
                     value={cityValue}
                     onChange={(event) => setCityValue(event.target.value)}
                     onKeyDown={handleCityKeyDown}
