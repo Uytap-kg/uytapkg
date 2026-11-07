@@ -54,16 +54,50 @@ const quickOptions = [
   },
 ];
 
-// Нормализация для сравнения названий городов и районов.
-// Не изменяет оригинальные значения в базе данных.
-export const normalizeCity = (value = "") =>
-  String(value)
+// Нормализация названий городов, районов и адресов
+export const normalizeCity = (value = "") => {
+  return String(value)
     .toLowerCase()
     .trim()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/ё/g, "е")
     .replace(/[^a-zа-я0-9]/gi, "");
+};
+
+// Универсальный поиск по местоположению объявления
+export const matchesLocation = (property, searchValue) => {
+  if (!searchValue || searchValue.trim() === "" || searchValue === "Все") {
+    return true;
+  }
+
+  const query = normalizeCity(searchValue);
+
+  if (!query) return true;
+
+  const locationFields = [
+    property?.city,
+    property?.region,
+    property?.district,
+    property?.address,
+    property?.location,
+    property?.neighborhood,
+    property?.microdistrict,
+    property?.area,
+    property?.settlement,
+  ];
+
+  return locationFields.some((value) => {
+    if (!value) return false;
+
+    // Поддержка строк и массивов значений
+    if (Array.isArray(value)) {
+      return value.some((item) => normalizeCity(item).includes(query));
+    }
+
+    return normalizeCity(value).includes(query);
+  });
+};
 
 export default function ProductsFilters({
   searchMode,
@@ -136,6 +170,7 @@ export default function ProductsFilters({
     updateUrl(next);
   };
 
+  // Проверка активного быстрого фильтра
   const isOptionActive = (option) => {
     if (
       filters.propertyType !== option.propertyType ||
@@ -144,8 +179,13 @@ export default function ProductsFilters({
       return false;
     }
 
-    if (option.id === "long") return filters.rentPeriod === "long";
-    if (option.id === "daily") return filters.rentPeriod === "daily";
+    if (option.id === "long") {
+      return filters.rentPeriod === "long";
+    }
+
+    if (option.id === "daily") {
+      return filters.rentPeriod === "daily";
+    }
 
     return !filters.rentPeriod;
   };
@@ -168,7 +208,7 @@ export default function ProductsFilters({
     updateUrl(next);
   };
 
-  // Поиск по Enter
+  // Поиск при нажатии Enter
   const handleCityKeyDown = (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -183,6 +223,7 @@ export default function ProductsFilters({
           <SearchModeSlider value={searchMode} onChange={setSearchMode} />
         </div>
 
+        {/* SMART SEARCH */}
         {searchMode === "smart" && (
           <div className={styles.modeContent}>
             <SmartSearch
@@ -195,6 +236,7 @@ export default function ProductsFilters({
           </div>
         )}
 
+        {/* REGULAR FILTER SEARCH */}
         {searchMode === "filters" && (
           <div className={styles.modeContent}>
             <div className={styles.compactTop}>
@@ -209,6 +251,7 @@ export default function ProductsFilters({
               </button>
             </div>
 
+            {/* QUICK OPTIONS */}
             <div className={styles.quickOptions}>
               {quickOptions.map((option) => {
                 const Icon = option.icon;
@@ -230,6 +273,7 @@ export default function ProductsFilters({
               })}
             </div>
 
+            {/* SEARCH FIELDS */}
             <div className={styles.searchFields}>
               <label className={styles.searchField}>
                 <MapPin size={18} />
@@ -239,10 +283,11 @@ export default function ProductsFilters({
 
                   <input
                     type="text"
-                    placeholder="Город или район"
+                    placeholder="Город, район или микрорайон"
                     value={cityValue}
-                    onChange={(e) => setCityValue(e.target.value)}
+                    onChange={(event) => setCityValue(event.target.value)}
                     onKeyDown={handleCityKeyDown}
+                    autoComplete="off"
                   />
                 </span>
               </label>
@@ -256,18 +301,20 @@ export default function ProductsFilters({
                   <div className={styles.priceInputs}>
                     <input
                       type="number"
+                      min="0"
                       placeholder="От"
                       value={priceFrom}
-                      onChange={(e) => setPriceFrom(e.target.value)}
+                      onChange={(event) => setPriceFrom(event.target.value)}
                     />
 
                     <span>—</span>
 
                     <input
                       type="number"
+                      min="0"
                       placeholder="До"
                       value={priceTo}
-                      onChange={(e) => setPriceTo(e.target.value)}
+                      onChange={(event) => setPriceTo(event.target.value)}
                     />
                   </div>
                 </span>
@@ -284,6 +331,7 @@ export default function ProductsFilters({
               </button>
             </div>
 
+            {/* QUICK ACTIONS */}
             <div className={styles.quickActions}>
               <button type="button" className={styles.secondaryAction}>
                 <Map size={15} />
@@ -305,8 +353,8 @@ export default function ProductsFilters({
       {sidebarOpen && (
         <div
           className={styles.sidebarOverlay}
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) {
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
               setSidebarOpen(false);
             }
           }}
@@ -317,6 +365,7 @@ export default function ProductsFilters({
             aria-modal="true"
             aria-labelledby="filters-title"
           >
+            {/* HEADER */}
             <div className={styles.sidebarHeader}>
               <div>
                 <span>UYTAP • SEARCH</span>
@@ -334,6 +383,7 @@ export default function ProductsFilters({
               </button>
             </div>
 
+            {/* CONTENT */}
             <div className={styles.sidebarContent}>
               <div className={styles.sidebarSection}>
                 <label>Тип недвижимости</label>
@@ -348,9 +398,9 @@ export default function ProductsFilters({
                           ? styles.sidebarCategoryActive
                           : ""
                       }
-                      onClick={() => {
-                        updateFilter("propertyType", category.value);
-                      }}
+                      onClick={() =>
+                        updateFilter("propertyType", category.value)
+                      }
                     >
                       {category.label}
                     </button>
@@ -401,6 +451,7 @@ export default function ProductsFilters({
               <div className={styles.sidebarSection}>
                 <div className={styles.sidebarCategoryHeading}>
                   <span>Характеристики</span>
+
                   <h3>{categoryLabels[filters.propertyType]}</h3>
                 </div>
 
@@ -411,6 +462,7 @@ export default function ProductsFilters({
               </div>
             </div>
 
+            {/* FOOTER */}
             <div className={styles.sidebarFooter}>
               <button
                 type="button"
