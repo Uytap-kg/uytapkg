@@ -1,0 +1,711 @@
+/* =========================================
+   GLASS SEARCH PANEL
+========================================= */
+
+.compactSearch {
+  position: relative;
+  isolation: isolate;
+  z-index: 2;
+
+  width: 100%;
+  margin: 0 auto 24px;
+  padding: 16px 20px;
+
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 18px;
+
+  background: transparent;
+
+  box-shadow:
+    0 12px 40px rgba(20, 16, 70, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+
+  overflow: hidden;
+}
+
+/* Сам стеклянный слой */
+.compactSearch::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+
+  border-radius: inherit;
+
+  background: rgba(255, 255, 255, 0.286);
+
+  backdrop-filter: blur(60px) saturate(185%);
+  -webkit-backdrop-filter: blur(60px) saturate(185%);
+}
+
+/* Контент поверх размытого стекла */
+.searchContent {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+/* =========================================
+   MODE SWITCH
+========================================= */
+
+.modeSwitch {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin: 0 auto 14px;
+}
+
+.modeContent {
+  width: 100%;
+  min-width: 0;
+  animation: modeAppear 0.2s ease;
+}
+
+@keyframes modeAppear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =========================================
+   HEADER
+========================================= */
+
+.compactTop {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 11px;
+}
+
+.compactEyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: #c9c7ff;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+
+.compactTop h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.compactTop p {
+  margin: 3px 0 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+}
+
+/* =========================================
+   ALL FILTERS BUTTON
+========================================= */
+
+.allFiltersButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  min-height: 34px;
+  padding: 0 12px;
+
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.2);
+
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 750;
+
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.allFiltersButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.allFiltersButton:hover {
+  background: rgba(255, 255, 255, 0.32);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.filterDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a9a1ff;
+}
+
+/* =========================================
+   QUICK OPTIONS
+========================================= */
+
+.quickOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 11px;
+}
+
+.quickOption {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  min-height: 34px;
+  padding: 0 11px;
+
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.17);
+
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.quickOption svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.quickOption:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+.quickOptionActive {
+  background: #fff;
+  border-color: #fff;
+  color: #483df6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.quickOptionActive:hover {
+  background: #f5f4ff;
+}
+
+/* =========================================
+   SEARCH FIELDS
+========================================= */
+
+.searchFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 1px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+
+  min-height: 63px;
+  padding: 9px 10px 9px 15px;
+
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 13px;
+
+  background: rgba(255, 255, 255, 0.94);
+
+  box-shadow:
+    0 7px 20px rgba(10, 8, 50, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.searchField {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: #483df6;
+}
+
+.searchField > svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.searchField > span,
+.priceField > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.searchField small,
+.priceField small {
+  color: #898694;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.searchField input,
+.priceInputs input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+
+  border: 0;
+  outline: 0;
+  background: transparent;
+
+  color: #25232b;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.searchField input::placeholder,
+.priceInputs input::placeholder {
+  color: #aaa7b1;
+}
+
+.fieldDivider {
+  width: 1px;
+  height: 32px;
+  background: #e9e7f0;
+}
+
+.priceField {
+  min-width: 0;
+  color: #483df6;
+}
+
+.priceInputs {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.priceInputs > span {
+  color: #aaa7b1;
+}
+
+/* =========================================
+   MAIN SEARCH BUTTON
+========================================= */
+
+.mainSearchButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  min-height: 42px;
+  padding: 0 15px;
+
+  border: 0;
+  border-radius: 10px;
+
+  background: linear-gradient(135deg, #5145ff, #392ee0);
+
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  box-shadow: 0 5px 13px rgba(72, 61, 246, 0.2);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.mainSearchButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.mainSearchButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 17px rgba(72, 61, 246, 0.3);
+}
+
+/* =========================================
+   QUICK ACTIONS
+========================================= */
+
+.quickActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  min-height: 30px;
+  padding: 0 10px;
+
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 9px;
+
+  background: rgba(255, 255, 255, 0.15);
+
+  color: #fff;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.secondaryAction svg {
+  width: 14px;
+  height: 14px;
+}
+
+.secondaryAction:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* =========================================
+   SIDEBAR
+========================================= */
+
+.sidebarOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  display: flex;
+  justify-content: flex-end;
+
+  background: rgba(12, 10, 35, 0.45);
+
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+
+  animation: overlayAppear 0.2s ease;
+}
+
+@keyframes overlayAppear {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.filterSidebar {
+  display: flex;
+  flex-direction: column;
+
+  width: min(460px, 100%);
+  height: 100%;
+  overflow: hidden;
+
+  background: #fff;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.16);
+
+  animation: sidebarAppear 0.25s ease;
+}
+
+@keyframes sidebarAppear {
+  from {
+    transform: translateX(30px);
+    opacity: 0.7;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.sidebarHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+
+  padding: 24px 22px 18px;
+  border-bottom: 1px solid #eeedf3;
+}
+
+.sidebarHeader > div > span {
+  color: #7168e8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+
+.sidebarHeader h2 {
+  margin: 7px 0 4px;
+  color: #252333;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.sidebarHeader p {
+  margin: 0;
+  color: #888693;
+  font-size: 12px;
+}
+
+.sidebarClose {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+
+  border: 1px solid #ecebf2;
+  border-radius: 10px;
+  background: #f8f7fb;
+
+  color: #454252;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.sidebarClose:hover {
+  background: #efedff;
+  color: #483df6;
+}
+
+.sidebarContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 22px;
+}
+
+.sidebarSection {
+  margin-bottom: 25px;
+}
+
+.sidebarSection > label {
+  display: block;
+  margin-bottom: 11px;
+
+  color: #343140;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sidebarCategories,
+.sidebarDeal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sidebarCategories button,
+.sidebarDeal button {
+  min-height: 35px;
+  padding: 0 12px;
+
+  border: 1px solid #e9e7f0;
+  border-radius: 9px;
+  background: #fff;
+
+  color: #5d5a69;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 650;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.sidebarCategories button:hover,
+.sidebarDeal button:hover {
+  border-color: #b9b4ff;
+  background: #f8f7ff;
+}
+
+.sidebarCategories button.sidebarCategoryActive,
+.sidebarDeal button.sidebarCategoryActive {
+  border-color: #5145ff;
+  background: #f0efff;
+  color: #483df6;
+}
+
+.sidebarCategoryHeading {
+  margin-bottom: 12px;
+}
+
+.sidebarCategoryHeading > span {
+  color: #888693;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.sidebarCategoryHeading h3 {
+  margin: 4px 0 0;
+  color: #343140;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.sidebarFooter {
+  display: flex;
+  gap: 10px;
+  padding: 15px 22px;
+
+  border-top: 1px solid #eeedf3;
+  background: #fff;
+}
+
+.sidebarReset,
+.sidebarApply {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  min-height: 43px;
+  border-radius: 10px;
+
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 750;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.sidebarReset {
+  padding: 0 13px;
+  border: 1px solid #e8e6ef;
+  background: #fff;
+  color: #656171;
+}
+
+.sidebarReset:hover {
+  background: #f7f6fb;
+}
+
+.sidebarApply {
+  flex: 1;
+  padding: 0 14px;
+  border: 0;
+  background: #483df6;
+  color: #fff;
+}
+
+.sidebarApply:hover {
+  background: #392edc;
+}
+
+/* =========================================
+   RESPONSIVE
+========================================= */
+
+@media (max-width: 850px) {
+  .compactSearch {
+    padding: 14px;
+  }
+
+  .searchFields {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .fieldDivider {
+    display: none;
+  }
+
+  .mainSearchButton {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 600px) {
+  .compactSearch {
+    padding: 12px;
+    border-radius: 15px;
+  }
+
+  .modeSwitch {
+    margin-bottom: 11px;
+  }
+
+  .quickOptions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .quickOption {
+    min-height: 33px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+
+  .searchFields {
+    grid-template-columns: 1fr;
+    gap: 13px;
+    padding: 12px;
+  }
+
+  .mainSearchButton {
+    grid-column: auto;
+    min-height: 40px;
+  }
+
+  .quickActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .secondaryAction {
+    justify-content: center;
+    padding: 0 5px;
+    font-size: 9px;
+  }
+
+  .sidebarHeader {
+    padding: 19px 16px 15px;
+  }
+
+  .sidebarContent {
+    padding: 17px 16px;
+  }
+
+  .sidebarFooter {
+    padding: 12px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modeContent,
+  .sidebarOverlay,
+  .filterSidebar {
+    animation: none;
+  }
+}

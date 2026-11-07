@@ -18,7 +18,7 @@
   min-height: 100vh;
   box-sizing: border-box;
 
-  padding: 100px 50px 0;
+  padding: 80px 50px 0;
   overflow-x: clip;
 
   background: #fff;
@@ -1759,3 +1759,5 @@
     animation: none;
   }
 }
+
+
