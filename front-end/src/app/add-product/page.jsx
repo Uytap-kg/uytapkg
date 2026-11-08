@@ -384,27 +384,44 @@ export default function AddProductPage() {
          ФОТО
       ===================================================== */
 
-      const photos = [];
+      // Загружаем по PHOTO_UPLOAD_CONCURRENCY фото одновременно (а не строго
+      // по одному) — порядок в итоговом массиве сохраняется по индексу.
+      const PHOTO_UPLOAD_CONCURRENCY = 3;
+      const sourceImages = form.images || [];
+      const photoSlots = new Array(sourceImages.length).fill(null);
+      let nextImageIndex = 0;
 
-      for (const img of form.images || []) {
-        if (img.file) {
-          try {
-            const uploadedUrl = await uploadListingPhoto(token, img.file);
+      const uploadWorker = async () => {
+        while (nextImageIndex < sourceImages.length) {
+          const index = nextImageIndex++;
+          const img = sourceImages[index];
 
-            photos.push(uploadedUrl);
-          } catch (e) {
-            console.error("Failed to upload image:", img.file.name, e);
+          if (img.file) {
+            try {
+              photoSlots[index] = await uploadListingPhoto(token, img.file);
+            } catch (e) {
+              console.error("Failed to upload image:", img.file.name, e);
 
-            throw new Error(
-              `${t("addProduct.errors.photoUpload")} ${img.file.name}: ${
-                e.message || t("addProduct.errors.unknown")
-              }`,
-            );
+              throw new Error(
+                `${t("addProduct.errors.photoUpload")} ${img.file.name}: ${
+                  e.message || t("addProduct.errors.unknown")
+                }`,
+              );
+            }
+          } else if (img.url && !img.url.startsWith("blob:")) {
+            photoSlots[index] = img.url;
           }
-        } else if (img.url && !img.url.startsWith("blob:")) {
-          photos.push(img.url);
         }
-      }
+      };
+
+      await Promise.all(
+        Array.from(
+          { length: Math.min(PHOTO_UPLOAD_CONCURRENCY, sourceImages.length) },
+          uploadWorker,
+        ),
+      );
+
+      const photos = photoSlots.filter(Boolean);
 
       /* =====================================================
          УДОБСТВА

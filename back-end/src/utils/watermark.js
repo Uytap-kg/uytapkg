@@ -46,6 +46,10 @@ const MARGIN_RATIO = 0.03;
 // фото в мешанину из перекрывающихся отпечатков, требуем минимальный размер.
 const MULTI_WATERMARK_MIN_SIZE = 500;
 
+// Максимальная длинная сторона сохраняемого фото (px). Для карточек и галереи
+// объявления этого с запасом достаточно, а обработка и загрузка — в разы быстрее.
+export const MAX_PHOTO_DIMENSION = 1920;
+
 let cachedLogoWidth = null;
 // Кэш готового полупрозрачного PNG водяного знака по ширине в пикселях —
 // на одно объявление обычно загружают несколько фото одинакового размера
@@ -128,15 +132,33 @@ export async function applyWatermark(buffer, mimetype) {
 
   return sharpSemaphore.run(async () => {
     try {
-      const image = sharp(buffer, { limitInputPixels: 50_000_000 }).rotate();
-      const metadata = await image.metadata();
+      // Поворот по EXIF + уменьшение до MAX_PHOTO_DIMENSION по длинной стороне
+      // ДО наложения знака: фото с телефона (12–48 Мп) обрабатывались в полном
+      // разрешении, что занимало секунды CPU на каждое фото и раздувало
+      // хранилище. Промежуточный буфер — raw, чтобы не пережимать JPEG дважды.
+      // Размеры берём из результата (а не из metadata() входа), т.к. после
+      // поворота по EXIF ширина и высота могут поменяться местами.
+      const { data: prepared, info } = await sharp(buffer, { limitInputPixels: 50_000_000 })
+        .rotate()
+        .resize({
+          width: MAX_PHOTO_DIMENSION,
+          height: MAX_PHOTO_DIMENSION,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .raw()
+        .toBuffer({ resolveWithObject: true });
 
-      const width = metadata.width || 0;
-      const height = metadata.height || 0;
+      const width = info.width || 0;
+      const height = info.height || 0;
 
       if (width < 200 || height < 200) {
         return buffer;
       }
+
+      const image = sharp(prepared, {
+        raw: { width: info.width, height: info.height, channels: info.channels },
+      });
 
       const targetWidth = Math.round(
         Math.min(

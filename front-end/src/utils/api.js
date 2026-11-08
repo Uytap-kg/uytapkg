@@ -616,9 +616,15 @@ export async function uploadImage(file) {
 }
 
 // Фото объявлений — сервер всегда накладывает водяной знак (лого UyTap)
+// Фото объявлений/ЖК сжимаем в браузере до 1920 px по длинной стороне:
+// оригиналы с телефона (3–8 МБ) грузились и обрабатывались очень долго.
+const LISTING_PHOTO_MAX_DIMENSION = 1920;
+const LISTING_PHOTO_QUALITY = 0.85;
+
 export async function uploadListingPhoto(token, file) {
   const form = new FormData();
-  form.append("file", file);
+  const readyFile = await compressImageFile(file, LISTING_PHOTO_MAX_DIMENSION, LISTING_PHOTO_QUALITY);
+  form.append("file", readyFile);
 
   const response = await fetch(`${API_URL}/upload/listing-photo`, {
     method: "POST",
@@ -644,7 +650,8 @@ export async function uploadListingPhoto(token, file) {
 // Фото ЖК — сервер всегда накладывает водяной знак (лого UyTap)
 export async function uploadComplexPhoto(token, file) {
   const form = new FormData();
-  form.append("file", file);
+  const readyFile = await compressImageFile(file, LISTING_PHOTO_MAX_DIMENSION, LISTING_PHOTO_QUALITY);
+  form.append("file", readyFile);
 
   const response = await fetch(`${API_URL}/upload/complex-photo`, {
     method: "POST",
