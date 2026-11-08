@@ -14,7 +14,7 @@ import {
 import { useLanguage } from "@/context/LanguageContext";
 
 import styles from "./CommonFilters.module.css";
-import CustomSelect from "@/components/ui/customSelect/CustomSelect";
+import CustomSelectSmall from "@/components/ui/CustomSelectSmall/CustomSelectSmall";
 
 const roomsOptions = ["Все", "1", "2", "3", "4+"];
 const currencyOptions = ["USD", "KGS", "EUR"];
@@ -740,7 +740,7 @@ export default function CommonFilters({ filters, updateFilter }) {
             COUNTRY
         ================================================= */}
 
-        <CustomSelect
+        <CustomSelectSmall
           icon={Globe2}
           title={t("commonFilters.country")}
           options={translatedCountryOptions}
@@ -753,7 +753,7 @@ export default function CommonFilters({ filters, updateFilter }) {
         ================================================= */}
 
         {isKyrgyzstan && (
-          <CustomSelect
+          <CustomSelectSmall
             icon={MapPin}
             title={t("commonFilters.regionOrCity")}
             options={kyrgyzRegionOptions}
@@ -767,7 +767,7 @@ export default function CommonFilters({ filters, updateFilter }) {
         ================================================= */}
 
         {isKyrgyzstan && isBishkek && (
-          <CustomSelect
+          <CustomSelectSmall
             icon={MapPin}
             title={t("commonFilters.bishkekDistrict")}
             options={translatedBishkekDistrictOptions}
@@ -781,7 +781,7 @@ export default function CommonFilters({ filters, updateFilter }) {
         ================================================= */}
 
         {isKyrgyzstan && selectedKyrgyzRegion && !isBishkek && (
-          <CustomSelect
+          <CustomSelectSmall
             icon={MapPin}
             title={t("commonFilters.cityOrVillage")}
             options={translatedKyrgyzSettlementOptions}
@@ -795,7 +795,7 @@ export default function CommonFilters({ filters, updateFilter }) {
         ================================================= */}
 
         {isTurkey && (
-          <CustomSelect
+          <CustomSelectSmall
             icon={MapPin}
             title={t("commonFilters.city")}
             options={turkeyCityOptions}
@@ -809,7 +809,7 @@ export default function CommonFilters({ filters, updateFilter }) {
         ================================================= */}
 
         {isTurkey && selectedTurkeyCity && (
-          <CustomSelect
+          <CustomSelectSmall
             icon={MapPin}
             title={t("commonFilters.district")}
             options={translatedTurkeyDistrictOptions}
@@ -822,13 +822,27 @@ export default function CommonFilters({ filters, updateFilter }) {
             CURRENCY
         ================================================= */}
 
-        <CustomSelect
+        <CustomSelectSmall
           icon={FileText}
           title={t("commonFilters.currency")}
           options={currencyOptions}
           value={filters?.currency || "USD"}
           setValue={(value) => updateFilter("currency", value)}
         />
+
+        {/* =================================================
+            ROOMS
+        ================================================= */}
+
+        {showRooms && (
+          <CustomSelectSmall
+            icon={DoorOpen}
+            title={t("commonFilters.rooms")}
+            options={translatedRoomsOptions}
+            value={filters?.rooms || "Все"}
+            setValue={(value) => updateFilter("rooms", value)}
+          />
+        )}
 
         {/* =================================================
             PRICE
@@ -889,20 +903,6 @@ export default function CommonFilters({ filters, updateFilter }) {
             />
           </div>
         </div>
-
-        {/* =================================================
-            ROOMS
-        ================================================= */}
-
-        {showRooms && (
-          <CustomSelect
-            icon={DoorOpen}
-            title={t("commonFilters.rooms")}
-            options={translatedRoomsOptions}
-            value={filters?.rooms || "Все"}
-            setValue={(value) => updateFilter("rooms", value)}
-          />
-        )}
 
         {/* =================================================
             BEACH DISTANCE

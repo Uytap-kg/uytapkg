@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 
 import { useLanguage } from "@/context/LanguageContext";
-
 import styles from "./MultiSelect.module.css";
 
 export default function MultiSelect({
@@ -22,58 +21,80 @@ export default function MultiSelect({
 
   const wrapperRef = useRef(null);
 
-  /* =========================================================
-     OPTION HELPERS
-  ========================================================= */
-
+  // Получение значения опции
   function getOptionValue(option) {
-    if (option && typeof option === "object") {
-      return option.value;
-    }
-
-    return option;
+    return option && typeof option === "object" ? option.value : option;
   }
 
+  // Получение названия опции
   function getOptionLabel(option) {
-    if (option && typeof option === "object") {
-      return option.label;
-    }
-
-    return option;
+    return option && typeof option === "object" ? option.label : option;
   }
 
   function getSelectedOption(valueItem) {
     return options.find((option) => getOptionValue(option) === valueItem);
   }
 
-  /* =========================================================
-     DROPDOWN POSITION
-  ========================================================= */
+  // ==========================================
+  // POSITIONING
+  // ==========================================
 
-  function updatePosition() {
+  const updatePosition = useCallback(() => {
     if (!wrapperRef.current) return;
 
     const rect = wrapperRef.current.getBoundingClientRect();
 
-    const spaceBelow = window.innerHeight - rect.bottom - 10;
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
 
-    const maxHeight = Math.max(120, Math.min(300, spaceBelow));
+    const gap = 8;
+    const edge = 10;
+    const maxDropdownHeight = 300;
+
+    const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap - edge);
+
+    const spaceAbove = Math.max(0, rect.top - gap - edge);
+
+    // Примерная необходимая высота списка
+    const desiredHeight = Math.min(
+      maxDropdownHeight,
+      Math.max(80, options.length * 40 + 12),
+    );
+
+    // Если снизу мало места, а сверху больше — открываем вверх
+    const openUp = spaceBelow < desiredHeight && spaceAbove > spaceBelow;
+
+    const availableSpace = openUp ? spaceAbove : spaceBelow;
+
+    const maxHeight = Math.max(80, Math.min(maxDropdownHeight, availableSpace));
+
+    // Не позволяем списку выходить за края экрана
+    const width = Math.min(rect.width, viewportWidth - edge * 2);
+
+    const left = Math.max(
+      edge,
+      Math.min(rect.left, viewportWidth - width - edge),
+    );
 
     setDropdownStyle({
       position: "fixed",
-      top: `${rect.bottom + 10}px`,
-      left: `${rect.left}px`,
-      width: `${rect.width}px`,
+      left: `${left}px`,
+      width: `${width}px`,
       maxHeight: `${maxHeight}px`,
+      top: openUp ? "auto" : `${rect.bottom + gap}px`,
+      bottom: openUp ? `${viewportHeight - rect.top + gap}px` : "auto",
     });
-  }
+  }, [options.length]);
 
-  /* =========================================================
-     OPEN / CLOSE
-  ========================================================= */
+  // ==========================================
+  // OPEN / CLOSE
+  // ==========================================
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setDropdownStyle(null);
+      return;
+    }
 
     updatePosition();
 
@@ -87,8 +108,9 @@ export default function MultiSelect({
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("scroll", handleScroll, true);
     };
-  }, [open]);
+  }, [open, updatePosition]);
 
+  // Закрытие при клике вне списка
   useEffect(() => {
     if (!open) return;
 
@@ -99,7 +121,10 @@ export default function MultiSelect({
         return;
       }
 
-      if (target.closest("[data-multi-select-dropdown]")) {
+      if (
+        target instanceof Element &&
+        target.closest("[data-multi-select-dropdown]")
+      ) {
         return;
       }
 
@@ -121,9 +146,9 @@ export default function MultiSelect({
     };
   }, [open]);
 
-  /* =========================================================
-     VALUE
-  ========================================================= */
+  // ==========================================
+  // VALUE
+  // ==========================================
 
   function toggleValue(optionValue) {
     setValue(
@@ -133,9 +158,9 @@ export default function MultiSelect({
     );
   }
 
-  /* =========================================================
-     SELECTED LABEL
-  ========================================================= */
+  // ==========================================
+  // SELECTED LABEL
+  // ==========================================
 
   let label;
 
@@ -146,13 +171,12 @@ export default function MultiSelect({
 
     label = selectedOption ? getOptionLabel(selectedOption) : value[0];
   } else {
-    // Вывод текста с количеством цифрой (например: "Выбрано: 3" или можно использовать ваш перевод)
     label = `Выбрано: ${value.length}`;
   }
 
-  /* =========================================================
-     DROPDOWN
-  ========================================================= */
+  // ==========================================
+  // DROPDOWN
+  // ==========================================
 
   const dropdown =
     open && dropdownStyle
@@ -161,6 +185,8 @@ export default function MultiSelect({
             data-multi-select-dropdown
             className={styles.dropdown}
             style={dropdownStyle}
+            role="listbox"
+            aria-multiselectable="true"
           >
             {options.map((option) => {
               const optionValue = getOptionValue(option);
@@ -172,6 +198,8 @@ export default function MultiSelect({
                 <button
                   key={optionValue}
                   type="button"
+                  role="option"
+                  aria-selected={selected}
                   className={`${styles.option} ${
                     selected ? styles.selected : ""
                   }`}
@@ -188,9 +216,9 @@ export default function MultiSelect({
         )
       : null;
 
-  /* =========================================================
-     RENDER
-  ========================================================= */
+  // ==========================================
+  // RENDER
+  // ==========================================
 
   return (
     <>
@@ -207,7 +235,6 @@ export default function MultiSelect({
 
             <div className={styles.content}>
               <span>{title}</span>
-
               <strong>{label}</strong>
             </div>
           </div>

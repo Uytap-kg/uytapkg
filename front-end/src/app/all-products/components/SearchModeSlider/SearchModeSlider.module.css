@@ -1,248 +1,125 @@
 .wrapper {
-  position: relative;
+  display: flex;
+  justify-content: center;
   width: 100%;
-  margin-top: 20px;
-  margin-bottom: 14px;
-  box-sizing: border-box;
+  margin: 0;
 }
 
 .slider {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 3px;
 
-  padding: 6px;
-  border: 1px solid #e2e1e8;
-  border-radius: 18px;
+  width: 100%;
+  min-width: 0;
+  padding: 3px;
 
-  background: #eeeef4;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
 
-  box-shadow:
-    0 6px 24px rgba(20, 20, 40, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
-/* =========================================================
-   SLIDING THUMB
-========================================================= */
 
 .thumb {
   position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 4.5px);
 
-  top: 6px;
-  bottom: 6px;
-  left: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.2);
 
-  width: calc(50% - 9px);
-
-  border: 1px solid rgba(72, 61, 246, 0.12);
-  border-radius: 13px;
-
-  background: #ffffff;
-
-  box-shadow:
-    0 4px 14px rgba(20, 20, 40, 0.08),
-    0 1px 3px rgba(20, 20, 40, 0.05);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.06);
 
   transform: translateX(0);
-
-  transition:
-    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.2s ease;
+  transition: transform 0.25s ease;
 }
 
 .thumbSmart {
-  transform: translateX(100%);
+  transform: translateX(calc(100% + 3px));
 }
-
-/* =========================================================
-   OPTION
-========================================================= */
 
 .option {
   position: relative;
-  z-index: 2;
+  z-index: 1;
 
-  display: flex;
-  align-items: center;
-  gap: 11px;
-
-  min-height: 62px;
-
-  padding: 10px 14px;
-
-  border: none;
-  border-radius: 13px;
-
-  background: transparent;
-
-  color: #898692;
-
-  text-align: left;
-
-  font-family: inherit;
-
-  cursor: pointer;
-
-  transition:
-    color 0.2s ease,
-    transform 0.15s ease;
-}
-
-.option:hover {
-  color: #55515f;
-}
-
-.option:active {
-  transform: scale(0.99);
-}
-
-/* =========================================================
-   ICON
-========================================================= */
-
-.icon {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
 
-  width: 38px;
-  height: 38px;
+  min-width: 0;
+  min-height: 27px;
+  padding: 4px 10px;
 
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+
+  color: rgba(255, 255, 255, 0.75);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.option svg {
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
+}
 
-  border-radius: 11px;
+.option span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-  background: rgba(0, 0, 0, 0.035);
-
-  color: #898692;
-
-  transition:
-    background 0.2s ease,
-    color 0.2s ease;
+.option strong {
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .active {
-  color: #24222d;
+  color: #ffffff;
 }
-
-.active .icon {
-  background: rgba(72, 61, 246, 0.09);
-  color: #483df6;
-}
-
-/* =========================================================
-   TEXT
-========================================================= */
-
-.text {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-
-  min-width: 0;
-}
-
-.text strong {
-  color: inherit;
-
-  font-size: 13px;
-  line-height: 1.2;
-  font-weight: 800;
-}
-
-.text small {
-  color: #aaa7b2;
-
-  font-size: 10px;
-  line-height: 1.3;
-  font-weight: 600;
-}
-
-.active .text small {
-  color: #85818e;
-}
-
-/* =========================================================
-   FOCUS
-========================================================= */
 
 .option:focus-visible {
-  outline: 2px solid rgba(72, 61, 246, 0.45);
+  outline: 2px solid rgba(255, 255, 255, 0.7);
   outline-offset: -2px;
-}
-
-/* =========================================================
-   RESPONSIVE
-========================================================= */
-
-@media (max-width: 700px) {
-  .slider {
-    border-radius: 16px;
-    padding: 5px;
-    gap: 5px;
-  }
-
-  .thumb {
-    top: 5px;
-    bottom: 5px;
-    left: 5px;
-
-    width: calc(50% - 7.5px);
-
-    border-radius: 12px;
-  }
-
-  .option {
-    min-height: 58px;
-    padding: 9px 11px;
-    gap: 9px;
-  }
-
-  .icon {
-    width: 35px;
-    height: 35px;
-    border-radius: 10px;
-  }
-
-  .text strong {
-    font-size: 12px;
-  }
-
-  .text small {
-    font-size: 9px;
-  }
 }
 
 @media (max-width: 480px) {
   .option {
-    min-height: 54px;
-    padding: 8px;
-    gap: 8px;
+    gap: 4px;
+    padding: 4px 5px;
+    font-size: 10px;
   }
 
-  .icon {
-    width: 32px;
-    height: 32px;
+  .option strong {
+    font-size: 10px;
   }
 
-  .text strong {
-    font-size: 11px;
-  }
-
-  .text small {
-    font-size: 8px;
+  .option svg {
+    width: 12px;
+    height: 12px;
   }
 }
 
-/* =========================================================
-   REDUCED MOTION
-========================================================= */
-
 @media (prefers-reduced-motion: reduce) {
   .thumb,
-  .option,
-  .icon {
-    transition: none !important;
+  .option {
+    transition: none;
   }
 }

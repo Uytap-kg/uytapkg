@@ -1,180 +1,376 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  X,
+  Search,
+  SlidersHorizontal,
+  Map,
+  ShieldCheck,
+  Home,
+  Building2,
+  KeyRound,
+  CalendarDays,
+  ChevronRight,
+  MapPin,
+  ArrowRight,
+} from "lucide-react";
 
-import { useLanguage } from "@/context/LanguageContext";
+import { useRouter } from "next/navigation";
 
-import CommonFilters from "../CommonFilters/CommonFilters";
 import SearchModeSlider from "../SearchModeSlider/SearchModeSlider";
 import SmartSearch from "../SmartSearch/SmartSearch";
 
-import styles from "../../AllProducts.module.css";
+import styles from "./ProductFilters.module.css";
+import ProductFilterSidebar from "./ProductFiltersSidebar/ProductFilterSidebar";
+
+const quickOptions = [
+  {
+    id: "apartment",
+    title: "Купить квартиру",
+    propertyType: "apartment",
+    dealType: "sale",
+    icon: Building2,
+  },
+  {
+    id: "house",
+    title: "Купить дом",
+    propertyType: "house",
+    dealType: "sale",
+    icon: Home,
+  },
+  {
+    id: "long",
+    title: "Снять надолго",
+    propertyType: "apartment",
+    dealType: "rent",
+    icon: KeyRound,
+  },
+  {
+    id: "daily",
+    title: "Посуточно",
+    propertyType: "apartment",
+    dealType: "rent",
+    icon: CalendarDays,
+  },
+];
+
+// Нормализация названий городов, районов и адресов
+export const normalizeCity = (value = "") => {
+  return String(value)
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]/gi, "");
+};
+
+// Универсальный поиск по местоположению объявления
+export const matchesLocation = (property, searchValue) => {
+  if (!searchValue || searchValue.trim() === "" || searchValue === "Все") {
+    return true;
+  }
+
+  const query = normalizeCity(searchValue);
+
+  if (!query) return true;
+
+  const locationFields = [
+    property?.city,
+    property?.region,
+    property?.district,
+    property?.address,
+    property?.location,
+    property?.neighborhood,
+    property?.microdistrict,
+    property?.area,
+    property?.settlement,
+  ];
+
+  return locationFields.some((value) => {
+    if (!value) return false;
+
+    // Поддержка строк и массивов значений
+    if (Array.isArray(value)) {
+      return value.some((item) => normalizeCity(item).includes(query));
+    }
+
+    return normalizeCity(value).includes(query);
+  });
+};
 
 export default function ProductsFilters({
   searchMode,
   setSearchMode,
-
   filters,
   updateFilter,
-
   updateUrl,
   handleSmartSearch,
   handleRemoveSmartFilter,
-
   resetFilters,
   hasFilters,
-
   categories,
   categoryLabels,
   CategoryFilters,
-
-  showBeachDistance,
 }) {
-  const { t } = useLanguage();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const router = useRouter();
+
+  const [cityValue, setCityValue] = useState(
+    filters.city === "Все" ? "" : filters.city || "",
+  );
+
+  const [priceFrom, setPriceFrom] = useState(filters.priceFrom || "");
+  const [priceTo, setPriceTo] = useState(filters.priceTo || "");
+
+  // Синхронизация полей с внешними фильтрами
+  useEffect(() => {
+    setCityValue(filters.city === "Все" ? "" : filters.city || "");
+    setPriceFrom(filters.priceFrom || "");
+    setPriceTo(filters.priceTo || "");
+  }, [filters.city, filters.priceFrom, filters.priceTo]);
+
+  // Закрытие боковой панели по Escape
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [sidebarOpen]);
+
+  // Быстрые варианты поиска
+  const handleQuickOption = (option) => {
+    const rentPeriod =
+      option.id === "long" ? "long" : option.id === "daily" ? "daily" : "";
+
+    const next = {
+      ...filters,
+      propertyType: option.propertyType,
+      dealType: option.dealType,
+      rentPeriod,
+    };
+
+    updateFilter("propertyType", option.propertyType);
+    updateFilter("dealType", option.dealType);
+    updateFilter("rentPeriod", rentPeriod);
+
+    updateUrl(next);
+  };
+
+  // Проверка активного быстрого фильтра
+  const isOptionActive = (option) => {
+    if (
+      filters.propertyType !== option.propertyType ||
+      filters.dealType !== option.dealType
+    ) {
+      return false;
+    }
+
+    if (option.id === "long") {
+      return filters.rentPeriod === "long";
+    }
+
+    if (option.id === "daily") {
+      return filters.rentPeriod === "daily";
+    }
+
+    return !filters.rentPeriod;
+  };
+
+  // Основной поиск
+  const handleSearch = () => {
+    const originalCity = cityValue.trim();
+
+    const next = {
+      ...filters,
+      city: originalCity || "Все",
+      priceFrom,
+      priceTo,
+    };
+
+    updateFilter("city", next.city);
+    updateFilter("priceFrom", priceFrom);
+    updateFilter("priceTo", priceTo);
+
+    updateUrl(next);
+  };
+
+  // Поиск при нажатии Enter
+  const handleCityKeyDown = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleSearch();
+    }
+  };
 
   return (
-    <>
-      <SearchModeSlider value={searchMode} onChange={setSearchMode} />
+    <section className={styles.compactSearch}>
+      <div className={styles.searchContent}>
+        <div className={styles.modeSwitch}>
+          <SearchModeSlider value={searchMode} onChange={setSearchMode} />
+        </div>
 
-      {searchMode === "smart" && (
-        <SmartSearch
-          onFiltersDetected={handleSmartSearch}
-          activeFilters={filters}
-          onRemoveFilter={handleRemoveSmartFilter}
-          onResetAll={resetFilters}
-          categoryLabels={categoryLabels}
-        />
-      )}
+        {/* SMART SEARCH */}
+        {searchMode === "smart" && (
+          <div className={styles.modeContent}>
+            <SmartSearch
+              onFiltersDetected={handleSmartSearch}
+              activeFilters={filters}
+              onRemoveFilter={handleRemoveSmartFilter}
+              onResetAll={resetFilters}
+              categoryLabels={categoryLabels}
+            />
+          </div>
+        )}
 
-      {searchMode === "filters" && (
-        <section id="filters" className={styles.filters}>
-          {/* =================================================
-              HEADER
-          ================================================= */}
-
-          <div className={styles.filterHeader}>
-            <div>
-              <span>{t("productsFilters.header.eyebrow")}</span>
-
-              <h2>{t("productsFilters.header.title")}</h2>
-            </div>
-
-            {hasFilters && (
+        {/* REGULAR FILTER SEARCH */}
+        {searchMode === "filters" && (
+          <div className={styles.modeContent}>
+            <div className={styles.compactTop}>
               <button
                 type="button"
-                className={styles.reset}
-                onClick={resetFilters}
+                className={styles.allFiltersButton}
+                onClick={() => setSidebarOpen(true)}
               >
-                <X size={14} />
-                {t("productsFilters.reset")}
+                <SlidersHorizontal size={16} />
+                Все фильтры
+                {hasFilters && <span className={styles.filterDot} />}
               </button>
-            )}
-          </div>
+            </div>
 
-          {/* =================================================
-              PROPERTY TYPE
-          ================================================= */}
-
-          <div className={styles.section}>
-            <label>{t("productsFilters.propertyType")}</label>
-
-            <div className={styles.categoryList}>
-              {categories.map((category) => {
-                const active = filters.propertyType === category.value;
+            {/* QUICK OPTIONS */}
+            <div className={styles.quickOptions}>
+              {quickOptions.map((option) => {
+                const Icon = option.icon;
+                const active = isOptionActive(option);
 
                 return (
                   <button
-                    key={category.value}
                     type="button"
-                    className={active ? styles.categoryActive : ""}
-                    onClick={() => {
-                      updateFilter("propertyType", category.value);
-                      updateUrl({ ...filters, propertyType: category.value });
-                    }}
+                    key={option.id}
+                    onClick={() => handleQuickOption(option)}
+                    className={`${styles.quickOption} ${
+                      active ? styles.quickOptionActive : ""
+                    }`}
                   >
-                    {category.label}
+                    <Icon size={16} />
+                    <span>{option.title}</span>
                   </button>
                 );
               })}
             </div>
-          </div>
 
-          {/* =================================================
-              DEAL
-          ================================================= */}
+            {/* SEARCH FIELDS */}
+            <div className={styles.searchFields}>
+              <label className={styles.searchField}>
+                <MapPin size={18} />
 
-          <div className={styles.section}>
-            <label>{t("productsFilters.dealType")}</label>
+                <span>
+                  <small>Местоположение</small>
 
-            <div className={styles.dealList}>
-              <button
-                type="button"
-                className={filters.dealType === "sale" ? styles.dealActive : ""}
-                onClick={() => {
-                  updateFilter("dealType", "sale");
-                  updateUrl({ ...filters, dealType: "sale" });
-                }}
-              >
-                {t("productsFilters.deal.sale")}
-              </button>
+                  <input
+                    type="text"
+                    placeholder="Город, Село или Область"
+                    value={cityValue}
+                    onChange={(event) => setCityValue(event.target.value)}
+                    onKeyDown={handleCityKeyDown}
+                    autoComplete="off"
+                  />
+                </span>
+              </label>
 
-              <button
-                type="button"
-                className={filters.dealType === "rent" ? styles.dealActive : ""}
-                onClick={() => {
-                  updateFilter("dealType", "rent");
-                  updateUrl({ ...filters, dealType: "rent" });
-                }}
-              >
-                {t("productsFilters.deal.rent")}
-              </button>
-            </div>
-          </div>
+              <div className={styles.fieldDivider} />
 
-          {/* =================================================
-              COMMON FILTERS
-          ================================================= */}
+              <div className={styles.priceField}>
+                <span>
+                  <small>Цена, USD</small>
 
-          <div className={styles.section}>
-            <label>{t("productsFilters.commonParameters")}</label>
+                  <div className={styles.priceInputs}>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="От"
+                      value={priceFrom}
+                      onChange={(event) => setPriceFrom(event.target.value)}
+                    />
 
-            <CommonFilters
-              filters={filters}
-              updateFilter={updateFilter}
-              showBeachDistance={showBeachDistance}
-            />
-          </div>
+                    <span>—</span>
 
-          {/* =================================================
-              CATEGORY FILTERS
-          ================================================= */}
-
-          <div className={styles.categoryFilters}>
-            <div className={styles.categoryTitle}>
-              <div>
-                <span>{t("productsFilters.characteristics")}</span>
-
-                <h3>{categoryLabels[filters.propertyType]}</h3>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="До"
+                      value={priceTo}
+                      onChange={(event) => setPriceTo(event.target.value)}
+                    />
+                  </div>
+                </span>
               </div>
+
+              <button
+                type="button"
+                className={styles.mainSearchButton}
+                onClick={handleSearch}
+              >
+                <Search size={17} />
+                Искать
+                <ArrowRight size={15} />
+              </button>
             </div>
 
-            <CategoryFilters filters={filters} updateFilter={updateFilter} />
+            {/* QUICK ACTIONS */}
+            <div className={styles.quickActions}>
+              <button
+                type="button"
+                className={styles.secondaryAction}
+                onClick={() => router.push("/search-map")}
+              >
+                <Map size={15} />
+                Искать на карте
+                <ChevronRight size={14} />
+              </button>
+
+              <button
+                type="button"
+                className={styles.secondaryAction}
+                onClick={() => router.push("/safety")}
+              >
+                <ShieldCheck size={15} />
+                Безопасность
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
+        )}
+      </div>
 
-          {/* =================================================
-              APPLY
-          ================================================= */}
-
-          <button
-            type="button"
-            className={styles.apply}
-            onClick={() => updateUrl(filters)}
-          >
-            <Search size={17} />
-            {t("productsFilters.showListings")}
-          </button>
-        </section>
+      {/* FILTER SIDEBAR */}
+      {sidebarOpen && (
+        <ProductFilterSidebar
+          filters={filters}
+          updateFilter={updateFilter}
+          categories={categories}
+          categoryLabels={categoryLabels}
+          CategoryFilters={CategoryFilters}
+          resetFilters={resetFilters}
+          updateUrl={updateUrl}
+          onClose={() => setSidebarOpen(false)}
+        />
       )}
-    </>
+    </section>
   );
 }

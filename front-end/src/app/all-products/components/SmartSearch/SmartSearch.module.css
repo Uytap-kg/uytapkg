@@ -1,299 +1,164 @@
 .wrapper {
   position: relative;
-  margin-top: 24px;
-  padding: 28px;
-  border: 1px solid #e4e3ed;
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at 50% 0%, rgba(72, 61, 246, 0.07), transparent 42%),
-    #ffffff;
-  overflow: hidden;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #e8e7f0;
+  border-radius: 14px;
+  background: #fff;
 }
-
-.wrapper::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    120deg,
-    transparent 25%,
-    rgba(72, 61, 246, 0.025),
-    transparent 75%
-  );
-}
-
-/* =========================================================
-   HEADER
-========================================================= */
 
 .header {
-  position: relative;
-  z-index: 1;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
-.titleBlock {
-  max-width: 680px;
-  margin: 0 auto;
+.title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: rgba(72, 61, 246, 0.08);
+  color: #483df6;
+}
+
+.title h2 {
+  margin: 0;
+  color: #201f33;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.title p {
+  margin: 3px 0 0;
+  color: #89869a;
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 11px;
-  border: 1px solid rgba(72, 61, 246, 0.18);
-  border-radius: 999px;
-  background: rgba(72, 61, 246, 0.06);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(72, 61, 246, 0.08);
   color: #483df6;
   font-size: 9px;
-  font-weight: 850;
-  letter-spacing: 1px;
+  font-weight: 800;
 }
-
-.titleBlock h2 {
-  margin: 13px 0 0;
-  color: #17162a;
-  font-size: 25px;
-  line-height: 1.2;
-  font-weight: 850;
-  letter-spacing: -0.6px;
-}
-
-.titleBlock p {
-  max-width: 580px;
-  margin: 10px auto 0;
-  color: #77758a;
-  font-size: 12px;
-  line-height: 1.65;
-}
-
-/* =========================================================
-   SEARCH BOX
-========================================================= */
 
 .searchBox {
-  position: relative;
-  z-index: 1;
-  margin-top: 28px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid #e3e1ec;
+  border-radius: 11px;
+  background: #fff;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.searchBox:focus-within {
+  border-color: rgba(72, 61, 246, 0.55);
+  box-shadow: 0 0 0 3px rgba(72, 61, 246, 0.06);
 }
 
 .searchBox textarea {
-  display: block;
-  width: 100%;
-  min-height: 145px;
-  padding: 18px 18px 58px;
-  border: 1px solid #dedde8;
-  border-radius: 15px;
-  background:
-    linear-gradient(145deg, rgba(72, 61, 246, 0.018), rgba(255, 255, 255, 0.8)),
-    #ffffff;
+  flex: 1;
+  min-width: 0;
+  min-height: 43px;
+  max-height: 110px;
+  padding: 5px;
+  border: none;
+  outline: none;
+  resize: vertical;
+  background: transparent;
   color: #242238;
   font-family: inherit;
-  font-size: 13px;
-  font-weight: 550;
-  line-height: 1.6;
-  resize: vertical;
-  outline: none;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .searchBox textarea::placeholder {
   color: #aaa8b8;
 }
 
-.searchBox textarea:hover {
-  border-color: #c9c7d8;
-}
-
-.searchBox textarea:focus {
-  border-color: rgba(72, 61, 246, 0.55);
-  background:
-    linear-gradient(
-      145deg,
-      rgba(72, 61, 246, 0.025),
-      rgba(255, 255, 255, 0.95)
-    ),
-    #ffffff;
-  box-shadow:
-    0 0 0 3px rgba(72, 61, 246, 0.07),
-    0 12px 40px rgba(72, 61, 246, 0.07);
-}
-
 .searchBox textarea:disabled {
-  opacity: 0.65;
-  cursor: wait;
+  opacity: 0.6;
 }
 
-/* =========================================================
-   ACTIONS
-========================================================= */
-
-.searchActions {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
+.actions {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.voiceButton,
+.clearButton,
+.searchButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s ease;
 }
 
 .voiceButton,
 .clearButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #dedde8;
-  border-radius: 10px;
-  background: #ffffff;
-  color: #858296;
-  cursor: pointer;
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease,
-    color 0.2s ease;
-}
-
-.voiceButton {
-  width: 42px;
-  height: 42px;
-}
-
-.clearButton {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
+  background: #f5f4fa;
+  color: #777489;
 }
 
 .voiceButton:hover,
 .clearButton:hover {
-  border-color: rgba(72, 61, 246, 0.35);
-  background: rgba(72, 61, 246, 0.06);
+  background: #eeecff;
   color: #483df6;
-}
-
-.voiceButton:active,
-.clearButton:active {
-  transform: scale(0.95);
 }
 
 .voiceButton.listening {
-  border-color: rgba(72, 61, 246, 0.6);
-  background: rgba(72, 61, 246, 0.09);
+  background: #eeecff;
   color: #483df6;
-  box-shadow:
-    0 0 0 4px rgba(72, 61, 246, 0.06),
-    0 0 25px rgba(72, 61, 246, 0.12);
+  box-shadow: 0 0 0 3px rgba(72, 61, 246, 0.08);
 }
-
-.voiceButton:disabled,
-.clearButton:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* =========================================================
-   LISTENING
-========================================================= */
-
-.listeningStatus {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 11px;
-  color: #706d80;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.pulse {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #483df6;
-  box-shadow:
-    0 0 0 0 rgba(72, 61, 246, 0.35),
-    0 0 12px rgba(72, 61, 246, 0.45);
-  animation: pulse 1.2s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    box-shadow:
-      0 0 0 0 rgba(72, 61, 246, 0.35),
-      0 0 12px rgba(72, 61, 246, 0.45);
-  }
-
-  70% {
-    box-shadow:
-      0 0 0 7px rgba(72, 61, 246, 0),
-      0 0 16px rgba(72, 61, 246, 0.5);
-  }
-
-  100% {
-    box-shadow:
-      0 0 0 0 rgba(72, 61, 246, 0),
-      0 0 12px rgba(72, 61, 246, 0.45);
-  }
-}
-
-/* =========================================================
-   SEARCH BUTTON
-========================================================= */
 
 .searchButton {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  width: 100%;
-  min-height: 48px;
-  margin-top: 13px;
-  border: 1px solid #483df6;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #483df6, #5a50f7);
-  color: #ffffff;
+  min-height: 32px;
+  gap: 6px;
+  padding: 0 11px;
+  background: #483df6;
+  color: white;
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(72, 61, 246, 0.18);
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease;
+  font-size: 10px;
+  font-weight: 750;
 }
 
 .searchButton:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: #3d32e8;
-  background: linear-gradient(135deg, #3d32e8, #5349f5);
-  box-shadow: 0 10px 30px rgba(72, 61, 246, 0.24);
+  background: #392fe0;
 }
 
-.searchButton:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.searchButton:disabled {
+.searchButton:disabled,
+.voiceButton:disabled,
+.clearButton:disabled {
   opacity: 0.45;
-  cursor: default;
-  box-shadow: none;
+  cursor: not-allowed;
 }
-
-/* =========================================================
-   SPINNER
-========================================================= */
 
 .spinner {
   animation: spin 0.8s linear infinite;
@@ -305,223 +170,417 @@
   }
 }
 
-/* =========================================================
-   ACTIVE CHIPS
-========================================================= */
+/* STATUS */
 
-.activeChipsBlock {
-  position: relative;
-  z-index: 1;
-  margin-top: 16px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(72, 61, 246, 0.03);
-  border: 1px solid rgba(72, 61, 246, 0.12);
+.status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  color: #777489;
+  font-size: 10px;
 }
 
-.activeChipsHeader {
+.pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #483df6;
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  70% {
+    box-shadow: 0 0 0 6px rgba(72, 61, 246, 0);
+  }
+}
+
+/* ERRORS */
+
+.error,
+.notice {
+  margin-top: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff4f4;
+  color: #b44f4f;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.notice {
+  background: #fff9e9;
+  color: #987a2b;
+}
+
+/* ACTIVE FILTERS */
+
+.activeFilters {
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid #eeedf3;
+}
+
+.filtersHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 7px;
 }
 
-.activeChipsHeader > span {
-  font-size: 11px;
-  font-weight: 700;
-  color: #5a576f;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.filtersHeader > span {
+  color: #777489;
+  font-size: 10px;
+  font-weight: 750;
 }
 
-.resetAllChips {
-  background: none;
-  border: none;
+.filtersHeader button {
   padding: 0;
+  border: none;
+  background: none;
   color: #483df6;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.2s ease;
 }
 
-.resetAllChips:hover {
-  opacity: 0.75;
-  text-decoration: underline;
-}
-
-.chipsList {
+.chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(72, 61, 246, 0.08);
-  border: 1px solid rgba(72, 61, 246, 0.18);
-  color: #483df6;
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.2;
+  gap: 5px;
+  max-width: 100%;
+  padding: 5px 7px;
+  border: 1px solid #e8e5ff;
+  border-radius: 7px;
+  background: #f8f7ff;
+  color: #5148d8;
+  font-size: 10px;
+  overflow-wrap: anywhere;
 }
 
 .chip button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(72, 61, 246, 0.12);
-  color: #483df6;
-  cursor: pointer;
+  width: 15px;
+  height: 15px;
   padding: 0;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
+  border: none;
+  border-radius: 50%;
+  background: #eeecff;
+  color: #5148d8;
+  cursor: pointer;
 }
 
 .chip button:hover {
   background: #483df6;
-  color: #ffffff;
+  color: #fff;
 }
 
-/* =========================================================
-   ERROR
-========================================================= */
-
-.error,
-.browserNotice {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 12px;
-  padding: 11px 14px;
-  border: 1px solid rgba(239, 68, 68, 0.16);
-  border-radius: 11px;
-  background: rgba(239, 68, 68, 0.04);
-  color: #b44f4f;
-  font-size: 11px;
-  line-height: 1.5;
-  text-align: center;
-}
-
-.browserNotice {
-  border-color: rgba(234, 179, 8, 0.18);
-  background: rgba(234, 179, 8, 0.05);
-  color: #9d7e28;
-}
-
-/* =========================================================
-   EXAMPLES
-========================================================= */
+/* EXAMPLES */
 
 .examples {
-  position: relative;
-  z-index: 1;
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px solid #ebeaf1;
-  text-align: center;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 11px;
 }
 
-.examples > span {
+.examplesTitle {
+  flex-shrink: 0;
+  padding-top: 6px;
   color: #9996a7;
   font-size: 9px;
-  font-weight: 850;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
+  font-weight: 700;
 }
 
 .exampleList {
   display: flex;
-  justify-content: center;
   flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 10px;
+  gap: 5px;
 }
 
 .exampleList button {
-  padding: 8px 11px;
-  border: 1px solid #dedde8;
-  border-radius: 9px;
+  padding: 5px 8px;
+  border: 1px solid #e9e7f0;
+  border-radius: 7px;
   background: #fafafd;
-  color: #777487;
+  color: #777489;
   font-family: inherit;
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 9px;
   cursor: pointer;
-  transition:
-    color 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease,
-    transform 0.2s ease;
+  transition: 0.2s ease;
 }
 
-.exampleList button:hover {
-  transform: translateY(-1px);
+.exampleList button:hover:not(:disabled) {
   border-color: rgba(72, 61, 246, 0.3);
-  background: rgba(72, 61, 246, 0.05);
+  background: #f5f3ff;
   color: #483df6;
 }
 
-/* =========================================================
-   MOBILE
-========================================================= */
+.exampleList button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* MOBILE */
 
 @media (max-width: 600px) {
   .wrapper {
-    padding: 22px 16px;
-    border-radius: 18px;
+    padding: 13px;
+    border-radius: 12px;
   }
 
-  .titleBlock h2 {
-    font-size: 21px;
+  .header {
+    margin-bottom: 10px;
   }
 
-  .titleBlock p {
-    font-size: 11px;
+  .title h2 {
+    font-size: 14px;
+  }
+
+  .title p {
+    font-size: 9px;
   }
 
   .searchBox {
-    margin-top: 22px;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 7px;
   }
 
   .searchBox textarea {
-    min-height: 135px;
-    padding: 15px 15px 56px;
-    font-size: 12px;
+    min-height: 48px;
+    font-size: 11px;
   }
 
-  .exampleList {
+  .searchButton {
+    width: 32px;
+    padding: 0;
+  }
+
+  .searchButton span {
+    display: none;
+  }
+
+  .examples {
     flex-direction: column;
+    gap: 6px;
   }
 
-  .exampleList button {
-    width: 100%;
+  .examplesTitle {
+    padding: 0;
   }
 }
 
-/* =========================================================
-   REDUCED MOTION
-========================================================= */
+/* =========================================
+   TABLET
+========================================= */
+
+@media (max-width: 900px) {
+  .wrapper {
+    padding: 15px;
+  }
+
+  .searchBox {
+    gap: 7px;
+  }
+
+  .searchBox textarea {
+    font-size: 12px;
+  }
+
+  .examples {
+    flex-wrap: wrap;
+  }
+}
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 600px) {
+  .wrapper {
+    margin-top: 12px;
+    padding: 13px;
+    border-radius: 12px;
+  }
+
+  .header {
+    margin-bottom: 11px;
+  }
+
+  .title {
+    gap: 8px;
+  }
+
+  .icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .title h2 {
+    font-size: 14px;
+  }
+
+  .title p {
+    font-size: 9px;
+  }
+
+  .searchBox {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .searchBox textarea {
+    width: 100%;
+    min-height: 68px;
+    max-height: 150px;
+    padding: 4px;
+    font-size: 12px;
+    line-height: 1.55;
+    resize: vertical;
+  }
+
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .voiceButton,
+  .clearButton {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+  }
+
+  .searchButton {
+    width: auto;
+    min-width: 115px;
+    min-height: 38px;
+    padding: 0 12px;
+    gap: 7px;
+    font-size: 11px;
+  }
+
+  .searchButton span {
+    display: inline;
+  }
+
+  .status,
+  .error,
+  .notice {
+    font-size: 11px;
+  }
+
+  .examples {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .examplesTitle {
+    padding: 0;
+    font-size: 10px;
+  }
+
+  .exampleList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .exampleList button {
+    min-height: 31px;
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+
+  .chips {
+    gap: 6px;
+  }
+
+  .chip {
+    max-width: 100%;
+    font-size: 10px;
+  }
+}
+
+/* =========================================
+   SMALL PHONES
+========================================= */
+
+@media (max-width: 380px) {
+  .wrapper {
+    padding: 10px;
+  }
+
+  .title h2 {
+    font-size: 13px;
+  }
+
+  .title p {
+    font-size: 9px;
+  }
+
+  .searchBox {
+    padding: 8px;
+  }
+
+  .searchBox textarea {
+    min-height: 62px;
+    font-size: 11px;
+  }
+
+  .voiceButton,
+  .clearButton {
+    width: 35px;
+    height: 35px;
+  }
+
+  .searchButton {
+    min-width: 105px;
+    min-height: 35px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+
+  .exampleList button {
+    font-size: 9px;
+    padding: 5px 7px;
+  }
+}
+
+/* =========================================
+   ACCESSIBILITY
+========================================= */
 
 @media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .pulse {
+    animation: none !important;
+  }
+
+  .searchBox,
   .voiceButton,
   .clearButton,
   .searchButton,
-  .exampleList button,
-  .pulse,
-  .spinner {
-    animation: none !important;
+  .exampleList button {
     transition: none !important;
   }
 }

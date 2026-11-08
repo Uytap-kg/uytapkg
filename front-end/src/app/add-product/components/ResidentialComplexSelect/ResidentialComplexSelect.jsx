@@ -99,11 +99,10 @@ function matchesLocation(complex, { country, city, district, region }) {
   // Проверяем выбранный город или населённый пункт.
   if (selectedCity) {
     const cityMatches =
-      (complexCity && (
-        complexCity === selectedCity ||
-        complexCity.includes(selectedCity) ||
-        selectedCity.includes(complexCity)
-      )) ||
+      (complexCity &&
+        (complexCity === selectedCity ||
+          complexCity.includes(selectedCity) ||
+          selectedCity.includes(complexCity))) ||
       (!complexCity && addressAndLocation.includes(selectedCity));
 
     if (!cityMatches) return false;
@@ -113,11 +112,10 @@ function matchesLocation(complex, { country, city, district, region }) {
   // либо выбранный район должен явно встречаться в его адресе.
   if (selectedDistrict) {
     const districtMatches =
-      (complexDistrict && (
-        complexDistrict === selectedDistrict ||
-        complexDistrict.includes(selectedDistrict) ||
-        selectedDistrict.includes(complexDistrict)
-      )) ||
+      (complexDistrict &&
+        (complexDistrict === selectedDistrict ||
+          complexDistrict.includes(selectedDistrict) ||
+          selectedDistrict.includes(complexDistrict))) ||
       complexAddress.includes(selectedDistrict);
 
     if (!districtMatches) return false;
@@ -297,8 +295,7 @@ export default function ResidentialComplexSelect({
 
       {district && filteredComplexes.length === 0 && !loading && (
         <span className={styles.emptyDistrictHint}>
-          {t("residentialComplex.noComplexInDistrict") ||
-            `В районе «${district}» пока нет добавленных ЖК`}
+          {`В районе «${district}» пока нет добавленных ЖК`}
         </span>
       )}
 
