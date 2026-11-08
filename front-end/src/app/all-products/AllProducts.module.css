@@ -60,7 +60,7 @@
   min-width: 0;
 
   margin: 0 auto;
-  margin-top: 50px
+  margin-top: 50px;
 }
 
 /* =========================================================
@@ -1637,4 +1637,598 @@
   }
 }
 
+/* =========================================================
+   RESPONSIVE — LARGE DESKTOP
+========================================================= */
 
+@media (min-width: 1600px) {
+  .page {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+
+  .header,
+  .container {
+    width: min(1360px, 100%);
+  }
+
+  .filters {
+    padding: 32px;
+  }
+
+  .grid {
+    gap: 22px;
+  }
+}
+
+@media (min-width: 2200px) {
+  .header,
+  .container {
+    width: min(1480px, 100%);
+  }
+}
+
+/* =========================================================
+   LAPTOP — 1200px
+========================================================= */
+
+@media (max-width: 1200px) {
+  .page {
+    padding-left: 30px;
+    padding-right: 30px;
+  }
+
+  .header,
+  .container {
+    width: 100%;
+    max-width: 1100px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .filters {
+    padding: 24px;
+  }
+}
+
+/* =========================================================
+   TABLET LANDSCAPE — 1000px
+========================================================= */
+
+@media (max-width: 1000px) {
+  .page {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .header {
+    margin-bottom: 30px;
+  }
+
+  .header h1 {
+    max-width: 680px;
+    font-size: clamp(36px, 5.5vw, 54px);
+  }
+
+  .header p {
+    max-width: 560px;
+    font-size: 14px;
+  }
+
+  .container {
+    margin-top: 36px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .categoryList {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .filters {
+    padding: 22px;
+  }
+
+  .section {
+    padding: 22px 0;
+  }
+
+  .categoryFilters {
+    padding-top: 24px;
+  }
+
+  .apply {
+    min-height: 54px;
+  }
+}
+
+/* =========================================================
+   TABLET PORTRAIT — 850px
+========================================================= */
+
+@media (max-width: 850px) {
+  .page {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .headerTop {
+    margin-bottom: 26px;
+  }
+
+  .header h1 {
+    font-size: clamp(34px, 6vw, 48px);
+    letter-spacing: -1.8px;
+    line-height: 1.05;
+  }
+
+  .header p {
+    margin-top: 15px;
+    font-size: 13px;
+  }
+
+  .container {
+    margin-top: 30px;
+  }
+
+  .filters {
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .filterHeader {
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .filterHeader h2 {
+    font-size: 21px;
+  }
+
+  .categoryList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .categoryList button,
+  .dealList button {
+    min-height: 44px;
+  }
+
+  .searchModes {
+    grid-template-columns: 1fr;
+  }
+
+  .resultsHeader {
+    margin-top: 34px;
+  }
+}
+
+/* =========================================================
+   MOBILE — 700px
+========================================================= */
+
+@media (max-width: 700px) {
+  .page {
+    padding: 88px 18px 0;
+  }
+
+  .page::before {
+    height: 540px;
+    background-size: auto 540px;
+    background-position: center top;
+  }
+
+  .header {
+    margin-bottom: 26px;
+  }
+
+  .headerTop {
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 25px;
+  }
+
+  .header h1 {
+    max-width: 100%;
+    font-size: clamp(32px, 7vw, 43px);
+    line-height: 1.04;
+    letter-spacing: -1.5px;
+  }
+
+  .header p {
+    max-width: 520px;
+    margin-top: 13px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .container {
+    margin-top: 26px;
+  }
+
+  .filters {
+    padding: 20px;
+    border-radius: 17px;
+  }
+
+  .filterHeader {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 18px;
+  }
+
+  .filterHeader h2 {
+    font-size: 19px;
+  }
+
+  .reset {
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+
+  .section {
+    padding: 19px 0;
+  }
+
+  .section > label {
+    margin-bottom: 10px;
+    font-size: 10px;
+  }
+
+  .categoryList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .categoryList button,
+  .dealList button {
+    min-height: 43px;
+    padding: 0 9px;
+    font-size: 11px;
+  }
+
+  .dealList {
+    width: 100%;
+    max-width: none;
+    gap: 8px;
+  }
+
+  .categoryFilters {
+    padding-top: 22px;
+  }
+
+  .categoryTitle {
+    margin-bottom: 15px;
+  }
+
+  .categoryTitle h3 {
+    font-size: 18px;
+  }
+
+  .apply {
+    min-height: 52px;
+    margin-top: 22px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+
+  .resultsHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    margin: 30px 0 15px;
+  }
+
+  .resultsHeader strong {
+    font-size: 21px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .loadMoreWrapper {
+    margin-top: 25px;
+  }
+
+  .loadMoreButton {
+    width: 100%;
+    max-width: 360px;
+    min-height: 46px;
+  }
+
+  .empty {
+    padding: 45px 18px;
+  }
+}
+
+/* =========================================================
+   SMALL MOBILE — 520px
+========================================================= */
+
+@media (max-width: 520px) {
+  .page {
+    padding: 82px 14px 0;
+  }
+
+  .page::before {
+    height: 470px;
+    background-size: auto 470px;
+  }
+
+  .header {
+    margin-bottom: 22px;
+  }
+
+  .headerTop {
+    gap: 7px;
+    margin-bottom: 22px;
+  }
+
+  .badge {
+    min-height: 30px;
+    padding: 0 9px;
+    gap: 6px;
+    font-size: 8px;
+    letter-spacing: 0.4px;
+  }
+
+  .badge span {
+    width: 5px;
+    height: 5px;
+    flex-basis: 5px;
+  }
+
+  .header h1 {
+    font-size: clamp(29px, 8vw, 38px);
+    letter-spacing: -1.2px;
+    line-height: 1.08;
+  }
+
+  .header p {
+    margin-top: 11px;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .container {
+    margin-top: 22px;
+  }
+
+  .filters {
+    padding: 16px 13px;
+    border-radius: 15px;
+  }
+
+  .filterHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 11px;
+    padding-bottom: 15px;
+  }
+
+  .filterHeader h2 {
+    font-size: 18px;
+  }
+
+  .reset {
+    min-height: 34px;
+    font-size: 10px;
+  }
+
+  .section {
+    padding: 17px 0;
+  }
+
+  .categoryList {
+    gap: 6px;
+  }
+
+  .categoryList button,
+  .dealList button {
+    min-height: 41px;
+    padding: 0 7px;
+    font-size: 10px;
+    border-radius: 9px;
+  }
+
+  .categoryFilters {
+    padding-top: 19px;
+  }
+
+  .categoryTitle h3 {
+    font-size: 16px;
+  }
+
+  .apply {
+    min-height: 49px;
+    margin-top: 19px;
+    font-size: 11px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .resultsHeader {
+    margin-top: 25px;
+  }
+
+  .resultsHeader strong {
+    font-size: 19px;
+  }
+
+  .resultsHeader small {
+    font-size: 10px;
+  }
+
+  .activeSearchBadge {
+    max-width: 100%;
+    padding: 6px 10px;
+    font-size: 10px;
+    overflow-wrap: anywhere;
+  }
+
+  .empty {
+    padding: 38px 14px;
+    border-radius: 15px;
+  }
+
+  .emptyIcon {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 14px;
+  }
+
+  .empty h2 {
+    font-size: 18px;
+  }
+
+  .empty p {
+    font-size: 12px;
+  }
+
+  .loading {
+    min-height: 150px;
+    font-size: 11px;
+  }
+
+  .error {
+    padding: 16px 12px;
+    font-size: 11px;
+  }
+}
+
+/* =========================================================
+   EXTRA SMALL — 400px
+========================================================= */
+
+@media (max-width: 400px) {
+  .page {
+    padding: 78px 11px 0;
+  }
+
+  .headerTop {
+    gap: 5px;
+  }
+
+  .badge {
+    padding: 0 7px;
+    font-size: 7.5px;
+  }
+
+  .header h1 {
+    font-size: clamp(26px, 8vw, 32px);
+    letter-spacing: -0.9px;
+  }
+
+  .header p {
+    font-size: 11px;
+  }
+
+  .filters {
+    padding: 14px 10px;
+    border-radius: 13px;
+  }
+
+  .filterHeader h2 {
+    font-size: 16px;
+  }
+
+  .categoryList button,
+  .dealList button {
+    min-height: 38px;
+    padding: 0 5px;
+    font-size: 9px;
+  }
+
+  .section {
+    padding: 15px 0;
+  }
+
+  .categoryTitle h3 {
+    font-size: 15px;
+  }
+
+  .apply {
+    min-height: 46px;
+  }
+
+  .grid {
+    gap: 12px;
+  }
+
+  .empty {
+    padding: 32px 10px;
+  }
+}
+
+/* =========================================================
+   VERY SMALL — 350px
+========================================================= */
+
+@media (max-width: 350px) {
+  .page {
+    padding: 74px 8px 0;
+  }
+
+  .headerTop {
+    align-items: flex-start;
+  }
+
+  .header h1 {
+    font-size: 25px;
+  }
+
+  .header p {
+    font-size: 10.5px;
+  }
+
+  .badge {
+    min-height: 27px;
+    font-size: 7px;
+  }
+
+  .filters {
+    padding: 12px 8px;
+  }
+
+  .categoryList,
+  .dealList {
+    gap: 5px;
+  }
+
+  .categoryList button,
+  .dealList button {
+    min-height: 36px;
+    font-size: 8.5px;
+  }
+
+  .filterHeader h2 {
+    font-size: 15px;
+  }
+
+  .reset {
+    min-height: 31px;
+    font-size: 9px;
+  }
+
+  .resultsHeader strong {
+    font-size: 17px;
+  }
+
+  .resultsHeader small {
+    font-size: 9px;
+  }
+}

@@ -379,3 +379,208 @@
     padding: 0;
   }
 }
+
+/* =========================================
+   TABLET
+========================================= */
+
+@media (max-width: 900px) {
+  .wrapper {
+    padding: 15px;
+  }
+
+  .searchBox {
+    gap: 7px;
+  }
+
+  .searchBox textarea {
+    font-size: 12px;
+  }
+
+  .examples {
+    flex-wrap: wrap;
+  }
+}
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 600px) {
+  .wrapper {
+    margin-top: 12px;
+    padding: 13px;
+    border-radius: 12px;
+  }
+
+  .header {
+    margin-bottom: 11px;
+  }
+
+  .title {
+    gap: 8px;
+  }
+
+  .icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .title h2 {
+    font-size: 14px;
+  }
+
+  .title p {
+    font-size: 9px;
+  }
+
+  .searchBox {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .searchBox textarea {
+    width: 100%;
+    min-height: 68px;
+    max-height: 150px;
+    padding: 4px;
+    font-size: 12px;
+    line-height: 1.55;
+    resize: vertical;
+  }
+
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .voiceButton,
+  .clearButton {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+  }
+
+  .searchButton {
+    width: auto;
+    min-width: 115px;
+    min-height: 38px;
+    padding: 0 12px;
+    gap: 7px;
+    font-size: 11px;
+  }
+
+  .searchButton span {
+    display: inline;
+  }
+
+  .status,
+  .error,
+  .notice {
+    font-size: 11px;
+  }
+
+  .examples {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .examplesTitle {
+    padding: 0;
+    font-size: 10px;
+  }
+
+  .exampleList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .exampleList button {
+    min-height: 31px;
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+
+  .chips {
+    gap: 6px;
+  }
+
+  .chip {
+    max-width: 100%;
+    font-size: 10px;
+  }
+}
+
+/* =========================================
+   SMALL PHONES
+========================================= */
+
+@media (max-width: 380px) {
+  .wrapper {
+    padding: 10px;
+  }
+
+  .title h2 {
+    font-size: 13px;
+  }
+
+  .title p {
+    font-size: 9px;
+  }
+
+  .searchBox {
+    padding: 8px;
+  }
+
+  .searchBox textarea {
+    min-height: 62px;
+    font-size: 11px;
+  }
+
+  .voiceButton,
+  .clearButton {
+    width: 35px;
+    height: 35px;
+  }
+
+  .searchButton {
+    min-width: 105px;
+    min-height: 35px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+
+  .exampleList button {
+    font-size: 9px;
+    padding: 5px 7px;
+  }
+}
+
+/* =========================================
+   ACCESSIBILITY
+========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .pulse {
+    animation: none !important;
+  }
+
+  .searchBox,
+  .voiceButton,
+  .clearButton,
+  .searchButton,
+  .exampleList button {
+    transition: none !important;
+  }
+}

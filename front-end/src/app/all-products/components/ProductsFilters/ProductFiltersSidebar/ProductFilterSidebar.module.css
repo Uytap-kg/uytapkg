@@ -289,3 +289,253 @@
   background: #f5f4ff;
   color: #483df6;
 }
+
+/* =========================================
+   RESPONSIVE SIDEBAR
+========================================= */
+
+/* Tablet */
+@media (max-width: 900px) {
+  .sidebar {
+    width: min(440px, 65vw);
+  }
+
+  .header {
+    padding: 20px 18px 16px;
+  }
+
+  .content {
+    padding: 17px 18px 22px;
+  }
+
+  .footer {
+    padding: 13px 18px;
+  }
+
+  .categoryButton,
+  .dealButtons button,
+  .dealButton {
+    min-height: 37px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .overlay {
+    inset: 0;
+    justify-content: stretch;
+    align-items: stretch;
+    overflow: hidden;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  .sidebar {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    height: 100dvh;
+    min-height: 0;
+    border-radius: 0;
+    box-shadow: none;
+    animation: mobileSidebarAppear 0.22s ease;
+  }
+
+  .header {
+    gap: 12px;
+    padding: 17px 16px 14px;
+  }
+
+  .eyebrow {
+    margin-bottom: 5px;
+    font-size: 9px;
+  }
+
+  .header h2 {
+    font-size: 19px;
+  }
+
+  .header p {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .closeButton {
+    width: 38px;
+    height: 38px;
+  }
+
+  .content {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 16px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .section {
+    padding-bottom: 17px;
+    margin-bottom: 16px;
+  }
+
+  .sectionLabel {
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+
+  .categories {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .categoryButton {
+    width: 100%;
+    min-width: 0;
+    min-height: 39px;
+    padding: 8px 7px;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+
+  .dealButtons {
+    gap: 8px;
+  }
+
+  .dealButtons button,
+  .dealButton {
+    min-height: 40px;
+    font-size: 12px;
+  }
+
+  .categoryHeading {
+    margin-bottom: 12px;
+  }
+
+  .categoryHeading span {
+    font-size: 10px;
+  }
+
+  .categoryHeading h3 {
+    font-size: 14px;
+  }
+
+  .footer {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-shrink: 0;
+    gap: 9px;
+    padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: #fff;
+  }
+
+  .resetButton,
+  .applyButton {
+    min-height: 45px;
+    font-size: 11px;
+  }
+
+  .resetButton {
+    padding: 0 11px;
+  }
+
+  .applyButton {
+    min-width: 0;
+    padding: 0 10px;
+    gap: 6px;
+  }
+}
+
+@keyframes mobileSidebarAppear {
+  from {
+    transform: translateY(15px);
+    opacity: 0.7;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Extra small phones */
+@media (max-width: 380px) {
+  .header {
+    padding: 15px 13px 12px;
+  }
+
+  .content {
+    padding: 14px 13px;
+  }
+
+  .footer {
+    gap: 7px;
+    padding-left: 13px;
+    padding-right: 13px;
+  }
+
+  .categoryButton {
+    font-size: 10px;
+    padding: 7px 5px;
+  }
+
+  .resetButton {
+    padding: 0 9px;
+    font-size: 10px;
+  }
+
+  .applyButton {
+    font-size: 10px;
+  }
+}
+
+/* Short screens / landscape */
+@media (max-height: 600px) {
+  .header {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .header h2 {
+    font-size: 18px;
+  }
+
+  .content {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .section {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+  }
+
+  .footer {
+    padding-top: 9px;
+    padding-bottom: max(9px, env(safe-area-inset-bottom));
+  }
+
+  .resetButton,
+  .applyButton {
+    min-height: 39px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    animation: none !important;
+  }
+
+  .categoryButton,
+  .dealButton,
+  .closeButton,
+  .resetButton,
+  .applyButton {
+    transition: none !important;
+  }
+}

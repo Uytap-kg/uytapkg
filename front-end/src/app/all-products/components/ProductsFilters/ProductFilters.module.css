@@ -709,3 +709,294 @@
     animation: none;
   }
 }
+
+/* =========================================
+   RESPONSIVE — LAPTOP
+========================================= */
+
+@media (max-width: 1200px) {
+  .compactSearch {
+    padding: 15px;
+  }
+
+  .searchFields {
+    grid-template-columns: minmax(0, 1.2fr) 1px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding-left: 12px;
+  }
+
+  .mainSearchButton {
+    padding: 0 12px;
+  }
+}
+
+/* =========================================
+   TABLET
+========================================= */
+
+@media (max-width: 900px) {
+  .compactSearch {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .searchFields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 15px;
+    padding: 14px;
+  }
+
+  .fieldDivider {
+    display: none;
+  }
+
+  .searchField,
+  .priceField {
+    min-width: 0;
+  }
+
+  .mainSearchButton {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .quickOptions {
+    gap: 8px;
+  }
+
+  .quickOption {
+    min-height: 36px;
+  }
+}
+
+/* =========================================
+   SMALL TABLET / LARGE PHONE
+========================================= */
+
+@media (max-width: 650px) {
+  .compactSearch {
+    padding: 12px;
+    margin-bottom: 18px;
+    border-radius: 14px;
+  }
+
+  .modeSwitch {
+    margin-bottom: 12px;
+  }
+
+  .compactTop {
+    margin-bottom: 10px;
+  }
+
+  .allFiltersButton {
+    min-height: 36px;
+    padding: 0 12px;
+  }
+
+  .quickOptions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .quickOption {
+    width: 100%;
+    min-width: 0;
+    min-height: 39px;
+    padding: 0 7px;
+    gap: 6px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .quickOption span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .searchFields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 13px;
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .searchField {
+    min-height: 42px;
+  }
+
+  .searchField input {
+    font-size: 13px;
+  }
+
+  .priceField {
+    width: 100%;
+  }
+
+  .priceInputs {
+    gap: 12px;
+  }
+
+  .priceInputs input {
+    min-height: 25px;
+    font-size: 13px;
+  }
+
+  .mainSearchButton {
+    grid-column: auto;
+    width: 100%;
+    min-height: 44px;
+    font-size: 12px;
+  }
+
+  .quickActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .secondaryAction {
+    justify-content: center;
+    min-width: 0;
+    min-height: 35px;
+    padding: 0 5px;
+    gap: 4px;
+    font-size: 9px;
+    white-space: nowrap;
+  }
+
+  .secondaryAction svg {
+    flex-shrink: 0;
+  }
+}
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 480px) {
+  .compactSearch {
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .quickOption {
+    min-height: 37px;
+    font-size: 9px;
+  }
+
+  .quickOption svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .searchFields {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .searchField small,
+  .priceField small {
+    font-size: 10px;
+  }
+
+  .searchField input,
+  .priceInputs input {
+    font-size: 12px;
+  }
+
+  .quickActions {
+    grid-template-columns: 1fr;
+  }
+
+  .secondaryAction {
+    justify-content: space-between;
+    padding: 0 11px;
+    font-size: 10px;
+  }
+
+  .sidebarOverlay {
+    justify-content: stretch;
+  }
+
+  .filterSidebar {
+    width: 100%;
+    max-width: none;
+    border-radius: 0;
+  }
+
+  .sidebarHeader {
+    padding: 17px 15px 14px;
+  }
+
+  .sidebarHeader h2 {
+    font-size: 19px;
+  }
+
+  .sidebarHeader p {
+    font-size: 11px;
+  }
+
+  .sidebarContent {
+    padding: 16px 15px;
+    overscroll-behavior: contain;
+  }
+
+  .sidebarFooter {
+    padding: 12px 15px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .sidebarReset,
+  .sidebarApply {
+    min-height: 42px;
+  }
+}
+
+/* =========================================
+   EXTRA SMALL PHONES
+========================================= */
+
+@media (max-width: 360px) {
+  .compactSearch {
+    padding: 8px;
+  }
+
+  .quickOption {
+    gap: 4px;
+    padding: 0 5px;
+    font-size: 8px;
+  }
+
+  .quickOption svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .searchFields {
+    padding: 10px;
+  }
+
+  .sidebarFooter {
+    gap: 7px;
+  }
+
+  .sidebarReset {
+    padding: 0 9px;
+  }
+}
+
+/* =========================================
+   ACCESSIBILITY
+========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .modeContent,
+  .sidebarOverlay,
+  .filterSidebar {
+    animation: none !important;
+    transition: none !important;
+  }
+}
