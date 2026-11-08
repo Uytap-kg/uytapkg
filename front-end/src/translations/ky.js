@@ -173,7 +173,7 @@ const ky = {
     },
 
     roadmap: {
-      smartSearch: "Кыймылсыз мүлктү акылдуу издөө",
+      smartSearch: "Uytap AI - Кыймылсыз мүлктү акылдуу издөө",
       voiceInput: "Үн менен киргизүү",
       verification: "Сатуучуларды текшерүү",
       newBuildings: "Жаңы курулуштар каталогу",

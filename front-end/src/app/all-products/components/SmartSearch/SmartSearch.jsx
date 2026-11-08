@@ -538,7 +538,8 @@ const REGION_DISPLAY_LABELS = {
 
 function normalizeFilters(aiFilters, originalQuery = "", aiFeatures = {}) {
   const baseObj = aiFilters && typeof aiFilters === "object" ? aiFilters : {};
-  const featObj = aiFeatures && typeof aiFeatures === "object" ? aiFeatures : {};
+  const featObj =
+    aiFeatures && typeof aiFeatures === "object" ? aiFeatures : {};
   const f = { ...baseObj, ...featObj };
   const hasAnyAiFilter = Object.values(f).some(
     (v) =>
@@ -1439,53 +1440,35 @@ export default function SmartSearch({
     };
   }, []);
 
-  /* =========================================================
-     RENDER
-  ========================================================= */
-
   return (
     <section className={styles.wrapper}>
       <div className={styles.header}>
-        <div className={styles.titleBlock}>
-          <div className={styles.badge}>
-            <Sparkles size={13} />
-            AI SEARCH
+        <div className={styles.title}>
+          <div className={styles.icon}>
+            <Sparkles size={15} />
           </div>
 
-          <h2>{t("smartSearch.title")}</h2>
-
-          <p>{t("smartSearch.description")}</p>
+          <div>
+            <h2>{t("smartSearch.title")}</h2>
+            <p>{t("smartSearch.description")}</p>
+          </div>
         </div>
       </div>
 
       <div className={styles.searchBox}>
         <textarea
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            setText(event.target.value);
+            if (error) setError("");
+          }}
           placeholder={t("smartSearch.placeholder")}
-          rows={5}
+          rows={2}
           maxLength={SAFE_MAX_TEXT_LENGTH}
           disabled={searching}
         />
 
-        <div className={styles.searchActions}>
-          <button
-            type="button"
-            className={`${styles.voiceButton} ${
-              listening ? styles.listening : ""
-            }`}
-            onClick={toggleVoice}
-            disabled={searching}
-            aria-label={
-              listening
-                ? t("smartSearch.voice.stop")
-                : t("smartSearch.voice.start")
-            }
-            aria-pressed={listening}
-          >
-            {listening ? <MicOff size={21} /> : <Mic size={21} />}
-          </button>
-
+        <div className={styles.actions}>
           {text && (
             <button
               type="button"
@@ -1493,21 +1476,57 @@ export default function SmartSearch({
               onClick={clearSearch}
               disabled={searching}
               aria-label={t("smartSearch.clear")}
+              title={t("smartSearch.clear")}
             >
-              <RotateCcw size={15} />
+              <X size={16} />
             </button>
           )}
+
+          <button
+            type="button"
+            className={`${styles.voiceButton} ${
+              listening ? styles.listening : ""
+            }`}
+            onClick={toggleVoice}
+            disabled={searching || !supported}
+            aria-label={
+              listening
+                ? t("smartSearch.voice.stop")
+                : t("smartSearch.voice.start")
+            }
+            title={
+              listening
+                ? t("smartSearch.voice.stop")
+                : t("smartSearch.voice.start")
+            }
+          >
+            {listening ? <MicOff size={17} /> : <Mic size={17} />}
+          </button>
+
+          <button
+            type="button"
+            className={styles.searchButton}
+            onClick={() => handleSearch()}
+            disabled={searching || !text.trim() || listening}
+          >
+            {searching ? (
+              <Loader2 size={16} className={styles.spinner} />
+            ) : (
+              <Search size={16} />
+            )}
+            <span>
+              {searching
+                ? t("smartSearch.analyzing")
+                : t("smartSearch.searchButton")}
+            </span>
+          </button>
         </div>
       </div>
 
       {listening && (
-        <div
-          className={styles.listeningStatus}
-          role="status"
-          aria-live="polite"
-        >
+        <div className={styles.status} role="status">
           <span className={styles.pulse} />
-          <span>{t("smartSearch.listening")}</span>
+          {t("smartSearch.listening")}
         </div>
       )}
 
@@ -1518,61 +1537,13 @@ export default function SmartSearch({
       )}
 
       {!supported && (
-        <div className={styles.browserNotice}>
-          {t("smartSearch.browserNotice")}
-        </div>
-      )}
-
-      <button
-        type="button"
-        className={styles.searchButton}
-        disabled={searching || !text.trim() || listening}
-        onClick={() => handleSearch()}
-      >
-        {searching ? (
-          <>
-            <Loader2 size={19} className={styles.spinner} />
-            {t("smartSearch.analyzing")}
-          </>
-        ) : (
-          <>
-            <Search size={19} />
-            {t("smartSearch.searchButton")}
-          </>
-        )}
-      </button>
-
-      {activeChips.length > 0 && (
-        <div className={styles.activeChipsBlock}>
-          <div className={styles.activeChipsHeader}>
-            <span>{t("smartSearch.activeFilters")}</span>
-            <button
-              type="button"
-              className={styles.resetAllChips}
-              onClick={onResetAll}
-            >
-              {t("smartSearch.resetAll")}
-            </button>
-          </div>
-          <div className={styles.chipsList}>
-            {activeChips.map((chip) => (
-              <span key={chip.id} className={styles.chip}>
-                {chip.label}
-                <button
-                  type="button"
-                  onClick={() => onRemoveFilter?.(chip.id)}
-                  aria-label={`Удалить ${chip.label}`}
-                >
-                  <X size={13} />
-                </button>
-              </span>
-            ))}
-          </div>
-        </div>
+        <div className={styles.notice}>{t("smartSearch.browserNotice")}</div>
       )}
 
       <div className={styles.examples}>
-        <span>{t("smartSearch.examples.title")}</span>
+        <span className={styles.examplesTitle}>
+          {t("smartSearch.examples.title")}
+        </span>
 
         <div className={styles.exampleList}>
           {examples.map((example) => (
