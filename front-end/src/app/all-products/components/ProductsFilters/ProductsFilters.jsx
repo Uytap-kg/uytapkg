@@ -14,10 +14,10 @@ import {
   ChevronRight,
   MapPin,
   ArrowRight,
-  RotateCcw,
 } from "lucide-react";
 
-import CommonFilters from "../CommonFilters/CommonFilters";
+import { useRouter } from "next/navigation";
+
 import SearchModeSlider from "../SearchModeSlider/SearchModeSlider";
 import SmartSearch from "../SmartSearch/SmartSearch";
 
@@ -113,9 +113,9 @@ export default function ProductsFilters({
   categories,
   categoryLabels,
   CategoryFilters,
-  showBeachDistance,
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const router = useRouter();
 
   const [cityValue, setCityValue] = useState(
     filters.city === "Все" ? "" : filters.city || "",
@@ -334,13 +334,21 @@ export default function ProductsFilters({
 
             {/* QUICK ACTIONS */}
             <div className={styles.quickActions}>
-              <button type="button" className={styles.secondaryAction}>
+              <button
+                type="button"
+                className={styles.secondaryAction}
+                onClick={() => router.push("/search-map")}
+              >
                 <Map size={15} />
                 Искать на карте
                 <ChevronRight size={14} />
               </button>
 
-              <button type="button" className={styles.secondaryAction}>
+              <button
+                type="button"
+                className={styles.secondaryAction}
+                onClick={() => router.push("/safety")}
+              >
                 <ShieldCheck size={15} />
                 Безопасность
                 <ChevronRight size={14} />
