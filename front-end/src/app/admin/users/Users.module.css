@@ -251,6 +251,28 @@
   color: #c2410c;
 }
 
+.profileLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.profileLink:hover,
+.profileLink:focus-visible {
+  border-color: #7c3aed;
+  color: #7c3aed;
+}
+
 .state {
   display: flex;
   align-items: center;

@@ -1,11 +1,13 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   Loader2,
   Search,
   Users,
@@ -238,6 +240,7 @@ function UsersContent() {
                 <th>Тип аккаунта</th>
                 <th>Верификация</th>
                 <th>Дата регистрации</th>
+                <th>Профиль</th>
               </tr>
             </thead>
 
@@ -269,6 +272,16 @@ function UsersContent() {
                     </span>
                   </td>
                   <td className={styles.nowrap}>{formatDate(user.createdAt)}</td>
+                  <td>
+                    <Link
+                      href={`/public-profile/${user.id}`}
+                      className={styles.profileLink}
+                      aria-label={`Открыть публичный профиль: ${user.name || "Без имени"}`}
+                    >
+                      <ExternalLink size={14} aria-hidden="true" />
+                      Открыть
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
