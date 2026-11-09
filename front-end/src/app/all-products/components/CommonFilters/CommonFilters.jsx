@@ -17,7 +17,8 @@ import styles from "./CommonFilters.module.css";
 import CustomSelectSmall from "@/components/ui/CustomSelectSmall/CustomSelectSmall";
 
 const roomsOptions = ["Все", "1", "2", "3", "4+"];
-const currencyOptions = ["USD", "KGS", "EUR"];
+// EUR убран: на бэкенде нет курса, цены сравнивались бы без пересчёта
+const currencyOptions = ["USD", "KGS"];
 
 const locations = {
   kyrgyzstan: {
@@ -705,7 +706,11 @@ export default function CommonFilters({ filters, updateFilter }) {
 
   const showBeachDistance = isIssykKul(filters);
 
-  const countryValue = isTurkey ? "turkey" : isKyrgyzstan ? "kyrgyzstan" : "";
+  const countryValue = isTurkey
+    ? "turkey"
+    : filters?.country === "kyrgyzstan"
+      ? "kyrgyzstan"
+      : "";
 
   const showRooms = ["apartment", "house", "cottage", "room"].includes(
     filters?.propertyType,

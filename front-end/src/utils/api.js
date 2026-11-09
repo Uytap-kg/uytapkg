@@ -336,10 +336,6 @@ export async function getListings(params = {}, options = {}) {
     mappedParams.maxPrice = params.priceTo;
     delete mappedParams.priceTo;
   }
-  if (params.rentalPeriod && !Array.isArray(params.rentalPeriod)) {
-    mappedParams.rentPeriod = params.rentalPeriod;
-    delete mappedParams.rentalPeriod;
-  }
 
   const cleanParams = {};
   for (const [key, val] of Object.entries(mappedParams)) {

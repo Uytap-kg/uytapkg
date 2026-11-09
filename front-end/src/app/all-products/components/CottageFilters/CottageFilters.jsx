@@ -21,14 +21,6 @@ import styles from "./CottageFilters.module.css";
    OPTIONS
 ========================================================= */
 
-const houseTypes = [
-  "Любой",
-  "Коттедж",
-  "Особняк",
-  "Таунхаус",
-  "Загородный дом",
-];
-
 const floors = ["Любой", "1", "2", "3", "4+"];
 
 const heating = [
@@ -218,8 +210,6 @@ export default function CottageFilters({ filters, updateFilter }) {
 
   const isRent = filters.dealType === "rent";
 
-  const translatedHouseTypes = translateOptions(houseTypes, "houseTypes", t);
-
   const translatedFloors = translateOptions(floors, "floors", t);
 
   const translatedHeating = translateOptions(heating, "heating", t);
@@ -244,14 +234,6 @@ export default function CottageFilters({ filters, updateFilter }) {
 
   return (
     <div className={styles.grid}>
-      <MultiSelect
-        icon={Home}
-        title={t("cottageFilters.titles.houseType")}
-        options={translatedHouseTypes}
-        value={filters.houseType || []}
-        setValue={(value) => updateFilter("houseType", value)}
-      />
-
       <MultiSelect
         icon={Layers3}
         title={t("cottageFilters.titles.floors")}

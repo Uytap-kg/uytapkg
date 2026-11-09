@@ -270,8 +270,8 @@ export default function RoomFilters({ filters, updateFilter }) {
         icon={MapPin}
         title={t("roomFilters.titles.location")}
         options={translatedLocations}
-        value={filters.location || []}
-        setValue={(value) => updateFilter("location", value)}
+        value={filters.roomLocation || []}
+        setValue={(value) => updateFilter("roomLocation", value)}
       />
 
       <MultiSelect

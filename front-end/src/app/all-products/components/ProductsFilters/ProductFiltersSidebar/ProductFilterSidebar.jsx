@@ -4,20 +4,33 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Search, RotateCcw } from "lucide-react";
 
+import { useLanguage } from "@/context/LanguageContext";
+
 import CommonFilters from "../../CommonFilters/CommonFilters";
+import { applyFilterChange } from "../../../utils/filterChanges";
 import styles from "./ProductFilterSidebar.module.css";
 
 export default function ProductFilterSidebar({
   filters,
-  updateFilter,
+  commitFilters,
   categories = [],
   categoryLabels = {},
-  CategoryFilters,
+  categoryComponents = {},
   resetFilters,
-  updateUrl,
   onClose,
 }) {
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
+
+  // Закрытие панели без применения отбрасывает черновик
+  const [draft, setDraft] = useState(filters);
+
+  const updateDraft = (key, value) => {
+    setDraft((prev) => applyFilterChange(prev, key, value));
+  };
+
+  const CategoryFilters =
+    categoryComponents[draft.propertyType] || categoryComponents.apartment;
 
   useEffect(() => {
     setMounted(true);
@@ -35,7 +48,7 @@ export default function ProductFilterSidebar({
   }, [mounted]);
 
   const handleApply = () => {
-    updateUrl(filters);
+    commitFilters(draft);
     onClose();
   };
 
@@ -45,12 +58,12 @@ export default function ProductFilterSidebar({
   };
 
   const handlePropertyType = (value) => {
-    updateFilter("propertyType", value);
+    updateDraft("propertyType", value);
   };
 
   const handleDealType = (value) => {
-    if (filters.dealType === value) return;
-    updateFilter("dealType", value);
+    if (draft.dealType === value) return;
+    updateDraft("dealType", value);
   };
 
   if (!mounted) return null;
@@ -73,15 +86,15 @@ export default function ProductFilterSidebar({
         <div className={styles.header}>
           <div>
             <span className={styles.eyebrow}>UYTAP • SEARCH</span>
-            <h2 id="filters-title">Все фильтры</h2>
-            <p>Настройте параметры недвижимости</p>
+            <h2 id="filters-title">{t("productsFilters.allFilters")}</h2>
+            <p>{t("productsFilters.sidebarDescription")}</p>
           </div>
 
           <button
             type="button"
             className={styles.closeButton}
             onClick={onClose}
-            aria-label="Закрыть"
+            aria-label={t("productsFilters.close")}
           >
             <X size={21} />
           </button>
@@ -89,11 +102,13 @@ export default function ProductFilterSidebar({
 
         <div className={styles.content}>
           <section className={styles.section}>
-            <label className={styles.sectionLabel}>Тип недвижимости</label>
+            <label className={styles.sectionLabel}>
+              {t("productsFilters.propertyType")}
+            </label>
 
             <div className={styles.categories}>
               {categories.map((category) => {
-                const isActive = filters.propertyType === category.value;
+                const isActive = draft.propertyType === category.value;
 
                 return (
                   <button
@@ -113,53 +128,53 @@ export default function ProductFilterSidebar({
           </section>
 
           <section className={styles.section}>
-            <label className={styles.sectionLabel}>Тип сделки</label>
+            <label className={styles.sectionLabel}>{t("productsFilters.dealType")}</label>
 
             <div className={styles.dealButtons}>
               <button
                 type="button"
                 className={`${styles.dealButton} ${
-                  filters.dealType === "sale" ? styles.categoryActive : ""
+                  draft.dealType === "sale" ? styles.categoryActive : ""
                 }`}
                 onClick={() => handleDealType("sale")}
               >
-                Покупка
+                {t("productsFilters.buy")}
               </button>
 
               <button
                 type="button"
                 className={`${styles.dealButton} ${
-                  filters.dealType === "rent" ? styles.categoryActive : ""
+                  draft.dealType === "rent" ? styles.categoryActive : ""
                 }`}
                 onClick={() => handleDealType("rent")}
               >
-                Аренда
+                {t("productsFilters.deal.rent")}
               </button>
             </div>
           </section>
 
           <section className={styles.section}>
             <label className={styles.sectionLabel}>
-              Местоположение и параметры
+              {t("productsFilters.locationAndParameters")}
             </label>
 
-            <CommonFilters filters={filters} updateFilter={updateFilter} />
+            <CommonFilters filters={draft} updateFilter={updateDraft} />
           </section>
 
           <section className={styles.section}>
             <div className={styles.categoryHeading}>
-              <span>Характеристики недвижимости</span>
+              <span>{t("productsFilters.characteristics")}</span>
               <h3>
-                {categoryLabels[filters.propertyType] ||
-                  "Дополнительные параметры"}
+                {categoryLabels[draft.propertyType] ||
+                  t("productsFilters.additionalParameters")}
               </h3>
             </div>
 
             {CategoryFilters && (
               <CategoryFilters
-                key={filters.propertyType}
-                filters={filters}
-                updateFilter={updateFilter}
+                key={draft.propertyType}
+                filters={draft}
+                updateFilter={updateDraft}
               />
             )}
           </section>
@@ -172,7 +187,7 @@ export default function ProductFilterSidebar({
             onClick={handleReset}
           >
             <RotateCcw size={16} />
-            Сбросить
+            {t("productsFilters.reset")}
           </button>
 
           <button
@@ -181,7 +196,7 @@ export default function ProductFilterSidebar({
             onClick={handleApply}
           >
             <Search size={17} />
-            Показать объявления
+            {t("productsFilters.showListings")}
           </button>
         </div>
       </aside>

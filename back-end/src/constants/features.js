@@ -24,6 +24,7 @@ export const FEATURE_KEYS = new Set([
   "terrain",
   "roomsInApartment",
   "privateBathroom",
+  "roomLocation",
   "premisesType",
   "firstLine",
   "separateEntrance",
@@ -49,6 +50,24 @@ export const ARRAY_FILTER_KEYS = new Set([
   "communications",
   "technicalParameters",
 ]);
+
+// Срок аренды хранится в колонке rent_period, а фильтры и умный поиск передают
+// его названием в rentalPeriod. Коды из rent_period тоже принимаются как есть.
+export const RENTAL_PERIOD_TO_RENT_CODES = {
+  "По часам": ["hourly"],
+  "Почасово": ["hourly"],
+  "Посуточно": ["daily"],
+  "Помесячно": ["monthly"],
+  "На долгий срок": ["long_term"],
+  "От 1 месяца": ["monthly"],
+  "От 3 месяцев": ["monthly", "long_term"],
+  "От 6 месяцев": ["monthly", "long_term"],
+  hourly: ["hourly"],
+  daily: ["daily"],
+  weekly: ["weekly"],
+  monthly: ["monthly"],
+  long_term: ["long_term"],
+};
 
 /**
  * Валидация и санитизация значения характеристики.

@@ -2438,6 +2438,26 @@ const ru = {
     characteristics: "ХАРАКТЕРИСТИКИ",
 
     showListings: "Показать объявления",
+
+    quick: {
+      apartment: "Купить квартиру",
+      house: "Купить дом",
+      long: "Снять надолго",
+      daily: "Посуточно",
+    },
+
+    allFilters: "Все фильтры",
+    location: "Местоположение",
+    locationPlaceholder: "Город, район или область",
+    searchButton: "Искать",
+    searchOnMap: "Искать на карте",
+    safety: "Безопасность",
+    sidebarDescription: "Настройте параметры недвижимости",
+    close: "Закрыть",
+    buy: "Покупка",
+    locationAndParameters: "Местоположение и параметры",
+    additionalParameters: "Дополнительные параметры",
+    selected: "Выбрано",
   },
 
   productsResults: {

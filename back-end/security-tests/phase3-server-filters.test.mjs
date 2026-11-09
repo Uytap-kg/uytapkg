@@ -280,3 +280,70 @@ test("Phase 3: Расстояние до пляжа (resort_filters)", () => {
     val: 500,
   });
 });
+
+test("Фильтры каталога: срок аренды ищется по колонке rent_period", () => {
+  const qLong = createMockQuery();
+  applyListingFilters(qLong, { dealType: "rent", rentalPeriod: "Помесячно,На долгий срок" });
+  assert.deepEqual(qLong._calls.in.find((c) => c.col === "rent_period"), {
+    col: "rent_period",
+    val: ["monthly", "long_term"],
+  });
+  assert.equal(qLong._calls.contains.find((c) => c.val.rentalPeriod), undefined);
+  assert.equal(qLong._calls.in.find((c) => c.col === "features->>rentalPeriod"), undefined);
+
+  const qUnknown = createMockQuery();
+  applyListingFilters(qUnknown, { rentalPeriod: "неизвестно" });
+  assert.equal(qUnknown._calls.in.find((c) => c.col === "rent_period"), undefined);
+});
+
+test("Фильтры каталога: свободный ввод местоположения ищет часть названия и область", () => {
+  const qPart = createMockQuery();
+  applyListingFilters(qPart, { locationQuery: "Джал" });
+  const clause = qPart._calls.or.at(-1);
+  for (const col of ["city", "district", "microdistrict", "address", "region"]) {
+    assert.ok(clause.includes(`${col}.ilike.%Джал%`), `Нет условия для ${col}`);
+  }
+  assert.equal(qPart._calls.eq.find((c) => c.col === "city"), undefined);
+
+  const qRegion = createMockQuery();
+  applyListingFilters(qRegion, { locationQuery: "Чуйская область" });
+  assert.ok(qRegion._calls.or.at(-1).includes("region.ilike.%CHUY%"));
+
+  const qAlias = createMockQuery();
+  applyListingFilters(qAlias, { locationQuery: "Стамбул" });
+  assert.ok(qAlias._calls.or.at(-1).includes("city.ilike.%istanbul%"));
+
+  // Спецсимволы не должны ломать синтаксис PostgREST .or()
+  const qInjection = createMockQuery();
+  applyListingFilters(qInjection, { locationQuery: "Ош),status.eq.draft" });
+  const injected = qInjection._calls.or.at(-1);
+  assert.equal(injected.includes(")"), false);
+  assert.equal(injected.includes("status.eq.draft"), false);
+});
+
+test("Фильтры каталога: тип дома применяется, а в категории «Коттедж» не конфликтует с ней", () => {
+  const qHouse = createMockQuery();
+  applyListingFilters(qHouse, { propertyType: "house", houseType: "Особняк" });
+  assert.ok(qHouse._calls.contains.find((c) => c.val.houseType === "Особняк"));
+
+  const qHouseMulti = createMockQuery();
+  applyListingFilters(qHouseMulti, { propertyType: "house", houseType: "Особняк,Дача" });
+  assert.deepEqual(qHouseMulti._calls.in.find((c) => c.col === "features->>houseType"), {
+    col: "features->>houseType",
+    val: ["Особняк", "Дача"],
+  });
+
+  const qCottage = createMockQuery();
+  applyListingFilters(qCottage, { propertyType: "cottage", houseType: "Особняк" });
+  assert.equal(qCottage._calls.contains.find((c) => c.val.houseType), undefined);
+});
+
+test("Фильтры каталога: комнаты ищутся по roomLocation и roomsInApartment", () => {
+  const q = createMockQuery();
+  applyListingFilters(q, { propertyType: "room", roomLocation: "В квартире", roomsInApartment: "2" });
+  assert.ok(q._calls.contains.find((c) => c.val.roomLocation === "В квартире"));
+  assert.deepEqual(q._calls.eq.find((c) => c.col === "features->>roomsInApartment"), {
+    col: "features->>roomsInApartment",
+    val: "2",
+  });
+});

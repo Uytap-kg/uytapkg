@@ -2650,6 +2650,26 @@ const ky = {
     characteristics: "МҮНӨЗДӨМӨЛӨР",
 
     showListings: "Жарыяларды көрсөтүү",
+
+    quick: {
+      apartment: "Батир сатып алуу",
+      house: "Үй сатып алуу",
+      long: "Узак мөөнөткө ижарага алуу",
+      daily: "Суткалап",
+    },
+
+    allFilters: "Бардык чыпкалар",
+    location: "Жайгашкан жери",
+    locationPlaceholder: "Шаар, район же облус",
+    searchButton: "Издөө",
+    searchOnMap: "Картадан издөө",
+    safety: "Коопсуздук",
+    sidebarDescription: "Кыймылсыз мүлктүн параметрлерин жөндөңүз",
+    close: "Жабуу",
+    buy: "Сатып алуу",
+    locationAndParameters: "Жайгашкан жери жана параметрлери",
+    additionalParameters: "Кошумча параметрлер",
+    selected: "Тандалды",
   },
 
   productsResults: {

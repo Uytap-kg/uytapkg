@@ -854,7 +854,12 @@ export default function SmartSearch({
       });
     }
 
-    if (activeFilters.city && activeFilters.city !== "Все") {
+    if (activeFilters.locationQuery) {
+      activeChips.push({
+        id: "location",
+        label: activeFilters.locationQuery,
+      });
+    } else if (activeFilters.city && activeFilters.city !== "Все") {
       activeChips.push({
         id: "location",
         label: activeFilters.district

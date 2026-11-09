@@ -18,39 +18,50 @@ import {
 
 import { useRouter } from "next/navigation";
 
+import { useLanguage } from "@/context/LanguageContext";
+
 import SearchModeSlider from "../SearchModeSlider/SearchModeSlider";
 import SmartSearch from "../SmartSearch/SmartSearch";
 
 import styles from "./ProductFilters.module.css";
 import ProductFilterSidebar from "./ProductFiltersSidebar/ProductFilterSidebar";
+import {
+  DAILY_RENTAL_PERIODS,
+  LONG_RENTAL_PERIODS,
+  applyFilterChanges,
+} from "../../utils/filterChanges";
 
 const quickOptions = [
   {
     id: "apartment",
-    title: "Купить квартиру",
+    titleKey: "productsFilters.quick.apartment",
     propertyType: "apartment",
     dealType: "sale",
+    rentalPeriod: [],
     icon: Building2,
   },
   {
     id: "house",
-    title: "Купить дом",
+    titleKey: "productsFilters.quick.house",
     propertyType: "house",
     dealType: "sale",
+    rentalPeriod: [],
     icon: Home,
   },
   {
     id: "long",
-    title: "Снять надолго",
+    titleKey: "productsFilters.quick.long",
     propertyType: "apartment",
     dealType: "rent",
+    rentalPeriod: LONG_RENTAL_PERIODS,
     icon: KeyRound,
   },
   {
     id: "daily",
-    title: "Посуточно",
+    titleKey: "productsFilters.quick.daily",
     propertyType: "apartment",
     dealType: "rent",
+    rentalPeriod: DAILY_RENTAL_PERIODS,
     icon: CalendarDays,
   },
 ];
@@ -104,32 +115,30 @@ export default function ProductsFilters({
   searchMode,
   setSearchMode,
   filters,
-  updateFilter,
-  updateUrl,
+  commitFilters,
   handleSmartSearch,
   handleRemoveSmartFilter,
   resetFilters,
   hasFilters,
   categories,
   categoryLabels,
-  CategoryFilters,
+  categoryComponents,
 }) {
+  const { t } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
 
-  const [cityValue, setCityValue] = useState(
-    filters.city === "Все" ? "" : filters.city || "",
-  );
+  const [cityValue, setCityValue] = useState(filters.locationQuery || "");
 
   const [priceFrom, setPriceFrom] = useState(filters.priceFrom || "");
   const [priceTo, setPriceTo] = useState(filters.priceTo || "");
 
-  // Синхронизация полей с внешними фильтрами
+  // Синхронизация полей с применёнными фильтрами
   useEffect(() => {
-    setCityValue(filters.city === "Все" ? "" : filters.city || "");
+    setCityValue(filters.locationQuery || "");
     setPriceFrom(filters.priceFrom || "");
     setPriceTo(filters.priceTo || "");
-  }, [filters.city, filters.priceFrom, filters.priceTo]);
+  }, [filters]);
 
   // Закрытие боковой панели по Escape
   useEffect(() => {
@@ -154,21 +163,14 @@ export default function ProductsFilters({
 
   // Быстрые варианты поиска
   const handleQuickOption = (option) => {
-    const rentPeriod =
-      option.id === "long" ? "long" : option.id === "daily" ? "daily" : "";
-
-    const next = {
-      ...filters,
-      propertyType: option.propertyType,
-      dealType: option.dealType,
-      rentPeriod,
-    };
-
-    updateFilter("propertyType", option.propertyType);
-    updateFilter("dealType", option.dealType);
-    updateFilter("rentPeriod", rentPeriod);
-
-    updateUrl(next);
+    commitFilters(
+      applyFilterChanges(filters, {
+        propertyType: option.propertyType,
+        dealType: option.dealType,
+        rentPeriod: "",
+        rentalPeriod: [...option.rentalPeriod],
+      }),
+    );
   };
 
   // Проверка активного быстрого фильтра
@@ -180,33 +182,33 @@ export default function ProductsFilters({
       return false;
     }
 
-    if (option.id === "long") {
-      return filters.rentPeriod === "long";
-    }
+    const selectedPeriods = filters.rentalPeriod || [];
 
-    if (option.id === "daily") {
-      return filters.rentPeriod === "daily";
-    }
-
-    return !filters.rentPeriod;
+    return (
+      !filters.rentPeriod &&
+      selectedPeriods.length === option.rentalPeriod.length &&
+      option.rentalPeriod.every((period) => selectedPeriods.includes(period))
+    );
   };
 
   // Основной поиск
   const handleSearch = () => {
-    const originalCity = cityValue.trim();
+    const locationQuery = cityValue.trim();
 
-    const next = {
-      ...filters,
-      city: originalCity || "Все",
-      priceFrom,
-      priceTo,
-    };
+    const changes = { locationQuery, priceFrom, priceTo };
 
-    updateFilter("city", next.city);
-    updateFilter("priceFrom", priceFrom);
-    updateFilter("priceTo", priceTo);
+    // Введённое местоположение заменяет выбранное в панели, иначе условия конфликтуют
+    if (locationQuery) {
+      Object.assign(changes, {
+        country: "",
+        region: "",
+        city: "Все",
+        settlement: "",
+        district: "",
+      });
+    }
 
-    updateUrl(next);
+    commitFilters(applyFilterChanges(filters, changes));
   };
 
   // Поиск при нажатии Enter
@@ -247,7 +249,7 @@ export default function ProductsFilters({
                 onClick={() => setSidebarOpen(true)}
               >
                 <SlidersHorizontal size={16} />
-                Все фильтры
+                {t("productsFilters.allFilters")}
                 {hasFilters && <span className={styles.filterDot} />}
               </button>
             </div>
@@ -268,7 +270,7 @@ export default function ProductsFilters({
                     }`}
                   >
                     <Icon size={16} />
-                    <span>{option.title}</span>
+                    <span>{t(option.titleKey)}</span>
                   </button>
                 );
               })}
@@ -280,11 +282,11 @@ export default function ProductsFilters({
                 <MapPin size={18} />
 
                 <span>
-                  <small>Местоположение</small>
+                  <small>{t("productsFilters.location")}</small>
 
                   <input
                     type="text"
-                    placeholder="Город, Село или Область"
+                    placeholder={t("productsFilters.locationPlaceholder")}
                     value={cityValue}
                     onChange={(event) => setCityValue(event.target.value)}
                     onKeyDown={handleCityKeyDown}
@@ -297,13 +299,15 @@ export default function ProductsFilters({
 
               <div className={styles.priceField}>
                 <span>
-                  <small>Цена, USD</small>
+                  <small>
+                    {t("commonFilters.price")}, {filters.currency || "USD"}
+                  </small>
 
                   <div className={styles.priceInputs}>
                     <input
                       type="number"
                       min="0"
-                      placeholder="От"
+                      placeholder={t("commonFilters.from")}
                       value={priceFrom}
                       onChange={(event) => setPriceFrom(event.target.value)}
                     />
@@ -313,7 +317,7 @@ export default function ProductsFilters({
                     <input
                       type="number"
                       min="0"
-                      placeholder="До"
+                      placeholder={t("commonFilters.to")}
                       value={priceTo}
                       onChange={(event) => setPriceTo(event.target.value)}
                     />
@@ -327,7 +331,7 @@ export default function ProductsFilters({
                 onClick={handleSearch}
               >
                 <Search size={17} />
-                Искать
+                {t("productsFilters.searchButton")}
                 <ArrowRight size={15} />
               </button>
             </div>
@@ -340,7 +344,7 @@ export default function ProductsFilters({
                 onClick={() => router.push("/search-map")}
               >
                 <Map size={15} />
-                Искать на карте
+                {t("productsFilters.searchOnMap")}
                 <ChevronRight size={14} />
               </button>
 
@@ -350,7 +354,7 @@ export default function ProductsFilters({
                 onClick={() => router.push("/safety")}
               >
                 <ShieldCheck size={15} />
-                Безопасность
+                {t("productsFilters.safety")}
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -362,12 +366,11 @@ export default function ProductsFilters({
       {sidebarOpen && (
         <ProductFilterSidebar
           filters={filters}
-          updateFilter={updateFilter}
+          commitFilters={commitFilters}
           categories={categories}
           categoryLabels={categoryLabels}
-          CategoryFilters={CategoryFilters}
+          categoryComponents={categoryComponents}
           resetFilters={resetFilters}
-          updateUrl={updateUrl}
           onClose={() => setSidebarOpen(false)}
         />
       )}

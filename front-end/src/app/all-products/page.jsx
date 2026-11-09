@@ -28,6 +28,13 @@ import ProductsFilters from "./components/ProductsFilters/ProductsFilters";
 import ProductsResults from "./components/ProductsResults/ProductsResults";
 import MatchedComplexCard from "./components/MatchedComplexCard/MatchedComplexCard";
 
+import {
+  LONG_RENTAL_PERIODS,
+  arrayFeatureKeys,
+  arrayFilterKeys,
+  featureKeys,
+} from "./utils/filterChanges";
+
 import styles from "./AllProducts.module.css";
 import Footer from "@/components/pageComponents/footer/Footer";
 import Header from "@/components/pageComponents/header/Header";
@@ -109,6 +116,7 @@ const DEFAULT_FILTERS = {
   country: "",
   district: "",
 
+  locationQuery: "",
   searchQuery: "",
 
   currency: "USD",
@@ -146,64 +154,6 @@ const DEFAULT_FILTERS = {
   technicalParameters: [],
 };
 
-/* =========================================================
-   FEATURE KEYS
-========================================================= */
-
-const featureKeys = [
-  "series",
-  "floor",
-  "condition",
-  "walls",
-  "heating",
-  "documents",
-  "furniture",
-  "offerType",
-  "pets",
-
-  "residentialComplex",
-
-  "houseType",
-  "floors",
-  "sewerage",
-  "water",
-  "electricity",
-
-  "purpose",
-  "fence",
-  "location",
-  "terrain",
-
-  "roomsInApartment",
-  "privateBathroom",
-
-  "premisesType",
-  "firstLine",
-  "separateEntrance",
-  "rentalBusiness",
-
-  "ceilingHeight",
-  "parkingType",
-  "material",
-  "security",
-  "gates",
-  "inspectionPit",
-  "basement",
-  "truckAccess",
-  "gateType",
-
-  "rentalPeriod",
-];
-
-const arrayFeatureKeys = [
-  ...featureKeys,
-  "amenities",
-  "communications",
-  "technicalParameters",
-];
-
-const arrayFilterKeys = ["amenities", "communications", "technicalParameters"];
-
 const ignoredUrlKeys = [
   "propertyType",
   "category",
@@ -231,119 +181,10 @@ const ignoredUrlKeys = [
 
   "urgentOnly",
   "searchQuery",
+  "locationQuery",
 
   ...arrayFeatureKeys,
 ];
-
-/* =========================================================
-   ISSYK-KUL
-========================================================= */
-
-const ISSYK_KUL_CITIES = [
-  "каракол",
-  "чолпон-ата",
-  "чолпоната",
-  "бостери",
-  "тамчы",
-  "чон-сары-ой",
-  "чон сары ой",
-  "чоң-сары-ой",
-  "сары-ой",
-  "сары ой",
-  "боконбаево",
-  "барскоон",
-  "тамга",
-  "каджи-сай",
-  "каджисай",
-  "тосор",
-  "ананьево",
-  "пристань-пржевальск",
-  "рыбачье",
-  "балыкчы",
-  "иссык-куль",
-  "иссыккуль",
-  "семеновка",
-  "семеновское",
-  "григорьевка",
-  "курменты",
-  "каракуль",
-  "дархан",
-  "тюп",
-  "кызыл-суу",
-  "покровка",
-];
-
-function normalizeLocationValue(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/ё/g, "е")
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ");
-}
-
-function isIssykKulValue(value) {
-  const normalized = normalizeLocationValue(value);
-
-  if (!normalized) {
-    return false;
-  }
-
-  if (
-    normalized === "issyk kul" ||
-    normalized === "issyk kul oblast" ||
-    normalized === "issyk kul region" ||
-    normalized.includes("issyk kul")
-  ) {
-    return true;
-  }
-
-  if (normalized.includes("иссык куль") || normalized.includes("иссыккуль")) {
-    return true;
-  }
-
-  return false;
-}
-
-function isIssykKulLocation(filters) {
-  const city = normalizeLocationValue(filters?.city);
-  const region = normalizeLocationValue(filters?.region);
-  const country = normalizeLocationValue(filters?.country);
-  const district = normalizeLocationValue(filters?.district);
-
-  if (isIssykKulValue(region)) {
-    return true;
-  }
-
-  if (isIssykKulValue(city)) {
-    return true;
-  }
-
-  if (
-    city &&
-    ISSYK_KUL_CITIES.some((name) => {
-      const normalizedName = normalizeLocationValue(name);
-
-      return (
-        city === normalizedName ||
-        city.includes(normalizedName) ||
-        normalizedName.includes(city)
-      );
-    })
-  ) {
-    return true;
-  }
-
-  if (isIssykKulValue(district)) {
-    return true;
-  }
-
-  if (isIssykKulValue(country)) {
-    return true;
-  }
-
-  return false;
-}
 
 /* =========================================================
    NORMALIZERS
@@ -447,6 +288,8 @@ function parseUrlToFilters(searchParams) {
 
     district: searchParams.get("district") || "",
 
+    locationQuery: searchParams.get("locationQuery") || "",
+
     searchQuery: searchParams.get("searchQuery") || "",
 
     currency: searchParams.get("currency") || "USD",
@@ -484,6 +327,12 @@ function parseUrlToFilters(searchParams) {
     nextFilters[key] = value;
   }
 
+  // Старые ссылки кнопки «Снять надолго»
+  if (nextFilters.rentPeriod === "long") {
+    nextFilters.rentPeriod = "";
+    nextFilters.rentalPeriod = [...LONG_RENTAL_PERIODS];
+  }
+
   return nextFilters;
 }
 
@@ -519,6 +368,10 @@ function buildApiFilters(f) {
 
   if (f.country) {
     params.country = f.country;
+  }
+
+  if (f.locationQuery) {
+    params.locationQuery = f.locationQuery;
   }
 
   if (f.searchQuery) {
@@ -810,26 +663,6 @@ export default function AllProducts() {
      UPDATE FILTER & URL
   ======================================================= */
 
-  function updateFilter(key, value) {
-    setFilters((prev) => {
-      const next = {
-        ...prev,
-        [key]: value,
-      };
-
-      if (key === "dealType") {
-        if (value === "rent") {
-          next.documents = [];
-          next.offerType = [];
-        } else {
-          next.rentalPeriod = [];
-        }
-      }
-
-      return next;
-    });
-  }
-
   function updateUrl(nextFilters) {
     const params = new URLSearchParams();
 
@@ -864,6 +697,10 @@ export default function AllProducts() {
 
     if (nextFilters.district) {
       params.set("district", nextFilters.district);
+    }
+
+    if (nextFilters.locationQuery) {
+      params.set("locationQuery", nextFilters.locationQuery);
     }
 
     if (nextFilters.searchQuery) {
@@ -916,6 +753,11 @@ export default function AllProducts() {
     router.replace(query ? `/all-products?${query}` : "/all-products", {
       scroll: false,
     });
+  }
+
+  function commitFilters(nextFilters) {
+    setFilters(nextFilters);
+    updateUrl(nextFilters);
   }
 
   /* =======================================================
@@ -1090,6 +932,7 @@ export default function AllProducts() {
         next.region = "";
         next.district = "";
         next.country = "";
+        next.locationQuery = "";
       } else if (filterKey === "district") {
         next.district = "";
       } else if (filterKey === "rooms") {
@@ -1201,13 +1044,6 @@ export default function AllProducts() {
     }
   }
 
-  /* =======================================================
-     CATEGORY FILTERS COMPONENT
-  ======================================================= */
-
-  const CategoryFilters =
-    categoryComponents[filters.propertyType] || ApartmentFilters;
-
   const translatedCategories = useMemo(
     () =>
       categories.map((category) => ({
@@ -1228,15 +1064,6 @@ export default function AllProducts() {
       parking: t("allProducts.categories.parking"),
     }),
     [t],
-  );
-
-  /* =======================================================
-     BEACH DISTANCE VISIBILITY
-  ======================================================= */
-
-  const showBeachDistance = useMemo(
-    () => isIssykKulLocation(filters),
-    [filters],
   );
 
   /* =======================================================
@@ -1261,7 +1088,7 @@ export default function AllProducts() {
   const hasFilters =
     filters.propertyType !== "apartment" ||
     filters.dealType !== "sale" ||
-    filters.city !== "Все" ||
+    (Boolean(filters.city) && filters.city !== "Все") ||
     Boolean(filters.searchQuery) ||
     Boolean(filters.priceFrom) ||
     Boolean(filters.priceTo) ||
@@ -1288,6 +1115,10 @@ export default function AllProducts() {
         ].includes(key)
       ) {
         return false;
+      }
+
+      if (key === "rooms") {
+        return value !== "Все";
       }
 
       if (Array.isArray(value)) {
@@ -1328,16 +1159,14 @@ export default function AllProducts() {
           searchMode={searchMode}
           setSearchMode={setSearchMode}
           filters={filters}
-          updateFilter={updateFilter}
-          updateUrl={updateUrl}
+          commitFilters={commitFilters}
           handleSmartSearch={handleSmartSearch}
           handleRemoveSmartFilter={handleRemoveSmartFilter}
           resetFilters={resetFilters}
           hasFilters={hasFilters}
           categories={translatedCategories}
           categoryLabels={categoryLabels}
-          CategoryFilters={CategoryFilters}
-          showBeachDistance={showBeachDistance}
+          categoryComponents={categoryComponents}
         />
 
         {matchedComplex && (

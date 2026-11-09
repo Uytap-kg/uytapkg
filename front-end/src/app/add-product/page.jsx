@@ -25,6 +25,14 @@ import styles from "./AddProduct.module.css";
 const DEFAULT_BOOST_DAYS = 7;
 const MAX_BOOST_DAYS = 30;
 const DRAFT_STORAGE_KEY = "uytap_add_product_draft";
+const ANY_OPTION_VALUES = ["Любой", "Любая", "Любое", "Любые"];
+
+// Значения вроде "4+" и "10+" сохраняются нижней границей, "Цоколь" — как null
+function parseLeadingInt(value) {
+  const number = parseInt(value, 10);
+
+  return Number.isNaN(number) ? null : number;
+}
 
 /* =========================================================
    INITIAL FORM
@@ -528,7 +536,7 @@ export default function AddProductPage() {
 
         residentialComplexName: form.residentialComplex || null,
 
-        rooms: form.rooms ? Number(form.rooms) : null,
+        rooms: parseLeadingInt(form.rooms),
 
         floor: form.floor || null,
 
@@ -546,9 +554,7 @@ export default function AddProductPage() {
 
         // Дом
         houseType:
-          form.category === "cottage"
-            ? (form.houseType || "Коттедж")
-            : form.houseType || null,
+          form.category === "cottage" ? "Коттедж" : form.houseType || null,
 
         floors: form.floors || null,
 
@@ -570,9 +576,7 @@ export default function AddProductPage() {
         communications: form.communications || null,
 
         // Комната
-        roomsInApartment: form.roomsInApartment
-          ? Number(form.roomsInApartment)
-          : null,
+        roomsInApartment: form.roomsInApartment || null,
 
         privateBathroom: form.privateBathroom || null,
 
@@ -632,6 +636,13 @@ export default function AddProductPage() {
         // Общие удобства
         amenities: generalSelectedAmenities,
       };
+
+      // «Любой» в объявлении значит «не указано», иначе фильтры его не найдут
+      for (const [key, value] of Object.entries(features)) {
+        if (ANY_OPTION_VALUES.includes(value)) {
+          features[key] = null;
+        }
+      }
 
       /* =====================================================
          PAYLOAD
@@ -718,11 +729,11 @@ export default function AddProductPage() {
         photos,
 
         // Основные параметры
-        rooms: form.rooms ? Number(form.rooms) : null,
+        rooms: parseLeadingInt(form.rooms),
 
-        floor: form.floor ? Number(form.floor) : null,
+        floor: parseLeadingInt(form.floor),
 
-        totalFloors: form.floors ? Number(form.floors) : null,
+        totalFloors: parseLeadingInt(form.floors),
 
         // Features
         features,

@@ -16,6 +16,7 @@ import {
 import {
   FEATURE_KEYS,
   ARRAY_FILTER_KEYS,
+  RENTAL_PERIOD_TO_RENT_CODES,
   sanitizeFeatureValue,
 } from "../constants/features.js";
 import {
@@ -258,6 +259,8 @@ export function applyListingFilters(query, filters = {}) {
     urgentOnly,
     beachDistanceFrom,
     beachDistanceTo,
+    locationQuery,
+    rentalPeriod,
   } = filters;
 
   // 1. Санитизация и серверный поиск по ключевым словам (searchQuery / query) с учётом падежных окончаний и порядка слов
@@ -332,6 +335,23 @@ export function applyListingFilters(query, filters = {}) {
     }
   }
 
+  // Свободный ввод местоположения: город, село, район, адрес или область, в том числе часть названия
+  const cleanLocation = sanitizeSearchQuery(locationQuery);
+  if (cleanLocation) {
+    const locationPattern = buildSearchPattern(cleanLocation.replace(/-/g, " "));
+    const clauses = ["city", "district", "microdistrict", "address", "region"].map(
+      (col) => `${col}.ilike.%${locationPattern}%`,
+    );
+    const locationRegion = resolveRegionCode(cleanLocation);
+    for (const pattern of REGION_SEARCH_PATTERNS[locationRegion] || []) {
+      clauses.push(`region.ilike.%${pattern}%`);
+    }
+    for (const alias of CITY_ALIASES[cleanLocation.toLowerCase()] || []) {
+      clauses.push(`city.ilike.%${alias}%`);
+    }
+    query = query.or(clauses.join(","));
+  }
+
   // 3. Фильтрация по типу недвижимости (с поддержкой cottage и parking через единые константы)
   if (propertyType && propertyType !== "all" && propertyType !== "Все") {
     const cleanType = String(propertyType).trim().toLowerCase();
@@ -349,6 +369,14 @@ export function applyListingFilters(query, filters = {}) {
 
   if (dealType && dealType !== "all" && dealType !== "Все") query = query.eq("deal_type", dealType);
   if (rentPeriod && rentPeriod !== "all" && rentPeriod !== "Все") query = query.eq("rent_period", rentPeriod);
+
+  if (rentalPeriod) {
+    const rawPeriods = Array.isArray(rentalPeriod) ? rentalPeriod : String(rentalPeriod).split(",");
+    const rentCodes = [
+      ...new Set(rawPeriods.flatMap((period) => RENTAL_PERIOD_TO_RENT_CODES[String(period).trim()] || [])),
+    ];
+    if (rentCodes.length > 0) query = query.in("rent_period", rentCodes);
+  }
 
   // 4. Фильтр urgentOnly (срочные объявления: активные и неистёкшие)
   if (urgentOnly === "true" || urgentOnly === true) {
@@ -443,8 +471,12 @@ export function applyListingFilters(query, filters = {}) {
   }
 
   // 9. Характеристики категорий (features JSONB) по белому списку
+  const isCottageSearch = String(propertyType || "").trim().toLowerCase() === "cottage";
   for (const key of FEATURE_KEYS) {
-    if (key === "houseType") continue;
+    // Срок аренды уже применён выше по колонке rent_period
+    if (key === "rentalPeriod") continue;
+    // Категорию «Коттедж» определяет сам houseType, он уже применён в разделе 3
+    if (key === "houseType" && isCottageSearch) continue;
     const val = filters[key];
     if (val === undefined || val === null || val === "" || val === "Любой" || val === "Любая" || val === "Любые" || val === "Любое") {
       continue;
@@ -488,6 +520,9 @@ export function applyListingFilters(query, filters = {}) {
               query = query.eq(`features->>${key}`, cleanVal);
             }
           }
+        } else if (key === "roomsInApartment") {
+          // В старых объявлениях значение хранится числом, поэтому сравниваем как текст
+          query = query.eq(`features->>${key}`, cleanVal);
         } else {
           query = query.contains("features", { [key]: cleanVal });
         }
@@ -1156,7 +1191,7 @@ export const createListing = async (req, res) => {
     const isCottage = cleanType === "cottage";
     const mappedPropertyType = UI_TO_DB_PROPERTY_TYPE[cleanType] || cleanType;
     const sanitizedFeats = sanitizeFeatures(features);
-    if (isCottage && !sanitizedFeats.houseType) {
+    if (isCottage) {
       sanitizedFeats.houseType = COTTAGE_HOUSE_TYPE;
     }
 
@@ -1607,7 +1642,7 @@ export const updateListing = async (req, res) => {
           : sanitizeFeatures(existingListing.features || {});
 
       const cleanType = data.propertyType ? String(data.propertyType).trim().toLowerCase() : null;
-      if (cleanType === "cottage" && !nextFeatures.houseType) {
+      if (cleanType === "cottage") {
         nextFeatures.houseType = COTTAGE_HOUSE_TYPE;
       }
 

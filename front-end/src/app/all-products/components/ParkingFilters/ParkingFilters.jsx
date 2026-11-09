@@ -5,7 +5,6 @@ import {
   Car,
   BrickWall,
   DoorOpen,
-  Warehouse,
   Truck,
   FileText,
   CreditCard,
@@ -265,14 +264,6 @@ export default function ParkingFilters({ filters, updateFilter }) {
         options={translatedYesNo}
         value={filters.gates || []}
         setValue={(value) => updateFilter("gates", value)}
-      />
-
-      <MultiSelect
-        icon={Warehouse}
-        title={t("parkingFilters.titles.basement")}
-        options={translatedYesNo}
-        value={filters.basement || []}
-        setValue={(value) => updateFilter("basement", value)}
       />
 
       <MultiSelect

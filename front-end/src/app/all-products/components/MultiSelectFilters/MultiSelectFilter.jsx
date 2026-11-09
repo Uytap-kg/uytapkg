@@ -171,7 +171,7 @@ export default function MultiSelect({
 
     label = selectedOption ? getOptionLabel(selectedOption) : value[0];
   } else {
-    label = `Выбрано: ${value.length}`;
+    label = `${t("productsFilters.selected")}: ${value.length}`;
   }
 
   // ==========================================
