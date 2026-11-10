@@ -83,7 +83,9 @@ export async function loginUser(credentials) {
 
   // Бэкенд отказал во входе: контакт не подтверждён (403 + needVerification)
   if (data.needVerification === true) {
-    const err = new Error(data.message || "Подтвердите данные перед входом в аккаунт");
+    const err = new Error(
+      data.message || "Подтвердите данные перед входом в аккаунт",
+    );
     err.needVerification = true;
     err.email = data.email;
     err.phone = data.phone;
@@ -257,7 +259,9 @@ export async function requestPasswordReset(identifier) {
   }
 
   if (!response.ok || !data.success) {
-    const err = new Error(data.message || "Не удалось отправить код восстановления");
+    const err = new Error(
+      data.message || "Не удалось отправить код восстановления",
+    );
     err.status = response.status;
     err.retryAfter = data.retryAfter;
     throw err;
@@ -429,8 +433,8 @@ export async function getAllListings(params = {}, maxItems = 2000) {
           }).catch((err) => {
             console.error(`Error loading listings page ${p}:`, err);
             return null;
-          })
-        )
+          }),
+        ),
       );
 
       for (const pageRes of batchResults) {
@@ -482,7 +486,13 @@ export async function createListing(token, payload) {
 }
 
 // 5. Жилые комплексы
-export async function getComplexes({ page, limit, country, city, district } = {}) {
+export async function getComplexes({
+  page,
+  limit,
+  country,
+  city,
+  district,
+} = {}) {
   const params = new URLSearchParams();
   if (page) params.set("page", page);
   if (limit) params.set("limit", limit);
@@ -601,7 +611,9 @@ export async function uploadImage(file) {
   const data = await parseSafeJson(response);
   if (!response.ok || !data?.success) {
     if (response.status === 413) {
-      throw new Error("Файл слишком большой. Пожалуйста, выберите файл до 2 МБ.");
+      throw new Error(
+        "Файл слишком большой. Пожалуйста, выберите файл до 2 МБ.",
+      );
     }
     if (response.status === 502 || response.status === 504) {
       throw new Error("Сервер временно недоступен. Попробуйте позже.");
@@ -619,7 +631,11 @@ const LISTING_PHOTO_QUALITY = 0.85;
 
 export async function uploadListingPhoto(token, file) {
   const form = new FormData();
-  const readyFile = await compressImageFile(file, LISTING_PHOTO_MAX_DIMENSION, LISTING_PHOTO_QUALITY);
+  const readyFile = await compressImageFile(
+    file,
+    LISTING_PHOTO_MAX_DIMENSION,
+    LISTING_PHOTO_QUALITY,
+  );
   form.append("file", readyFile);
 
   const response = await fetch(`${API_URL}/upload/listing-photo`, {
@@ -633,7 +649,9 @@ export async function uploadListingPhoto(token, file) {
   const data = await parseSafeJson(response);
   if (!response.ok || !data?.success) {
     if (response.status === 413) {
-      throw new Error("Фото слишком большое. Пожалуйста, выберите фото до 8 МБ.");
+      throw new Error(
+        "Фото слишком большое. Пожалуйста, выберите фото до 8 МБ.",
+      );
     }
     if (response.status === 502 || response.status === 504) {
       throw new Error("Сервер временно недоступен. Попробуйте позже.");
@@ -646,7 +664,11 @@ export async function uploadListingPhoto(token, file) {
 // Фото ЖК — сервер всегда накладывает водяной знак (лого UyTap)
 export async function uploadComplexPhoto(token, file) {
   const form = new FormData();
-  const readyFile = await compressImageFile(file, LISTING_PHOTO_MAX_DIMENSION, LISTING_PHOTO_QUALITY);
+  const readyFile = await compressImageFile(
+    file,
+    LISTING_PHOTO_MAX_DIMENSION,
+    LISTING_PHOTO_QUALITY,
+  );
   form.append("file", readyFile);
 
   const response = await fetch(`${API_URL}/upload/complex-photo`, {
@@ -660,7 +682,9 @@ export async function uploadComplexPhoto(token, file) {
   const data = await parseSafeJson(response);
   if (!response.ok || !data?.success) {
     if (response.status === 413) {
-      throw new Error("Фото слишком большое. Пожалуйста, выберите фото до 8 МБ.");
+      throw new Error(
+        "Фото слишком большое. Пожалуйста, выберите фото до 8 МБ.",
+      );
     }
     if (response.status === 502 || response.status === 504) {
       throw new Error("Сервер временно недоступен. Попробуйте позже.");
@@ -686,7 +710,9 @@ export async function uploadAvatar(token, file) {
   const data = await parseSafeJson(response);
   if (!response.ok || !data?.success) {
     if (response.status === 413) {
-      throw new Error("Файл слишком большой. Пожалуйста, выберите изображение до 5 МБ.");
+      throw new Error(
+        "Файл слишком большой. Пожалуйста, выберите изображение до 5 МБ.",
+      );
     }
     if (response.status === 502 || response.status === 504) {
       throw new Error("Сервер временно недоступен. Попробуйте позже.");
@@ -715,7 +741,9 @@ export async function getListingById(id, token = null) {
   const headers = {};
   const authToken =
     token ||
-    (typeof window !== "undefined" ? localStorage.getItem("uytap_token") : null);
+    (typeof window !== "undefined"
+      ? localStorage.getItem("uytap_token")
+      : null);
   if (authToken) {
     headers["Authorization"] = `Bearer ${authToken}`;
   }
@@ -1080,7 +1108,9 @@ export async function getAdminUsers(
   const data = await parseSafeJson(response);
 
   if (!response.ok || !data?.success) {
-    const err = new Error(data?.message || "Ошибка получения списка пользователей");
+    const err = new Error(
+      data?.message || "Ошибка получения списка пользователей",
+    );
     err.status = response.status;
     throw err;
   }
@@ -1342,7 +1372,9 @@ export async function uploadVerificationDocument(token, file) {
   const data = await parseSafeJson(response);
   if (!response.ok || !data?.success) {
     if (response.status === 413) {
-      throw new Error("Документ слишком большой. Пожалуйста, выберите файл до 10 МБ.");
+      throw new Error(
+        "Документ слишком большой. Пожалуйста, выберите файл до 10 МБ.",
+      );
     }
     if (response.status === 502 || response.status === 504) {
       throw new Error("Сервер временно недоступен. Попробуйте позже.");
@@ -1533,4 +1565,26 @@ export async function deleteBanner(token, id) {
     throw new Error(data.message || "Не удалось удалить баннер");
   }
   return data;
+}
+
+export async function getRealtors(token, { signal } = {}) {
+  const response = await fetch(`${API_URL}/admin/users`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    signal,
+  });
+
+  const data = await parseSafeJson(response);
+
+  if (!response.ok || !data?.success) {
+    const err = new Error(data?.message || "Ошибка получения списка риэлторов");
+
+    err.status = response.status;
+    throw err;
+  }
+
+  const users = Array.isArray(data.data) ? data.data : [];
+
+  return users.filter((user) => user.type === "realtor");
 }
