@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import styles from "./RealtorsPage.module.css";
+import Header from "@/components/pageComponents/header/Header";
 
 const DEFAULT_IMAGE = "/assets/realtorImage.png";
 
@@ -72,6 +73,7 @@ export default function RealtorsPage() {
 
   return (
     <main className={styles.container}>
+      <Header />
       <section className={styles.header}>
         <div className={styles.headerContent}>
           <span className={styles.eyebrow}>
