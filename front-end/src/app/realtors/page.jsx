@@ -74,20 +74,18 @@ export default function RealtorsPage() {
   return (
     <main className={styles.container}>
       <Header />
-      <section className={styles.header}>
+      <section className={styles.hero}>
         <div className={styles.headerContent}>
           <span className={styles.eyebrow}>
             <BriefcaseBusiness size={15} />
             НАШИ СПЕЦИАЛИСТЫ
           </span>
 
-          <h1>
-            Найдите своего <span>риэлтора</span>
-          </h1>
+          <h1>Найдите своего риэлтора</h1>
 
           <p>
-            Профессиональные специалисты по недвижимости, которые помогут найти
-            идеальное жильё или выгодно продать вашу недвижимость.
+            Профессионалы недвижимости, готовые помочь вам найти идеальное
+            жильё.
           </p>
         </div>
 
