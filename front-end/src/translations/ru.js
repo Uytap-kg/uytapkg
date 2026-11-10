@@ -6,6 +6,7 @@ const ru = {
     newBuildings: "Новостройки",
     residentialComplexes: "Жилые комплексы",
     developers: "Застройщики",
+    realtors: "Риэлторы",
 
     more: "Еще",
     pricing: "Тарифы",

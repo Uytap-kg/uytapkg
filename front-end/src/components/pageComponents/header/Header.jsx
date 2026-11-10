@@ -302,6 +302,10 @@ export default function Header() {
                 <Link href="/lawyers" onClick={() => setOpenMenu(null)}>
                   {t("header.lawyers")}
                 </Link>
+                
+                <Link href="/realtors" onClick={() => setOpenMenu(null)}>
+                  {t("header.realtors")}
+                </Link>
               </div>
             )}
           </div>

@@ -6,6 +6,7 @@ const ky = {
     newBuildings: "Жаңы курулуштар",
     residentialComplexes: "Турак жай комплекстери",
     developers: "Куруучулар",
+    realtors: "Риэлторлор",
 
     more: "Дагы",
     pricing: "Тарифтер",
