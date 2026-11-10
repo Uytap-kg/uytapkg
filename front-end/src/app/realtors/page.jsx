@@ -12,8 +12,8 @@ import {
 
 import styles from "./RealtorsPage.module.css";
 import Header from "@/components/pageComponents/header/Header";
+import { getRealtors } from "@/utils/api";
 
-import { getRealtors } from "@/api/auth"; // замени путь на свой API-файл
 
 const DEFAULT_IMAGE = "/assets/realtorImage.png";
 
