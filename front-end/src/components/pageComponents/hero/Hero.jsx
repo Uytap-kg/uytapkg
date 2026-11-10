@@ -9,7 +9,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import styles from "./Hero.module.css";
 
 // Импортируйте саму картинку, чтобы Next.js знал ее размеры и сгенерировал прелоад
-import bishkekBg from "../../../../public/assets/bishkek.png";
+import bishkekBg from "../../../../public/assets/listings_main.jpg";
 
 export default function Hero() {
   const router = useRouter();
