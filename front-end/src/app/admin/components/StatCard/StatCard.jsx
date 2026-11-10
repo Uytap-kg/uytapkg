@@ -1,13 +1,26 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
 import styles from "./StatCard.module.css";
 
-// href — необязательный: если передан, карточка становится ссылкой
-// на подробный раздел (например, «Новые пользователи» → /admin/users).
+const DEFAULT_ROUTES = {
+  "Новые пользователи": "/admin/users",
+  Оплаты: "/admin/payments",
+  Баннеры: "/admin/banners",
+  Юристы: "/admin/lawyers",
+};
+
 export default function StatCard({ title, value, change, icon: Icon, href }) {
-  const content = (
-    <>
+  const destination = href || DEFAULT_ROUTES[title] || "/admin";
+
+  return (
+    <Link
+      href={destination}
+      className={`${styles.card} ${styles.link}`}
+      aria-label={`${title}: открыть раздел`}
+    >
       <div className={styles.top}>
         <div className={styles.icon}>
           <Icon />
@@ -20,22 +33,8 @@ export default function StatCard({ title, value, change, icon: Icon, href }) {
 
       <div className={styles.bottom}>
         <strong>{value}</strong>
-        <span>{change}</span>
+        {change && <span>{change}</span>}
       </div>
-    </>
+    </Link>
   );
-
-  if (href) {
-    return (
-      <Link
-        href={href}
-        className={`${styles.card} ${styles.link}`}
-        aria-label={`${title}: открыть подробный список`}
-      >
-        {content}
-      </Link>
-    );
-  }
-
-  return <div className={styles.card}>{content}</div>;
 }
