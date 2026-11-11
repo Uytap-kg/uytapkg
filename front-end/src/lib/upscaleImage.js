@@ -2,7 +2,7 @@ let sessionPromise = null;
 
 const MODEL_URL = "/models/realesr-general-x4v3.onnx";
 const SCALE = 4;
-const MAX_INPUT_SIDE = 450;
+const MAX_INPUT_SIDE = 850;
 
 // --------------------------------------------------
 // SESSION
