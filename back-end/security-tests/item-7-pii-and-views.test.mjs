@@ -397,7 +397,10 @@ test("P1-08: getUserPublicProfile учитывает show_phone, скрывае�
     assert.equal(statusCode, 200);
     assert.ok(body?.user);
     assert.equal(body.user.email, null, "Email не должен отдаваться в getUserPublicProfile");
-    assert.equal(body.user.phone, null, "Телефон должен быть скрыт при show_phone === false");
+    // Риэлтор — бизнес-аккаунт: телефон рабочий и показывается всегда
+    // (как в карточках объявлений, см. utils/publicContact.js). show_phone —
+    // согласие только для personal, проверяется в realtors-catalog.test.mjs.
+    assert.equal(body.user.phone, "+996700112233", "Телефон бизнес-аккаунта должен показываться");
     assert.equal(body.user.profile.inn, undefined, "ИНН не должен присутствовать в ответе");
     assert.equal(body.user.profile.verificationDocs, undefined);
     assert.equal(body.user.profile.verificationStatus, undefined);

@@ -10,6 +10,8 @@ import nikitaService from "../services/nikitaService.js";
 import { generateToken, invalidateUserAuthCache } from "../middleware/auth.js";
 import { resolvePromotionExpiry } from "../services/promotionsService.js";
 import { validateImageMagicBytes } from "../middleware/upload.js";
+import { getPublicPhone } from "../utils/publicContact.js";
+import { invalidatePublicCache } from "../utils/publicCache.js";
 import {
   uploadAvatarToStorage,
   removeImageFromStorage,
@@ -1098,6 +1100,12 @@ export const updateMe = async (req, res) => {
     }
 
     invalidateUserAuthCache(userId);
+
+    // Каталог риэлторов кэшируется (GET /api/realtors) — сбрасываем, если
+    // риэлтор обновил профиль или аккаунт перестал/стал риэлторским.
+    if (currentUser.account_type === "realtor" || updatedUser.account_type === "realtor") {
+      invalidatePublicCache("realtors");
+    }
 
     return res.json({
       success: true,
@@ -2309,17 +2317,6 @@ export const getUserPublicProfile = async (req, res) => {
       }
     }
 
-    const isBusinessAccount = ["agency", "developer", "realtor"].includes(user.account_type);
-    const explicitlyHidden =
-      user.show_phone === false ||
-      profile?.show_phone === false ||
-      profile?.showPhone === false;
-    const explicitlyShown =
-      user.show_phone === true ||
-      profile?.show_phone === true ||
-      profile?.showPhone === true;
-    const canShowPhone = !explicitlyHidden && (isBusinessAccount || explicitlyShown);
-
     const sanitizedProfile = formatProfileWithMetadata(profile);
     delete sanitizedProfile.inn;
     delete sanitizedProfile.verificationDocs;
@@ -2342,7 +2339,7 @@ export const getUserPublicProfile = async (req, res) => {
         id: user.id,
         type: user.account_type,
         email: null,
-        phone: canShowPhone ? (user.phone || null) : null,
+        phone: getPublicPhone(user, profile),
         isVerified: user.is_verified,
         createdAt: user.created_at,
         profile: sanitizedProfile,

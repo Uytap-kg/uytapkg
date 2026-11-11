@@ -2878,3 +2878,25 @@ a.detail:hover {
     height: 78px;
   }
 }
+
+/* Экран загрузки / ошибки (RealtorProfileLoader) */
+.statusScreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 60vh;
+  padding: 24px 16px;
+  text-align: center;
+  color: #666;
+}
+
+.statusScreen h1 {
+  color: #e53e3e;
+}
+
+.statusScreen a {
+  color: #3182ce;
+  text-decoration: underline;
+}

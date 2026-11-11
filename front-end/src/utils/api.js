@@ -1567,24 +1567,27 @@ export async function deleteBanner(token, id) {
   return data;
 }
 
-export async function getRealtors(token, { signal } = {}) {
-  const response = await fetch(`${API_URL}/admin/users`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+// Публичный каталог риэлторов (страница /realtors). Без авторизации:
+// бэкенд отдаёт только витринные поля (имя, компания, аватар, рабочий телефон).
+export async function getRealtors({ page, limit, signal } = {}) {
+  const params = new URLSearchParams();
+  if (page) params.set("page", page);
+  if (limit) params.set("limit", limit);
+  const qs = params.toString();
+
+  const response = await fetch(`${API_URL}/realtors${qs ? `?${qs}` : ""}`, {
     signal,
   });
-
   const data = await parseSafeJson(response);
 
   if (!response.ok || !data?.success) {
     const err = new Error(data?.message || "Ошибка получения списка риэлторов");
-
     err.status = response.status;
     throw err;
   }
 
-  const users = Array.isArray(data.data) ? data.data : [];
-
-  return users.filter((user) => user.type === "realtor");
+  return {
+    data: Array.isArray(data.data) ? data.data : [],
+    pagination: data.pagination || null,
+  };
 }

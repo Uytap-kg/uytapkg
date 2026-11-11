@@ -6,6 +6,7 @@ import { setBoundedMap, evictExpiredAndCapMap } from "./boundedMap.js";
  * - complexes (GET /api/complexes, GET /api/complexes/:id)
  * - developers (GET /api/developers, GET /api/developers/:id)
  * - lawyers (GET /api/lawyers)
+ * - realtors (GET /api/realtors)
  *
  * Гарантирует:
  * 1. Ограничение размера каждого пространства имён (MAX_KEYS_PER_NAMESPACE = 200).
