@@ -4,13 +4,20 @@ const MODEL_URL = "/models/realesrgan-x4.onnx";
 const SCALE = 4;
 const MAX_INPUT_SIDE = 450;
 
+// --------------------------------------------------
+// SESSION
+// --------------------------------------------------
+
 async function getSession() {
   if (!sessionPromise) {
     sessionPromise = (async () => {
+      const sessionStart = performance.now();
+
       const ort = await import("onnxruntime-web");
 
-      // WASM fallback
-      ort.env.wasm.numThreads = crossOriginIsolated
+      const isIsolated = globalThis.crossOriginIsolated === true;
+
+      ort.env.wasm.numThreads = isIsolated
         ? Math.min(navigator.hardwareConcurrency || 2, 4)
         : 1;
 
@@ -23,6 +30,13 @@ async function getSession() {
           });
 
           console.log("[Real-ESRGAN] WebGPU enabled");
+
+          console.log(
+            `[Real-ESRGAN] Session initialization: ${(
+              (performance.now() - sessionStart) /
+              1000
+            ).toFixed(2)} sec`,
+          );
 
           return {
             ort,
@@ -37,13 +51,20 @@ async function getSession() {
         }
       }
 
-      // Если WebGPU недоступен — используем WASM
+      // WASM fallback
       const session = await ort.InferenceSession.create(MODEL_URL, {
         executionProviders: ["wasm"],
         graphOptimizationLevel: "all",
       });
 
       console.log("[Real-ESRGAN] WASM enabled");
+
+      console.log(
+        `[Real-ESRGAN] Session initialization: ${(
+          (performance.now() - sessionStart) /
+          1000
+        ).toFixed(2)} sec`,
+      );
 
       return {
         ort,
@@ -61,7 +82,10 @@ async function getSession() {
   }
 }
 
-// Преобразование изображения в RGB Tensor
+// --------------------------------------------------
+// IMAGE TO TENSOR
+// --------------------------------------------------
+
 function imageToTensor(bitmap, ort) {
   const { width, height } = bitmap;
 
@@ -93,7 +117,10 @@ function imageToTensor(bitmap, ort) {
   return new ort.Tensor("float32", data, [1, 3, height, width]);
 }
 
-// Преобразование результата нейросети в Canvas
+// --------------------------------------------------
+// TENSOR TO CANVAS
+// --------------------------------------------------
+
 function tensorToCanvas(output) {
   const [batch, channels, height, width] = output.dims;
 
@@ -135,7 +162,10 @@ function tensorToCanvas(output) {
   return canvas;
 }
 
-// Экспорт Canvas в WebP
+// --------------------------------------------------
+// CANVAS TO WEBP
+// --------------------------------------------------
+
 function canvasToBlob(canvas) {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -152,13 +182,16 @@ function canvasToBlob(canvas) {
   });
 }
 
-// Основная функция AI Upscaling
+// --------------------------------------------------
+// AI UPSCALING
+// --------------------------------------------------
+
 export async function upscaleSmallImage(file) {
   if (!file || !file.type.startsWith("image/")) {
     throw new Error("Передан некорректный файл изображения");
   }
 
-  // GIF не обрабатываем, чтобы не терять анимацию
+  // GIF не обрабатываем
   if (
     file.type.toLowerCase() === "image/gif" ||
     file.name.toLowerCase().endsWith(".gif")
@@ -170,6 +203,8 @@ export async function upscaleSmallImage(file) {
     };
   }
 
+  const totalStart = performance.now();
+
   const bitmap = await createImageBitmap(file, {
     imageOrientation: "from-image",
   });
@@ -177,8 +212,12 @@ export async function upscaleSmallImage(file) {
   try {
     const { width, height } = bitmap;
 
+    console.log(`[AI] Original image: ${width}x${height}`);
+
     // Большие изображения оставляем оригинальными
     if (Math.max(width, height) > MAX_INPUT_SIDE) {
+      console.log("[AI] Skipped: image is larger than 450px");
+
       return {
         file,
         upscaled: false,
@@ -188,16 +227,34 @@ export async function upscaleSmallImage(file) {
       };
     }
 
-    // Получаем уже загруженную модель или загружаем её один раз
+    // 1. Получение модели
+    console.time("[AI] Model session");
+
     const { ort, session, provider } = await getSession();
 
-    // Подготавливаем входной Tensor
+    console.timeEnd("[AI] Model session");
+
+    // 2. Подготовка Tensor
+    console.time("[AI] Tensor preparation");
+
     const input = imageToTensor(bitmap, ort);
 
-    // Запускаем нейросеть
-    const result = await session.run({
-      [session.inputNames[0]]: input,
-    });
+    console.timeEnd("[AI] Tensor preparation");
+
+    let result;
+
+    // 3. Инференс нейросети
+    console.time("[AI] Neural network inference");
+
+    try {
+      result = await session.run({
+        [session.inputNames[0]]: input,
+      });
+    } finally {
+      input.dispose?.();
+    }
+
+    console.timeEnd("[AI] Neural network inference");
 
     const output = result[session.outputNames[0]];
 
@@ -205,15 +262,38 @@ export async function upscaleSmallImage(file) {
       throw new Error("Модель не вернула результат");
     }
 
-    // Проверяем размер результата
-    const canvas = tensorToCanvas(output);
+    let canvas;
 
-    if (canvas.width !== width * SCALE || canvas.height !== height * SCALE) {
-      throw new Error("Неожиданный размер результата модели");
+    try {
+      // 4. Преобразование результата
+      console.time("[AI] Output conversion");
+
+      canvas = tensorToCanvas(output);
+
+      console.timeEnd("[AI] Output conversion");
+    } finally {
+      output.dispose?.();
     }
 
-    // Сохраняем улучшенную фотографию
-    const blob = await canvasToBlob(canvas);
+    if (canvas.width !== width * SCALE || canvas.height !== height * SCALE) {
+      throw new Error(
+        `Неверный размер результата: ${canvas.width}x${canvas.height}`,
+      );
+    }
+
+    let blob;
+
+    try {
+      // 5. Экспорт WebP
+      console.time("[AI] WebP export");
+
+      blob = await canvasToBlob(canvas);
+
+      console.timeEnd("[AI] WebP export");
+    } finally {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
 
     const baseName = file.name.replace(/\.[^.]+$/, "");
 
@@ -222,15 +302,30 @@ export async function upscaleSmallImage(file) {
       lastModified: Date.now(),
     });
 
+    const totalTime = ((performance.now() - totalStart) / 1000).toFixed(2);
+
+    console.log("----------------------------------");
+    console.log("[Real-ESRGAN] Processing completed");
+    console.log(`Provider: ${provider}`);
+    console.log(`Original: ${width}x${height}`);
+    console.log(`Enhanced: ${width * SCALE}x${height * SCALE}`);
+    console.log(`Output size: ${(blob.size / 1024).toFixed(2)} KB`);
+    console.log(`Total processing: ${totalTime} sec`);
+    console.log("----------------------------------");
+
     return {
       file: enhancedFile,
       upscaled: true,
       provider,
-      width: canvas.width,
-      height: canvas.height,
+      width: canvas?.width || width * SCALE,
+      height: height * SCALE,
       originalWidth: width,
       originalHeight: height,
+      processingTime: Number(totalTime),
     };
+  } catch (error) {
+    console.error("[Real-ESRGAN] Processing failed:", error);
+    throw error;
   } finally {
     bitmap.close();
   }
