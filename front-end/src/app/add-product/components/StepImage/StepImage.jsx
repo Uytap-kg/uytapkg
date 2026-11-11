@@ -275,7 +275,10 @@ export default function StepImage({ form, updateForm, onNext }) {
             </span>
 
             {isProcessing ? (
-              <small>{processingProgress}% завершено</small>
+              <>
+                <small>Это может занять пару минут</small>
+                <small>{processingProgress}% завершено</small>
+              </>
             ) : (
               <small>
                 JPG, PNG или WebP · {t("stepImage.upload.upTo")} {MAX_IMAGES}{" "}
