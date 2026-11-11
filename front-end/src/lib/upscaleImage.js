@@ -1,6 +1,6 @@
 let sessionPromise = null;
 
-const MODEL_URL = "/models/realesrgan-x4.onnx";
+const MODEL_URL = "/models/realesr-general-x4v3.onnx";
 const SCALE = 4;
 const MAX_INPUT_SIDE = 450;
 
