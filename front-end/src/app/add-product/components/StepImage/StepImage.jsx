@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { useLanguage } from "@/context/LanguageContext";
+import { upscaleSmallImage } from "@/lib/upscaleImage";
 
 import styles from "./StepImage.module.css";
 
@@ -21,29 +22,22 @@ export default function StepImage({ form, updateForm, onNext }) {
   const { t } = useLanguage();
 
   const inputRef = useRef(null);
+  const isProcessingRef = useRef(false);
 
   const [images, setImages] = useState(form.images || []);
   const [isDragging, setIsDragging] = useState(false);
-
-  /*
-   * images:
-   * [
-   *   {
-   *     id: "...",
-   *     file: File,
-   *     url: "blob:...",
-   *   }
-   * ]
-   */
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingText, setProcessingText] = useState("");
+  const [processingProgress, setProcessingProgress] = useState(0);
 
   useEffect(() => {
-    updateForm({
-      images,
-    });
+    updateForm({ images });
   }, [images]);
 
-  function addImages(files) {
-    const selectedFiles = Array.from(files);
+  async function addImages(files) {
+    if (isProcessingRef.current) return;
+
+    const selectedFiles = Array.from(files || []);
 
     if (!selectedFiles.length) return;
 
@@ -53,33 +47,99 @@ export default function StepImage({ form, updateForm, onNext }) {
 
     const filesToAdd = selectedFiles
       .filter((file) => {
-        if (file.type && file.type.toLowerCase().startsWith("image/")) return true;
+        const type = file.type?.toLowerCase();
         const ext = file.name?.split(".").pop()?.toLowerCase();
-        return ["jpg", "jpeg", "png", "webp", "gif"].includes(ext);
+
+        return (
+          ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(
+            type,
+          ) || ["jpg", "jpeg", "png", "webp", "gif"].includes(ext)
+        );
       })
       .slice(0, available);
 
-    const newImages = filesToAdd.map((file) => ({
-      id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
-      file,
-      url: URL.createObjectURL(file),
-    }));
+    if (!filesToAdd.length) return;
 
-    setImages((prev) => [...prev, ...newImages]);
+    isProcessingRef.current = true;
+    setIsProcessing(true);
+    setProcessingProgress(0);
+
+    const newImages = [];
+
+    try {
+      for (let i = 0; i < filesToAdd.length; i++) {
+        const originalFile = filesToAdd[i];
+
+        setProcessingText(
+          `Обработка фотографии ${i + 1} из ${filesToAdd.length}...`,
+        );
+
+        let finalFile = originalFile;
+        let wasUpscaled = false;
+        let dimensions = null;
+
+        const extension = originalFile.name?.split(".").pop()?.toLowerCase();
+
+        const isGif =
+          originalFile.type?.toLowerCase() === "image/gif" ||
+          extension === "gif";
+
+        // GIF не отправляем в Real-ESRGAN, чтобы не потерять анимацию.
+        if (!isGif) {
+          try {
+            const result = await upscaleSmallImage(originalFile);
+
+            finalFile = result.file;
+            wasUpscaled = result.upscaled;
+            dimensions = {
+              width: result.width,
+              height: result.height,
+            };
+          } catch (error) {
+            console.error("AI upscaling failed:", error);
+
+            // Если AI не сработал, сохраняем оригинал.
+            finalFile = originalFile;
+          }
+        }
+
+        newImages.push({
+          id:
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `${Date.now()}-${i}-${Math.random()}`,
+
+          file: finalFile,
+          originalFile,
+          url: URL.createObjectURL(finalFile),
+          wasUpscaled,
+          dimensions,
+        });
+
+        setProcessingProgress(Math.round(((i + 1) / filesToAdd.length) * 100));
+      }
+
+      setImages((prev) => [...prev, ...newImages]);
+    } finally {
+      isProcessingRef.current = false;
+      setIsProcessing(false);
+      setProcessingText("");
+      setProcessingProgress(0);
+    }
   }
 
   function handleFileChange(event) {
     addImages(event.target.files);
-
-    // Позволяет повторно выбрать тот же файл
     event.target.value = "";
   }
 
   function removeImage(id) {
+    if (isProcessing) return;
+
     setImages((prev) => {
       const image = prev.find((item) => item.id === id);
 
-      if (image) {
+      if (image?.url) {
         URL.revokeObjectURL(image.url);
       }
 
@@ -88,6 +148,8 @@ export default function StepImage({ form, updateForm, onNext }) {
   }
 
   function setMainImage(id) {
+    if (isProcessing) return;
+
     setImages((prev) => {
       const index = prev.findIndex((item) => item.id === id);
 
@@ -101,7 +163,10 @@ export default function StepImage({ form, updateForm, onNext }) {
 
   function handleDragOver(event) {
     event.preventDefault();
-    setIsDragging(true);
+
+    if (!isProcessing) {
+      setIsDragging(true);
+    }
   }
 
   function handleDragLeave(event) {
@@ -113,16 +178,18 @@ export default function StepImage({ form, updateForm, onNext }) {
     event.preventDefault();
     setIsDragging(false);
 
-    addImages(event.dataTransfer.files);
+    if (!isProcessing) {
+      addImages(event.dataTransfer.files);
+    }
   }
 
   function handleNext() {
-    if (!images.length) return;
+    if (!images.length || isProcessing) return;
 
     onNext();
   }
 
-  const canContinue = images.length > 0;
+  const canContinue = images.length > 0 && !isProcessing;
   const remaining = MAX_IMAGES - images.length;
 
   return (
@@ -161,12 +228,14 @@ export default function StepImage({ form, updateForm, onNext }) {
         <div
           className={`${styles.uploadZone} ${
             isDragging ? styles.dragging : ""
-          } ${images.length >= MAX_IMAGES ? styles.disabled : ""}`}
+          } ${
+            images.length >= MAX_IMAGES || isProcessing ? styles.disabled : ""
+          }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => {
-            if (images.length < MAX_IMAGES) {
+            if (images.length < MAX_IMAGES && !isProcessing) {
               inputRef.current?.click();
             }
           }}
@@ -174,35 +243,72 @@ export default function StepImage({ form, updateForm, onNext }) {
           <input
             ref={inputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/jpg"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             multiple
             onChange={handleFileChange}
+            disabled={isProcessing || images.length >= MAX_IMAGES}
             hidden
           />
 
           <div className={styles.uploadIcon}>
-            <ImagePlus size={28} />
+            {isProcessing ? <Images size={28} /> : <ImagePlus size={28} />}
           </div>
 
           <div className={styles.uploadContent}>
             <strong>
-              {images.length >= MAX_IMAGES
-                ? t("stepImage.upload.limitReached")
-                : t("stepImage.upload.addPhotos")}
+              {isProcessing
+                ? "Улучшаем фотографии с помощью AI..."
+                : images.length >= MAX_IMAGES
+                  ? t("stepImage.upload.limitReached")
+                  : t("stepImage.upload.addPhotos")}
             </strong>
 
             <span>
-              {t("stepImage.upload.dragText")}{" "}
-              <b>{t("stepImage.upload.chooseOnDevice")}</b>
+              {isProcessing ? (
+                processingText
+              ) : (
+                <>
+                  {t("stepImage.upload.dragText")}{" "}
+                  <b>{t("stepImage.upload.chooseOnDevice")}</b>
+                </>
+              )}
             </span>
 
-            <small>
-              JPG, PNG или WebP · {t("stepImage.upload.upTo")} {MAX_IMAGES}{" "}
-              {t("stepImage.upload.photos")}
-            </small>
+            {isProcessing ? (
+              <small>{processingProgress}% завершено</small>
+            ) : (
+              <small>
+                JPG, PNG или WebP · {t("stepImage.upload.upTo")} {MAX_IMAGES}{" "}
+                {t("stepImage.upload.photos")}
+              </small>
+            )}
+
+            {isProcessing && (
+              <div
+                style={{
+                  width: "100%",
+                  maxWidth: 260,
+                  height: 6,
+                  marginTop: 10,
+                  borderRadius: 10,
+                  overflow: "hidden",
+                  background: "#e5e7eb",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${processingProgress}%`,
+                    height: "100%",
+                    borderRadius: 10,
+                    background: "#f97316",
+                    transition: "width 0.2s ease",
+                  }}
+                />
+              </div>
+            )}
           </div>
 
-          {images.length < MAX_IMAGES && (
+          {images.length < MAX_IMAGES && !isProcessing && (
             <button
               type="button"
               className={styles.uploadButton}
@@ -258,7 +364,6 @@ export default function StepImage({ form, updateForm, onNext }) {
           <div className={styles.galleryHeader}>
             <div>
               <h2>{t("stepImage.gallery.title")}</h2>
-
               <p>{t("stepImage.gallery.description")}</p>
             </div>
 
@@ -286,6 +391,7 @@ export default function StepImage({ form, updateForm, onNext }) {
                       type="button"
                       className={styles.remove}
                       onClick={() => removeImage(image.id)}
+                      disabled={isProcessing}
                       aria-label={t("stepImage.remove")}
                     >
                       <X size={17} />
@@ -304,10 +410,29 @@ export default function StepImage({ form, updateForm, onNext }) {
                       type="button"
                       className={styles.makeMain}
                       onClick={() => setMainImage(image.id)}
+                      disabled={isProcessing}
                     >
                       <Star size={14} />
                       {t("stepImage.makeMain")}
                     </button>
+                  )}
+
+                  {image.wasUpscaled && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 8,
+                        bottom: 8,
+                        padding: "4px 7px",
+                        borderRadius: 6,
+                        background: "rgba(17, 24, 39, 0.8)",
+                        color: "#fff",
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    >
+                      AI ×4
+                    </div>
                   )}
 
                   <div className={styles.dragHandle}>
@@ -335,6 +460,7 @@ export default function StepImage({ form, updateForm, onNext }) {
               <button
                 type="button"
                 className={styles.addMore}
+                disabled={isProcessing}
                 onClick={() => inputRef.current?.click()}
               >
                 <div className={styles.addMoreIcon}>
@@ -362,7 +488,6 @@ export default function StepImage({ form, updateForm, onNext }) {
 
           <div>
             <strong>{t("stepImage.empty.title")}</strong>
-
             <span>{t("stepImage.empty.description")}</span>
           </div>
         </div>
@@ -377,7 +502,7 @@ export default function StepImage({ form, updateForm, onNext }) {
           disabled={!canContinue}
           onClick={handleNext}
         >
-          {t("stepImage.continue")}
+          {isProcessing ? "Обработка..." : t("stepImage.continue")}
           <ChevronRight size={18} />
         </button>
       </div>
