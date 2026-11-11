@@ -215,7 +215,7 @@ export async function upscaleSmallImage(file) {
     console.log(`[AI] Original image: ${width}x${height}`);
 
     // Большие изображения оставляем оригинальными
-    if (Math.max(width, height) > MAX_INPUT_SIDE) {
+    if (Math.min(width, height) > MAX_INPUT_SIDE) {
       console.log("[AI] Skipped: image is larger than 450px");
 
       return {
