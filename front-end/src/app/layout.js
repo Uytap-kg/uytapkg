@@ -12,6 +12,12 @@ const notoSans = Noto_Sans({
   display: "swap",
 });
 
+export const metadata = {
+  verification: {
+    google: "Lv25s8pfXZm934Fhkm7SF-jK-UdIOsx-Z6X0oiTlqX0",
+  },
+};
+
 export default function RootLayout({ children }) {
   return (
     <html
