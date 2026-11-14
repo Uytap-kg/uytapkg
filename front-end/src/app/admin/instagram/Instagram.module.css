@@ -943,6 +943,14 @@
   }
 }
 
+/* Instagram text header with copy button */
+
+.postTextHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .copyButton {
   display: inline-flex;
   align-items: center;
@@ -979,4 +987,42 @@
   width: 13px;
   height: 13px;
   flex-shrink: 0;
+}
+
+.copyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.copyButton:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.copyButton:active {
+  transform: scale(0.97);
+}
+
+.copyButton:focus-visible {
+  outline: 2px solid #f97316;
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .postTextHeader {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
 }

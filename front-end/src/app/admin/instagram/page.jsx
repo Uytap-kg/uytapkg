@@ -85,7 +85,6 @@ function formatDate(value) {
   }
 }
 
-// Получение URL изображения из разных форматов
 function getImageUrl(image) {
   if (typeof image === "string") {
     return image;
@@ -106,17 +105,40 @@ function getImageUrl(image) {
 }
 
 // --------------------------------------------------
+// GET DESCRIPTION
+// --------------------------------------------------
+
+function getListingDescription(listing) {
+  if (!listing) return "";
+
+  const possibleDescriptions = [
+    listing.description,
+    listing.fullDescription,
+    listing.full_description,
+    listing.details,
+    listing.rawDescription,
+    listing.raw_description,
+    listing.raw?.description,
+    listing.raw?.full_description,
+  ];
+
+  const description = possibleDescriptions.find(
+    (value) => typeof value === "string" && value.trim().length > 0,
+  );
+
+  return description?.trim() || "";
+}
+
+// --------------------------------------------------
 // GET ALL LISTING IMAGES
 // --------------------------------------------------
 
 function getListingImages(listing) {
   if (!listing) return [];
 
-  // Фотографии из базы данных
   const listingPhotos =
     listing.listing_photos || listing.raw?.listing_photos || [];
 
-  // Сортируем фотографии по display_order
   const sortedPhotos = Array.isArray(listingPhotos)
     ? [...listingPhotos].sort(
         (a, b) =>
@@ -124,10 +146,8 @@ function getListingImages(listing) {
       )
     : [];
 
-  // Получаем все URL из listing_photos
   const databaseImages = sortedPhotos.map(getImageUrl).filter(Boolean);
 
-  // Дополнительные возможные источники фотографий
   const galleryImages = [
     ...(Array.isArray(listing.images) ? listing.images : []),
     ...(Array.isArray(listing.photos) ? listing.photos : []),
@@ -136,15 +156,13 @@ function getListingImages(listing) {
     .map(getImageUrl)
     .filter(Boolean);
 
-  // Главное изображение
   const mainImage = getImageUrl(listing.image);
 
-  // Объединяем все источники и убираем дубликаты
-  const allImages = [...databaseImages, ...galleryImages, mainImage].filter(
-    Boolean,
-  );
-
-  return [...new Set(allImages)];
+  return [
+    ...new Set(
+      [...databaseImages, ...galleryImages, mainImage].filter(Boolean),
+    ),
+  ];
 }
 
 // --------------------------------------------------
@@ -167,16 +185,16 @@ function mapRequest(raw) {
     };
   }
 
-  // Получаем все фотографии из исходного объекта API
   const images = getListingImages(listing);
 
-  // Главное фото: is_main -> первое фото -> image
   const mainPhoto =
     listing.listing_photos?.find((photo) => photo.is_main) ||
     listing.listing_photos?.[0];
 
   const mainImage =
     getImageUrl(listing.image) || getImageUrl(mainPhoto) || images[0] || "";
+
+  const description = getListingDescription(listing);
 
   return {
     id: raw.id,
@@ -188,12 +206,9 @@ function mapRequest(raw) {
       title: listing.title || "Без названия",
 
       image: mainImage,
-
-      // Все фотографии для скачивания
       images,
 
-      description:
-        listing.description || listing.fullDescription || listing.details || "",
+      description,
 
       type:
         PROPERTY_TYPE_LABELS[listing.propertyType] ||
@@ -268,12 +283,12 @@ export default function InstagramPage() {
       const mappedRequests = (Array.isArray(data) ? data : []).map(mapRequest);
 
       console.log(
-        "INSTAGRAM IMAGES:",
+        "INSTAGRAM LISTINGS:",
         mappedRequests.map((request) => ({
           id: request.id,
           title: request.listing?.title,
+          description: request.listing?.description,
           images: request.listing?.images,
-          imageCount: request.listing?.images?.length || 0,
         })),
       );
 
@@ -287,7 +302,7 @@ export default function InstagramPage() {
   }
 
   // --------------------------------------------------
-  // DOWNLOAD ALL IMAGES
+  // DOWNLOAD MAIN IMAGE
   // --------------------------------------------------
 
   async function handleDownloadImages(request) {
@@ -303,10 +318,7 @@ export default function InstagramPage() {
     setDownloadingId(request.id);
 
     try {
-      // Убираем возможные дубликаты перед скачиванием
       const images = [...new Set(listing.images.filter(Boolean))];
-
-      console.log(`Downloading ${images.length} Instagram images:`, images);
 
       await downloadInstagramImages(images, listing.title);
     } catch (err) {
@@ -407,6 +419,7 @@ export default function InstagramPage() {
     const searchableText = [
       request.listing?.title,
       request.listing?.location,
+      request.listing?.description,
       request.user?.name,
       request.user?.phone,
     ]
@@ -454,7 +467,6 @@ export default function InstagramPage() {
 
               <div>
                 <h1>Публикации Instagram</h1>
-
                 <p>
                   Подготавливайте фотографии и тексты объявлений для публикации.
                 </p>
@@ -516,7 +528,7 @@ export default function InstagramPage() {
             </div>
           </section>
 
-          {/* LOADING */}
+          {/* CONTENT */}
 
           {loading ? (
             <div className={styles.loading}>
@@ -579,7 +591,6 @@ export default function InstagramPage() {
                         }`}
                       >
                         {isPublished ? <Check /> : <Clock3 />}
-
                         {STATUS_LABELS[request.status] || request.status}
                       </div>
                     </div>
@@ -589,8 +600,6 @@ export default function InstagramPage() {
                     {listing ? (
                       <>
                         <div className={styles.listing}>
-                          {/* IMAGE AND DOWNLOAD */}
-
                           <div className={styles.imageColumn}>
                             <div className={styles.listingImage}>
                               {listing.image ? (
@@ -631,11 +640,9 @@ export default function InstagramPage() {
 
                               {isDownloading
                                 ? "Подготовка..."
-                                : `Скачать главное фото`}
+                                : "Скачать главное фото"}
                             </button>
                           </div>
-
-                          {/* LISTING INFO */}
 
                           <div className={styles.listingContent}>
                             <span className={styles.listingType}>
@@ -643,6 +650,14 @@ export default function InstagramPage() {
                             </span>
 
                             <h2>{listing.title}</h2>
+
+                            {listing.location && <p>{listing.location}</p>}
+
+                            {listing.area && <p>Площадь: {listing.area}</p>}
+
+                            {listing.rooms && <p>Комнат: {listing.rooms}</p>}
+
+                            <strong>{listing.price}</strong>
                           </div>
                         </div>
 
@@ -675,10 +690,15 @@ export default function InstagramPage() {
                             {listing.price}
                           </strong>
 
-                          <p className={styles.postDescription}>
-                            {listing.description ||
-                              "Описание объявления отсутствует."}
-                          </p>
+                          {/* FULL DESCRIPTION */}
+
+                          <div className={styles.postDescription}>
+                            {listing.description ? (
+                              listing.description
+                            ) : (
+                              <span>Описание объявления отсутствует.</span>
+                            )}
+                          </div>
 
                           <a
                             href={listingPath}
@@ -750,7 +770,6 @@ export default function InstagramPage() {
               </div>
 
               <h2>Заявок не найдено</h2>
-
               <p>Попробуйте изменить фильтр или поисковый запрос.</p>
             </div>
           )}
