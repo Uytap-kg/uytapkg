@@ -647,7 +647,6 @@ export default function InstagramPage() {
                               </span>
                               <h3>Текст публикации</h3>
                             </div>
-
                             <button
                               type="button"
                               className={`${styles.copyButton} ${

@@ -496,56 +496,36 @@
   font-weight: 750;
 }
 
-/* ==================================================
-   COPY BUTTON — ICON ONLY
-================================================== */
-
 .copyButton {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   padding: 0;
-  border: 1px solid #e9e4f1;
-  border-radius: 9px;
+  border: 1px solid #e9e5ef;
+  border-radius: 8px;
   background: #fff;
   color: #777184;
   cursor: pointer;
-  transition:
-    color 0.2s ease,
-    background 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: 0.2s ease;
+}
+
+.copyButton:hover {
+  color: #7547c5;
+  background: #f5f0ff;
+  border-color: #d8c7f5;
+}
+
+.copyButton:active {
+  transform: scale(0.95);
 }
 
 .copyButton svg {
   width: 17px;
   height: 17px;
-  stroke-width: 1.9;
 }
-
-.copyButton:hover {
-  color: #794bc8;
-  background: #f5f0ff;
-  border-color: #d8c7f5;
-  box-shadow: 0 3px 9px rgba(121, 75, 200, 0.09);
-  transform: translateY(-1px);
-}
-
-.copyButton:active {
-  transform: scale(0.94);
-}
-
-.copyButton:focus-visible {
-  outline: 3px solid rgba(121, 75, 200, 0.2);
-  outline-offset: 2px;
-}
-
-/* Copied state */
 
 .copyButtonCopied {
   color: #16885c;
@@ -556,7 +536,6 @@
 .copyButtonCopied:hover {
   color: #16885c;
   background: #e1f5ea;
-  border-color: #b4e4ca;
 }
 
 /* Tooltip */
