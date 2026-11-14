@@ -654,12 +654,6 @@ export default function InstagramPage() {
                                 isCopied ? styles.copyButtonCopied : ""
                               }`}
                               onClick={() => handleCopyInstagramText(request)}
-                              title={
-                                isCopied ? "Скопировано" : "Скопировать текст"
-                              }
-                              aria-label={
-                                isCopied ? "Скопировано" : "Скопировать текст"
-                              }
                             >
                               {isCopied ? (
                                 <CheckCheck size={17} />
