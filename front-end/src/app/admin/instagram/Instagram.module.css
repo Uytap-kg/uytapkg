@@ -538,20 +538,6 @@
   background: #e1f5ea;
 }
 
-/* Tooltip */
-
-.copyButton::before {
-  content: "";
-  position: absolute;
-  z-index: 5;
-  right: 11px;
-  bottom: calc(100% + 3px);
-  border: 5px solid transparent;
-  border-top-color: #292533;
-  opacity: 0;
-  visibility: hidden;
-  transition: 0.18s ease;
-}
 
 .copyButton:hover::after,
 .copyButton:hover::before,
