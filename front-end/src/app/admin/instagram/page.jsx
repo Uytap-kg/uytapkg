@@ -631,7 +631,7 @@ export default function InstagramPage() {
 
                               {isDownloading
                                 ? "Подготовка..."
-                                : `Скачать фото (${imageCount})`}
+                                : `Скачать главное фото`}
                             </button>
                           </div>
 
