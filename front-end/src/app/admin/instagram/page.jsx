@@ -1,17 +1,31 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Check, Clock3, Search, ExternalLink, Camera, Loader2 } from "lucide-react";
+import {
+  Check,
+  Clock3,
+  Search,
+  ExternalLink,
+  Camera,
+  Loader2,
+  Download,
+} from "lucide-react";
 
 import {
   getAdminInstagramRequests,
   completeInstagramRequest,
 } from "@/utils/api";
 
+import { downloadInstagramImages } from "@/utils/downloadInstagramImages";
+
 import Header from "../components/Header/Header";
 import Sidebar from "../components/Sidebar/Sidebar";
 
 import styles from "./Instagram.module.css";
+
+// --------------------------------------------------
+// CONSTANTS
+// --------------------------------------------------
 
 const STATUS_LABELS = {
   pending: "На проверке",
@@ -27,18 +41,35 @@ const PROPERTY_TYPE_LABELS = {
   parking: "Паркинг / гараж",
 };
 
+// --------------------------------------------------
+// HELPERS
+// --------------------------------------------------
+
 function formatPrice(price, currency) {
-  if (price === null || price === undefined) return "Цена не указана";
-  const formatted = new Intl.NumberFormat("ru-RU").format(price);
+  if (price === null || price === undefined || price === "") {
+    return "Цена не указана";
+  }
+
+  const numericPrice = Number(price);
+
+  const formatted = Number.isFinite(numericPrice)
+    ? new Intl.NumberFormat("ru-RU").format(numericPrice)
+    : price;
+
   return `${formatted} ${currency || ""}`.trim();
 }
 
 function formatLocation(listing) {
-  return [listing?.district, listing?.address].filter(Boolean).join(", ") || listing?.city || "";
+  return (
+    [listing?.district, listing?.address].filter(Boolean).join(", ") ||
+    listing?.city ||
+    ""
+  );
 }
 
 function formatDate(value) {
   if (!value) return "";
+
   try {
     return new Date(value).toLocaleString("ru-RU", {
       day: "numeric",
@@ -47,47 +78,116 @@ function formatDate(value) {
       hour: "2-digit",
       minute: "2-digit",
     });
-  } catch (e) {
+  } catch {
     return value;
   }
 }
 
-// Приводит ответ бэкенда (см. adminController.listInstagramRequestsAdmin) к
-// форме, которую ожидает разметка ниже.
+function getImageUrl(image) {
+  if (typeof image === "string") {
+    return image;
+  }
+
+  if (image && typeof image === "object") {
+    return image.url || image.publicUrl || image.imageUrl || image.path || "";
+  }
+
+  return "";
+}
+
+// Получение всех фотографий объявления
+function getListingImages(listing) {
+  if (!listing) return [];
+
+  const gallery = [
+    ...(Array.isArray(listing.images) ? listing.images : []),
+    ...(Array.isArray(listing.photos) ? listing.photos : []),
+    ...(Array.isArray(listing.gallery) ? listing.gallery : []),
+  ];
+
+  const mainImage = getImageUrl(listing.image);
+
+  const images = [mainImage, ...gallery.map(getImageUrl)].filter(Boolean);
+
+  // Убираем повторяющиеся URL
+  return [...new Set(images)];
+}
+
+// --------------------------------------------------
+// MAP API RESPONSE
+// --------------------------------------------------
+
 function mapRequest(raw) {
+  const listing = raw.listing;
+
   return {
     id: raw.id,
     status: raw.status,
     createdAt: formatDate(raw.createdAt),
-    listing: raw.listing
+
+    listing: listing
       ? {
-          id: raw.listing.id,
-          title: raw.listing.title,
-          image: raw.listing.image,
-          type: PROPERTY_TYPE_LABELS[raw.listing.propertyType] || raw.listing.propertyType,
-          location: formatLocation(raw.listing),
-          rooms: raw.listing.rooms,
-          area: raw.listing.area ? `${raw.listing.area} м²` : null,
-          price: formatPrice(raw.listing.price, raw.listing.currency),
+          id: listing.id,
+          title: listing.title || "Без названия",
+
+          image: getImageUrl(listing.image),
+
+          images: getListingImages(listing),
+
+          description:
+            listing.description ||
+            listing.fullDescription ||
+            listing.details ||
+            "",
+
+          type:
+            PROPERTY_TYPE_LABELS[listing.propertyType] ||
+            listing.propertyType ||
+            "Недвижимость",
+
+          location: formatLocation(listing),
+
+          rooms: listing.rooms,
+
+          area: listing.area ? `${listing.area} м²` : null,
+
+          price: formatPrice(listing.price, listing.currency),
+
           status:
-            raw.listing.promotionStatus && raw.listing.promotionStatus !== "regular"
-              ? raw.listing.promotionStatus
-              : raw.listing.isUrgent
+            listing.promotionStatus && listing.promotionStatus !== "regular"
+              ? listing.promotionStatus
+              : listing.isUrgent
                 ? "urgent"
                 : null,
         }
       : null,
-    user: raw.user,
+
+    user: {
+      name: raw.user?.name || "Пользователь",
+      phone: raw.user?.phone || "Телефон не указан",
+    },
   };
 }
 
+// --------------------------------------------------
+// COMPONENT
+// --------------------------------------------------
+
 export default function InstagramPage() {
   const [requests, setRequests] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const [publishingId, setPublishingId] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
+
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+
+  // --------------------------------------------------
+  // LOAD REQUESTS
+  // --------------------------------------------------
 
   useEffect(() => {
     loadRequests();
@@ -96,52 +196,72 @@ export default function InstagramPage() {
   async function loadRequests() {
     setLoading(true);
     setError("");
+
     const token = localStorage.getItem("uytap_token");
+
     if (!token) {
       setError("Требуется авторизация администратора");
       setLoading(false);
       return;
     }
+
     try {
       const data = await getAdminInstagramRequests(token);
-      setRequests((data || []).map(mapRequest));
+
+      setRequests((Array.isArray(data) ? data : []).map(mapRequest));
     } catch (err) {
-      console.error("Error loading instagram requests:", err);
-      setError(err.message || "Ошибка загрузки заявок на Instagram");
+      console.error("Error loading Instagram requests:", err);
+
+      setError(err.message || "Ошибка загрузки заявок Instagram");
     } finally {
       setLoading(false);
     }
   }
 
-  const filteredRequests = requests.filter((request) => {
-    const matchesFilter =
-      activeFilter === "all" || request.status === activeFilter;
+  // --------------------------------------------------
+  // DOWNLOAD ALL IMAGES
+  // --------------------------------------------------
 
-    const query = search.toLowerCase().trim();
+  async function handleDownloadImages(request) {
+    const listing = request.listing;
 
-    if (!query) {
-      return matchesFilter;
+    if (!listing?.images?.length) {
+      alert("У объявления нет фотографий");
+      return;
     }
 
-    const searchableText = [
-      request.listing?.title,
-      request.listing?.location,
-      request.user?.name,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
+    if (downloadingId) return;
 
-    return matchesFilter && searchableText.includes(query);
-  });
+    setDownloadingId(request.id);
+
+    try {
+      await downloadInstagramImages(listing.images, listing.title);
+    } catch (err) {
+      console.error("Instagram image download error:", err);
+
+      alert(
+        err.message ||
+          "Не удалось скачать фотографии. Проверь доступность изображений и настройки CORS.",
+      );
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
+  // --------------------------------------------------
+  // PUBLISH REQUEST
+  // --------------------------------------------------
 
   async function publishRequest(id) {
     const token = localStorage.getItem("uytap_token");
-    if (!token) return;
+
+    if (!token || publishingId) return;
 
     setPublishingId(id);
+
     try {
       await completeInstagramRequest(token, id);
+
       setRequests((current) =>
         current.map((request) =>
           request.id === id
@@ -153,12 +273,42 @@ export default function InstagramPage() {
         ),
       );
     } catch (err) {
-      console.error("Error completing instagram request:", err);
+      console.error("Error completing Instagram request:", err);
+
       alert(err.message || "Не удалось обновить заявку");
     } finally {
       setPublishingId(null);
     }
   }
+
+  // --------------------------------------------------
+  // SEARCH AND FILTERS
+  // --------------------------------------------------
+
+  const filteredRequests = requests.filter((request) => {
+    const matchesFilter =
+      activeFilter === "all" || request.status === activeFilter;
+
+    const query = search.toLowerCase().trim();
+
+    if (!query) return matchesFilter;
+
+    const searchableText = [
+      request.listing?.title,
+      request.listing?.location,
+      request.user?.name,
+      request.user?.phone,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return matchesFilter && searchableText.includes(query);
+  });
+
+  // --------------------------------------------------
+  // STATISTICS
+  // --------------------------------------------------
 
   const pendingCount = requests.filter(
     (request) => request.status === "pending",
@@ -167,6 +317,10 @@ export default function InstagramPage() {
   const publishedCount = requests.filter(
     (request) => request.status === "published",
   ).length;
+
+  // --------------------------------------------------
+  // RENDER
+  // --------------------------------------------------
 
   return (
     <div className={styles.page}>
@@ -179,9 +333,7 @@ export default function InstagramPage() {
         />
 
         <main className={styles.main}>
-          {/* =========================
-              TOP
-          ========================= */}
+          {/* TOP */}
 
           <section className={styles.top}>
             <div className={styles.titleBlock}>
@@ -192,7 +344,9 @@ export default function InstagramPage() {
               <div>
                 <h1>Публикации Instagram</h1>
 
-                <p>Проверяйте заявки и отмечайте опубликованные объявления.</p>
+                <p>
+                  Подготавливайте фотографии и тексты объявлений для публикации.
+                </p>
               </div>
             </div>
 
@@ -209,9 +363,7 @@ export default function InstagramPage() {
             </div>
           </section>
 
-          {/* =========================
-              CONTROLS
-          ========================= */}
+          {/* CONTROLS */}
 
           <section className={styles.controls}>
             <div className={styles.search}>
@@ -253,22 +405,36 @@ export default function InstagramPage() {
             </div>
           </section>
 
-          {/* =========================
-              REQUESTS
-          ========================= */}
+          {/* LOADING */}
 
           {loading ? (
-            <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
-              <Loader2 className={styles.spinIcon} size={32} style={{ color: "#6d28d9" }} />
+            <div className={styles.loading}>
+              <Loader2 className={styles.spinIcon} size={32} />
             </div>
           ) : error ? (
-            <div style={{ padding: "20px", color: "#e53e3e", background: "#fed7d7", borderRadius: "10px" }}>
+            <div className={styles.error}>
               {error}
+
+              <button type="button" onClick={loadRequests}>
+                Повторить
+              </button>
             </div>
           ) : filteredRequests.length > 0 ? (
+            /* REQUESTS */
+
             <section className={styles.grid}>
               {filteredRequests.map((request) => {
                 const isPublished = request.status === "published";
+
+                const listing = request.listing;
+
+                const isDownloading = downloadingId === request.id;
+
+                const imageCount = listing?.images?.length || 0;
+
+                const listingUrl = listing
+                  ? `${window.location.origin}/all-products/${listing.id}`
+                  : "";
 
                 return (
                   <article
@@ -277,16 +443,17 @@ export default function InstagramPage() {
                       isPublished ? styles.published : styles.pending
                     }`}
                   >
-                    {/* HEADER */}
+                    {/* REQUEST HEADER */}
 
                     <div className={styles.requestHeader}>
                       <div className={styles.requestUser}>
                         <div className={styles.avatar}>
-                          {request.user.name.charAt(0)}
+                          {request.user.name.charAt(0).toUpperCase()}
                         </div>
 
                         <div className={styles.userInfo}>
                           <strong>{request.user.name}</strong>
+
                           <span>{request.user.phone}</span>
                         </div>
                       </div>
@@ -300,68 +467,122 @@ export default function InstagramPage() {
                       >
                         {isPublished ? <Check /> : <Clock3 />}
 
-                        {STATUS_LABELS[request.status]}
+                        {STATUS_LABELS[request.status] || request.status}
                       </div>
                     </div>
 
                     {/* LISTING */}
 
-                    {request.listing ? (
-                      <div className={styles.listing}>
-                        <div className={styles.listingImage}>
-                          {request.listing.image && (
-                            <img
-                              src={request.listing.image}
-                              alt={request.listing.title}
-                            />
-                          )}
+                    {listing ? (
+                      <>
+                        <div className={styles.listing}>
+                          {/* IMAGE AND DOWNLOAD */}
 
-                          {request.listing.status && (
-                            <span
-                              className={`${styles.listingBadge} ${
-                                styles[request.listing.status]
-                              }`}
+                          <div className={styles.imageColumn}>
+                            <div className={styles.listingImage}>
+                              {listing.image ? (
+                                <img src={listing.image} alt={listing.title} />
+                              ) : (
+                                <div className={styles.noImage}>
+                                  <Camera />
+                                  <span>Нет фото</span>
+                                </div>
+                              )}
+
+                              {listing.status && (
+                                <span
+                                  className={`${styles.listingBadge} ${
+                                    styles[listing.status]
+                                  }`}
+                                >
+                                  {listing.status === "vip" ? "VIP" : "Срочно"}
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              className={styles.downloadButton}
+                              disabled={
+                                isDownloading ||
+                                imageCount === 0 ||
+                                downloadingId !== null
+                              }
+                              onClick={() => handleDownloadImages(request)}
                             >
-                              {request.listing.status === "vip"
-                                ? "VIP"
-                                : "Срочно"}
-                            </span>
-                          )}
-                        </div>
+                              {isDownloading ? (
+                                <Loader2 className={styles.spinIcon} />
+                              ) : (
+                                <Download />
+                              )}
 
-                        <div className={styles.listingContent}>
-                          <span className={styles.listingType}>
-                            {request.listing.type}
-                          </span>
-
-                          <h2>{request.listing.title}</h2>
-
-                          <p className={styles.location}>
-                            {request.listing.location}
-                          </p>
-
-                          <div className={styles.specs}>
-                            {request.listing.rooms && (
-                              <span>{request.listing.rooms} комн.</span>
-                            )}
-
-                            {request.listing.area && (
-                              <span>{request.listing.area}</span>
-                            )}
+                              {isDownloading
+                                ? "Подготовка..."
+                                : `Скачать фото (${imageCount})`}
+                            </button>
                           </div>
 
-                          <strong className={styles.price}>
-                            {request.listing.price}
+                          {/* LISTING INFO */}
+
+                          <div className={styles.listingContent}>
+                            <span className={styles.listingType}>
+                              {listing.type}
+                            </span>
+
+                            <h2>{listing.title}</h2>
+
+                            <p className={styles.location}>
+                              {listing.location || "Местоположение не указано"}
+                            </p>
+
+                            <div className={styles.specs}>
+                              {listing.rooms && (
+                                <span>{listing.rooms} комн.</span>
+                              )}
+
+                              {listing.area && <span>{listing.area}</span>}
+                            </div>
+
+                            <strong className={styles.price}>
+                              {listing.price}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {/* INSTAGRAM TEXT */}
+
+                        <div className={styles.postText}>
+                          <div className={styles.postTextHeader}>
+                            <span>ТЕКСТ ДЛЯ INSTAGRAM</span>
+                          </div>
+
+                          <strong className={styles.postTitle}>
+                            {listing.title}
                           </strong>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className={styles.listing}>
-                        <div className={styles.listingContent}>
-                          <p className={styles.location}>
-                            Объявление было удалено
+
+                          <strong className={styles.postPrice}>
+                            {listing.price}
+                          </strong>
+
+                          <p className={styles.postDescription}>
+                            {listing.description ||
+                              "Описание объявления отсутствует."}
                           </p>
+
+                          <a
+                            href={`/all-products/${listing.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={styles.postLink}
+                          >
+                            Подробнее: {listingUrl}
+                            <ExternalLink />
+                          </a>
                         </div>
+                      </>
+                    ) : (
+                      <div className={styles.deletedListing}>
+                        <p>Объявление было удалено</p>
                       </div>
                     )}
 
@@ -370,37 +591,39 @@ export default function InstagramPage() {
                     <div className={styles.meta}>
                       <div>
                         <span>Заявка создана</span>
+
                         <strong>{request.createdAt}</strong>
                       </div>
 
-                      {request.listing && (
-                        <button
-                          type="button"
+                      {listing && (
+                        <a
+                          href={`/all-products/${listing.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className={styles.openButton}
-                          onClick={() =>
-                            window.open(
-                              `/all-products/${request.listing.id}`,
-                              "_blank",
-                            )
-                          }
                         >
                           <ExternalLink />
                           Объявление
-                        </button>
+                        </a>
                       )}
                     </div>
 
-                    {/* PUBLISH */}
+                    {/* PUBLISH STATUS */}
 
                     {!isPublished && (
                       <div className={styles.publishArea}>
                         <button
                           type="button"
                           className={styles.publishButton}
-                          disabled={publishingId === request.id}
+                          disabled={publishingId !== null}
                           onClick={() => publishRequest(request.id)}
                         >
-                          <Check />
+                          {publishingId === request.id ? (
+                            <Loader2 className={styles.spinIcon} />
+                          ) : (
+                            <Check />
+                          )}
+
                           {publishingId === request.id
                             ? "Сохранение..."
                             : "Опубликовано"}
@@ -412,6 +635,8 @@ export default function InstagramPage() {
               })}
             </section>
           ) : (
+            /* EMPTY */
+
             <div className={styles.empty}>
               <div className={styles.emptyIcon}>
                 <Camera />

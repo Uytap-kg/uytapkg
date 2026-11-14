@@ -758,3 +758,187 @@
     transition: none;
   }
 }
+
+/* =========================
+   INSTAGRAM DOWNLOAD
+========================= */
+
+.loading {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+  color: #6d28d9;
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 10px;
+  background: #fff5f5;
+  color: #c53030;
+  font-size: 13px;
+}
+
+.error button {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 1px solid #fed7d7;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #c53030;
+  cursor: pointer;
+}
+
+.imageColumn {
+  width: 145px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.imageColumn .listingImage {
+  width: 100%;
+}
+
+.noImage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #a0aec0;
+  font-size: 10px;
+}
+
+.noImage svg {
+  width: 24px;
+  height: 24px;
+}
+
+.downloadButton {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid #c4b5fd;
+  border-radius: 8px;
+  background: #f5f3ff;
+  color: #6d28d9;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.downloadButton:hover:not(:disabled) {
+  background: #ede9fe;
+  border-color: #8b5cf6;
+}
+
+.downloadButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.downloadButton svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+/* =========================
+   INSTAGRAM POST TEXT
+========================= */
+
+.postText {
+  margin: 0 16px 14px;
+  padding: 15px;
+  border: 1px solid #e9d5ff;
+  border-radius: 12px;
+  background: #faf5ff;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.postTextHeader {
+  color: #8b5cf6;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.postTitle {
+  color: #1a202c;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
+.postPrice {
+  color: #6d28d9;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.postDescription {
+  margin: 0;
+  color: #4a5568;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.postLink {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.postLink:hover {
+  text-decoration: underline;
+}
+
+.postLink svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.deletedListing {
+  padding: 20px 16px;
+  color: #718096;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .imageColumn {
+    width: 115px;
+  }
+
+  .postText {
+    margin: 0 13px 13px;
+  }
+}
+
+@media (max-width: 380px) {
+  .imageColumn {
+    width: 95px;
+  }
+}
