@@ -9,6 +9,8 @@ import {
   Camera,
   Loader2,
   Download,
+  Copy,
+  CheckCheck,
 } from "lucide-react";
 
 import {
@@ -109,7 +111,6 @@ function getListingImages(listing) {
 
   const images = [mainImage, ...gallery.map(getImageUrl)].filter(Boolean);
 
-  // Убираем повторяющиеся URL
   return [...new Set(images)];
 }
 
@@ -181,6 +182,7 @@ export default function InstagramPage() {
 
   const [publishingId, setPublishingId] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
 
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -211,7 +213,6 @@ export default function InstagramPage() {
       setRequests((Array.isArray(data) ? data : []).map(mapRequest));
     } catch (err) {
       console.error("Error loading Instagram requests:", err);
-
       setError(err.message || "Ошибка загрузки заявок Instagram");
     } finally {
       setLoading(false);
@@ -249,6 +250,45 @@ export default function InstagramPage() {
   }
 
   // --------------------------------------------------
+  // COPY INSTAGRAM TEXT
+  // --------------------------------------------------
+
+  async function handleCopyInstagramText(request) {
+    const listing = request.listing;
+
+    if (!listing) return;
+
+    const listingPath = `/all-products/${listing.id}`;
+
+    const listingUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}${listingPath}`
+        : listingPath;
+
+    const postText = [
+      listing.title,
+      listing.price,
+      "",
+      listing.description || "Описание объявления отсутствует.",
+      "",
+      `Подробнее: ${listingUrl}`,
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(postText);
+      setCopiedId(request.id);
+
+      // Возвращаем обычное состояние кнопки через 2 секунды
+      setTimeout(() => {
+        setCopiedId((current) => (current === request.id ? null : current));
+      }, 2000);
+    } catch (err) {
+      console.error("Copy Instagram text error:", err);
+      alert("Не удалось скопировать текст. Проверь разрешения браузера.");
+    }
+  }
+
+  // --------------------------------------------------
   // PUBLISH REQUEST
   // --------------------------------------------------
 
@@ -274,7 +314,6 @@ export default function InstagramPage() {
       );
     } catch (err) {
       console.error("Error completing Instagram request:", err);
-
       alert(err.message || "Не удалось обновить заявку");
     } finally {
       setPublishingId(null);
@@ -425,16 +464,21 @@ export default function InstagramPage() {
             <section className={styles.grid}>
               {filteredRequests.map((request) => {
                 const isPublished = request.status === "published";
-
                 const listing = request.listing;
 
                 const isDownloading = downloadingId === request.id;
+                const isCopied = copiedId === request.id;
 
                 const imageCount = listing?.images?.length || 0;
 
-                const listingUrl = listing
-                  ? `${window.location.origin}/all-products/${listing.id}`
+                const listingPath = listing
+                  ? `/all-products/${listing.id}`
                   : "";
+
+                const listingUrl =
+                  typeof window !== "undefined" && listing
+                    ? `${window.location.origin}${listingPath}`
+                    : listingPath;
 
                 return (
                   <article
@@ -453,7 +497,6 @@ export default function InstagramPage() {
 
                         <div className={styles.userInfo}>
                           <strong>{request.user.name}</strong>
-
                           <span>{request.user.phone}</span>
                         </div>
                       </div>
@@ -530,22 +573,6 @@ export default function InstagramPage() {
                             </span>
 
                             <h2>{listing.title}</h2>
-
-                            <p className={styles.location}>
-                              {listing.location || "Местоположение не указано"}
-                            </p>
-
-                            <div className={styles.specs}>
-                              {listing.rooms && (
-                                <span>{listing.rooms} комн.</span>
-                              )}
-
-                              {listing.area && <span>{listing.area}</span>}
-                            </div>
-
-                            <strong className={styles.price}>
-                              {listing.price}
-                            </strong>
                           </div>
                         </div>
 
@@ -554,6 +581,20 @@ export default function InstagramPage() {
                         <div className={styles.postText}>
                           <div className={styles.postTextHeader}>
                             <span>ТЕКСТ ДЛЯ INSTAGRAM</span>
+
+                            <button
+                              type="button"
+                              className={styles.copyButton}
+                              onClick={() => handleCopyInstagramText(request)}
+                            >
+                              {isCopied ? (
+                                <CheckCheck size={16} />
+                              ) : (
+                                <Copy size={16} />
+                              )}
+
+                              {isCopied ? "Скопировано" : "Копировать текст"}
+                            </button>
                           </div>
 
                           <strong className={styles.postTitle}>
@@ -570,13 +611,12 @@ export default function InstagramPage() {
                           </p>
 
                           <a
-                            href={`/all-products/${listing.id}`}
+                            href={listingPath}
                             target="_blank"
                             rel="noopener noreferrer"
                             className={styles.postLink}
                           >
                             Подробнее: {listingUrl}
-                            <ExternalLink />
                           </a>
                         </div>
                       </>
@@ -591,13 +631,12 @@ export default function InstagramPage() {
                     <div className={styles.meta}>
                       <div>
                         <span>Заявка создана</span>
-
                         <strong>{request.createdAt}</strong>
                       </div>
 
                       {listing && (
                         <a
-                          href={`/all-products/${listing.id}`}
+                          href={listingPath}
                           target="_blank"
                           rel="noopener noreferrer"
                           className={styles.openButton}
