@@ -540,27 +540,6 @@
 
 /* Tooltip */
 
-.copyButton::after {
-  content: attr(title);
-  position: absolute;
-  z-index: 5;
-  right: 0;
-  bottom: calc(100% + 9px);
-  padding: 7px 10px;
-  border-radius: 7px;
-  background: #292533;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translateY(4px);
-  transition: 0.18s ease;
-}
-
 .copyButton::before {
   content: "";
   position: absolute;
