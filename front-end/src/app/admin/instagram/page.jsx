@@ -11,6 +11,10 @@ import {
   Download,
   Copy,
   CheckCheck,
+  MapPin,
+  Maximize2,
+  BedDouble,
+  Home,
 } from "lucide-react";
 
 import {
@@ -63,9 +67,10 @@ function formatPrice(price, currency) {
 
 function formatLocation(listing) {
   return (
-    [listing?.district, listing?.address].filter(Boolean).join(", ") ||
-    listing?.city ||
-    ""
+    [listing?.district, listing?.address, listing?.city]
+      .filter(Boolean)
+      .filter((value, index, array) => array.indexOf(value) === index)
+      .join(", ") || ""
   );
 }
 
@@ -86,9 +91,7 @@ function formatDate(value) {
 }
 
 function getImageUrl(image) {
-  if (typeof image === "string") {
-    return image;
-  }
+  if (typeof image === "string") return image;
 
   if (image && typeof image === "object") {
     return (
@@ -103,35 +106,6 @@ function getImageUrl(image) {
 
   return "";
 }
-
-// --------------------------------------------------
-// GET DESCRIPTION
-// --------------------------------------------------
-
-function getListingDescription(listing) {
-  if (!listing) return "";
-
-  const possibleDescriptions = [
-    listing.description,
-    listing.fullDescription,
-    listing.full_description,
-    listing.details,
-    listing.rawDescription,
-    listing.raw_description,
-    listing.raw?.description,
-    listing.raw?.full_description,
-  ];
-
-  const description = possibleDescriptions.find(
-    (value) => typeof value === "string" && value.trim().length > 0,
-  );
-
-  return description?.trim() || "";
-}
-
-// --------------------------------------------------
-// GET ALL LISTING IMAGES
-// --------------------------------------------------
 
 function getListingImages(listing) {
   if (!listing) return [];
@@ -172,16 +146,18 @@ function getListingImages(listing) {
 function mapRequest(raw) {
   const listing = raw?.listing;
 
+  const user = {
+    name: raw.user?.name || "Пользователь",
+    phone: raw.user?.phone || "Телефон не указан",
+  };
+
   if (!listing) {
     return {
       id: raw.id,
       status: raw.status,
       createdAt: formatDate(raw.createdAt),
       listing: null,
-      user: {
-        name: raw.user?.name || "Пользователь",
-        phone: raw.user?.phone || "Телефон не указан",
-      },
+      user,
     };
   }
 
@@ -194,7 +170,13 @@ function mapRequest(raw) {
   const mainImage =
     getImageUrl(listing.image) || getImageUrl(mainPhoto) || images[0] || "";
 
-  const description = getListingDescription(listing);
+  const description =
+    listing.description ||
+    listing.fullDescription ||
+    listing.full_description ||
+    listing.details ||
+    listing.raw?.description ||
+    "";
 
   return {
     id: raw.id,
@@ -217,9 +199,8 @@ function mapRequest(raw) {
 
       location: formatLocation(listing),
 
-      rooms: listing.rooms,
-
-      area: listing.area ? `${listing.area} м²` : null,
+      rooms: listing.rooms || null,
+      area: listing.area || null,
 
       price: formatPrice(listing.price, listing.currency),
 
@@ -231,10 +212,7 @@ function mapRequest(raw) {
             : null,
     },
 
-    user: {
-      name: raw.user?.name || "Пользователь",
-      phone: raw.user?.phone || "Телефон не указан",
-    },
+    user,
   };
 }
 
@@ -278,19 +256,9 @@ export default function InstagramPage() {
     try {
       const data = await getAdminInstagramRequests(token);
 
-      console.log("INSTAGRAM API RESPONSE:", data);
-
       const mappedRequests = (Array.isArray(data) ? data : []).map(mapRequest);
 
-      console.log(
-        "INSTAGRAM LISTINGS:",
-        mappedRequests.map((request) => ({
-          id: request.id,
-          title: request.listing?.title,
-          description: request.listing?.description,
-          images: request.listing?.images,
-        })),
-      );
+      console.log("INSTAGRAM REQUESTS:", mappedRequests);
 
       setRequests(mappedRequests);
     } catch (err) {
@@ -308,8 +276,8 @@ export default function InstagramPage() {
   async function handleDownloadImages(request) {
     const listing = request.listing;
 
-    if (!listing?.images?.length) {
-      alert("У объявления нет фотографий");
+    if (!listing?.image) {
+      alert("У объявления нет главной фотографии");
       return;
     }
 
@@ -318,19 +286,58 @@ export default function InstagramPage() {
     setDownloadingId(request.id);
 
     try {
-      const images = [...new Set(listing.images.filter(Boolean))];
-
-      await downloadInstagramImages(images, listing.title);
+      // Скачиваем только главное фото
+      await downloadInstagramImages([listing.image], listing.title);
     } catch (err) {
       console.error("Instagram image download error:", err);
 
       alert(
         err.message ||
-          "Не удалось скачать фотографии. Проверь доступность изображений и настройки CORS.",
+          "Не удалось скачать фотографию. Проверь доступность изображения и настройки CORS.",
       );
     } finally {
       setDownloadingId(null);
     }
+  }
+
+  // --------------------------------------------------
+  // BUILD INSTAGRAM TEXT
+  // --------------------------------------------------
+
+  function buildInstagramText(listing) {
+    const lines = [
+      listing.title,
+      "",
+      `Цена: ${listing.price}`,
+      "",
+      "Информация об объекте:",
+    ];
+
+    if (listing.type) {
+      lines.push(`Тип недвижимости: ${listing.type}`);
+    }
+
+    if (listing.location) {
+      lines.push(`Адрес: ${listing.location}`);
+    }
+
+    if (listing.area) {
+      lines.push(`Площадь: ${listing.area} м²`);
+    }
+
+    if (listing.rooms) {
+      lines.push(`Количество комнат: ${listing.rooms}`);
+    }
+
+    if (listing.description?.trim()) {
+      lines.push("", listing.description.trim());
+    }
+
+    const listingUrl = `${window.location.origin}/all-products/${listing.id}`;
+
+    lines.push("", `Подробнее об объявлении: ${listingUrl}`);
+
+    return lines.join("\n");
   }
 
   // --------------------------------------------------
@@ -342,23 +349,9 @@ export default function InstagramPage() {
 
     if (!listing) return;
 
-    const listingPath = `/all-products/${listing.id}`;
-
-    const listingUrl =
-      typeof window !== "undefined"
-        ? `${window.location.origin}${listingPath}`
-        : listingPath;
-
-    const postText = [
-      listing.title,
-      listing.price,
-      "",
-      listing.description || "Описание объявления отсутствует.",
-      "",
-      `Подробнее: ${listingUrl}`,
-    ].join("\n");
-
     try {
+      const postText = buildInstagramText(listing);
+
       await navigator.clipboard.writeText(postText);
 
       setCopiedId(request.id);
@@ -388,12 +381,7 @@ export default function InstagramPage() {
 
       setRequests((current) =>
         current.map((request) =>
-          request.id === id
-            ? {
-                ...request,
-                status: "published",
-              }
-            : request,
+          request.id === id ? { ...request, status: "published" } : request,
         ),
       );
     } catch (err) {
@@ -551,8 +539,6 @@ export default function InstagramPage() {
                 const isDownloading = downloadingId === request.id;
                 const isCopied = copiedId === request.id;
 
-                const imageCount = listing?.images?.length || 0;
-
                 const listingPath = listing
                   ? `/all-products/${listing.id}`
                   : "";
@@ -595,7 +581,7 @@ export default function InstagramPage() {
                       </div>
                     </div>
 
-                    {/* LISTING */}
+                    {/* LISTING PREVIEW */}
 
                     {listing ? (
                       <>
@@ -626,9 +612,7 @@ export default function InstagramPage() {
                               type="button"
                               className={styles.downloadButton}
                               disabled={
-                                isDownloading ||
-                                imageCount === 0 ||
-                                downloadingId !== null
+                                !listing.image || downloadingId !== null
                               }
                               onClick={() => handleDownloadImages(request)}
                             >
@@ -639,7 +623,7 @@ export default function InstagramPage() {
                               )}
 
                               {isDownloading
-                                ? "Подготовка..."
+                                ? "Скачивание..."
                                 : "Скачать главное фото"}
                             </button>
                           </div>
@@ -650,64 +634,102 @@ export default function InstagramPage() {
                             </span>
 
                             <h2>{listing.title}</h2>
-
-                            {listing.location && <p>{listing.location}</p>}
-
-                            {listing.area && <p>Площадь: {listing.area}</p>}
-
-                            {listing.rooms && <p>Комнат: {listing.rooms}</p>}
-
-                            <strong>{listing.price}</strong>
                           </div>
                         </div>
 
-                        {/* INSTAGRAM TEXT */}
+                        {/* INSTAGRAM POST */}
 
                         <div className={styles.postText}>
                           <div className={styles.postTextHeader}>
-                            <span>ТЕКСТ ДЛЯ INSTAGRAM</span>
+                            <div>
+                              <span className={styles.postEyebrow}>
+                                INSTAGRAM
+                              </span>
+                              <h3>Текст публикации</h3>
+                            </div>
 
                             <button
                               type="button"
-                              className={styles.copyButton}
+                              className={`${styles.copyButton} ${
+                                isCopied ? styles.copyButtonCopied : ""
+                              }`}
                               onClick={() => handleCopyInstagramText(request)}
+                              title={
+                                isCopied ? "Скопировано" : "Скопировать текст"
+                              }
+                              aria-label={
+                                isCopied ? "Скопировано" : "Скопировать текст"
+                              }
                             >
                               {isCopied ? (
-                                <CheckCheck size={16} />
+                                <CheckCheck size={17} />
                               ) : (
-                                <Copy size={16} />
+                                <Copy size={17} />
                               )}
-
-                              {isCopied ? "Скопировано" : "Копировать текст"}
                             </button>
                           </div>
 
-                          <strong className={styles.postTitle}>
-                            {listing.title}
-                          </strong>
+                          <div className={styles.postContent}>
+                            <h2 className={styles.postTitle}>
+                              {listing.title}
+                            </h2>
 
-                          <strong className={styles.postPrice}>
-                            {listing.price}
-                          </strong>
+                            <div className={styles.postPrice}>
+                              {listing.price}
+                            </div>
 
-                          {/* FULL DESCRIPTION */}
+                            <div className={styles.postDetails}>
+                              <div className={styles.postDetailsHeading}>
+                                Информация об объекте
+                              </div>
 
-                          <div className={styles.postDescription}>
-                            {listing.description ? (
-                              listing.description
-                            ) : (
-                              <span>Описание объявления отсутствует.</span>
-                            )}
+                              {listing.location && (
+                                <div className={styles.postDetail}>
+                                  <MapPin />
+                                  <span>{listing.location}</span>
+                                </div>
+                              )}
+
+                              {listing.type && (
+                                <div className={styles.postDetail}>
+                                  <Home />
+                                  <span>{listing.type}</span>
+                                </div>
+                              )}
+
+                              {listing.area && (
+                                <div className={styles.postDetail}>
+                                  <Maximize2 />
+                                  <span>{listing.area} м²</span>
+                                </div>
+                              )}
+
+                              {listing.rooms && (
+                                <div className={styles.postDetail}>
+                                  <BedDouble />
+                                  <span>{listing.rooms} комн.</span>
+                                </div>
+                              )}
+
+                              {listing.description && (
+                                <p className={styles.postDescription}>
+                                  {listing.description}
+                                </p>
+                              )}
+                            </div>
+
+                            <a
+                              href={listingPath}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.postLink}
+                            >
+                              <span>Подробнее об объявлении</span>
+                              <ExternalLink />
+                            </a>
+
+                            <span className={styles.postUrl}>{listingUrl}</span>
                           </div>
-
-                          <a
-                            href={listingPath}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={styles.postLink}
-                          >
-                            Подробнее: {listingUrl}
-                          </a>
                         </div>
                       </>
                     ) : (
@@ -737,7 +759,7 @@ export default function InstagramPage() {
                       )}
                     </div>
 
-                    {/* PUBLISH STATUS */}
+                    {/* PUBLISH */}
 
                     {!isPublished && (
                       <div className={styles.publishArea}>

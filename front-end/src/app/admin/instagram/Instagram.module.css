@@ -66,7 +66,7 @@
 .titleIcon svg {
   width: 25px;
   height: 25px;
-  color: #ffffff;
+  color: #fff;
 }
 
 .titleBlock h1 {
@@ -98,7 +98,7 @@
   padding: 13px 16px;
   border: 1px solid #e2e8f0;
   border-radius: 13px;
-  background: #ffffff;
+  background: #fff;
   text-align: center;
   box-shadow: 0 2px 5px rgba(26, 32, 44, 0.02);
 }
@@ -154,7 +154,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 13px;
   outline: none;
-  background: #ffffff;
+  background: #fff;
   color: #1a202c;
   font-family: inherit;
   font-size: 13px;
@@ -183,7 +183,7 @@
   padding: 5px;
   border: 1px solid #e2e8f0;
   border-radius: 13px;
-  background: #ffffff;
+  background: #fff;
 }
 
 .filters button {
@@ -242,7 +242,7 @@
   overflow: hidden;
   border: 1px solid #e2e8f0;
   border-radius: 18px;
-  background: #ffffff;
+  background: #fff;
   box-shadow: 0 3px 10px rgba(26, 32, 44, 0.025);
   transition:
     transform 0.2s ease,
@@ -360,18 +360,27 @@
 }
 
 /* =========================
-   LISTING
+   LISTING PREVIEW
 ========================= */
 
 .listing {
   display: flex;
-  gap: 13px;
-  padding: 15px 16px;
+  align-items: flex-start;
+  gap: 15px;
+  padding: 16px;
+}
+
+.imageColumn {
+  width: 145px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
 
 .listingImage {
   position: relative;
-  width: 145px;
+  width: 100%;
   height: 115px;
   flex-shrink: 0;
   overflow: hidden;
@@ -398,13 +407,73 @@
 
 .vip {
   background: #7c3aed;
-  color: #ffffff;
+  color: #fff;
 }
 
 .urgent {
   background: #e53e3e;
-  color: #ffffff;
+  color: #fff;
 }
+
+.noImage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #a0aec0;
+  font-size: 10px;
+}
+
+.noImage svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Download button */
+
+.downloadButton {
+  width: 100%;
+  min-height: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid #c4b5fd;
+  border-radius: 8px;
+  background: #f5f3ff;
+  color: #6d28d9;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.downloadButton:hover:not(:disabled) {
+  background: #ede9fe;
+  border-color: #8b5cf6;
+  transform: translateY(-1px);
+}
+
+.downloadButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.downloadButton svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* Listing title only */
 
 .listingContent {
   min-width: 0;
@@ -412,60 +481,158 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  padding-top: 3px;
 }
 
 .listingType {
-  color: #718096;
+  color: #8b5cf6;
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .listingContent h2 {
-  display: -webkit-box;
-  overflow: hidden;
-  margin: 4px 0 3px;
+  margin: 6px 0 0;
   color: #1a202c;
-  font-size: 13px;
-  line-height: 1.4;
-  font-weight: 800;
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 850;
   overflow-wrap: anywhere;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
-.location {
-  overflow: hidden;
-  max-width: 100%;
-  margin: 0;
-  color: #718096;
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* =========================
+   INSTAGRAM POST TEXT
+========================= */
 
-.specs {
+.postText {
+  position: relative;
+  margin: 0 16px 15px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 13px;
+  background: #f8fafc;
   display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 7px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 11px;
 }
 
-.specs span {
-  padding: 4px 6px;
-  border: 1px solid #edf0f5;
-  border-radius: 5px;
-  background: #f7fafc;
-  color: #4a5568;
-  font-size: 8px;
-  font-weight: 700;
-}
+/* Header */
 
-.price {
-  margin-top: auto;
-  padding-top: 7px;
-  color: #7c3aed;
-  font-size: 13px;
+.postTextHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid #e9edf3;
+  color: #64748b;
+  font-size: 9px;
   font-weight: 900;
+  letter-spacing: 0.09em;
+}
+
+/* Icon-only copy button */
+
+.copyButton {
+  width: 31px;
+  height: 31px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.copyButton:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.copyButton:active {
+  transform: scale(0.94);
+}
+
+.copyButton:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 3px;
+}
+
+.copyButton svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+/* Title */
+
+.postTitle {
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Price */
+
+.postPrice {
+  align-self: flex-start;
+  padding: 6px 10px;
+  border-radius: 7px;
+  background: #ede9fe;
+  color: #6d28d9;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+/* Description / listing details */
+
+.postDescription {
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 9px;
+  background: #fff;
+  color: #4a5568;
+  font-size: 12px;
+  line-height: 1.75;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Listing link */
+
+.postLink {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 7px;
+  margin-top: 1px;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 750;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: color 0.2s ease;
+}
+
+.postLink:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
 }
 
 /* =========================
@@ -503,11 +670,12 @@
   padding: 0 9px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  background: #ffffff;
+  background: #fff;
   color: #4a5568;
   font-family: inherit;
   font-size: 9px;
   font-weight: 700;
+  text-decoration: none;
   cursor: pointer;
   transition:
     background 0.2s ease,
@@ -544,7 +712,7 @@
   border: 1px solid #7c3aed;
   border-radius: 9px;
   background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-  color: #ffffff;
+  color: #fff;
   font-family: inherit;
   font-size: 10px;
   font-weight: 800;
@@ -586,7 +754,7 @@
   padding: 24px;
   border: 1px dashed #cbd5e0;
   border-radius: 18px;
-  background: #ffffff;
+  background: #fff;
   text-align: center;
 }
 
@@ -619,6 +787,44 @@
   color: #718096;
   font-size: 11px;
   line-height: 1.5;
+}
+
+/* =========================
+   LOADING / ERROR / DELETED
+========================= */
+
+.loading {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+  color: #6d28d9;
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 10px;
+  background: #fff5f5;
+  color: #c53030;
+  font-size: 13px;
+}
+
+.error button {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 1px solid #fed7d7;
+  border-radius: 8px;
+  background: #fff;
+  color: #c53030;
+  cursor: pointer;
+}
+
+.deletedListing {
+  padding: 20px 16px;
+  color: #718096;
+  font-size: 12px;
 }
 
 /* =========================
@@ -709,13 +915,21 @@
     padding: 13px;
   }
 
-  .listingImage {
+  .imageColumn {
     width: 115px;
+  }
+
+  .listingImage {
     height: 100px;
   }
 
   .listingContent h2 {
-    font-size: 12px;
+    font-size: 13px;
+  }
+
+  .postText {
+    margin: 0 13px 13px;
+    padding: 13px;
   }
 
   .meta {
@@ -733,8 +947,11 @@
     font-size: 8px;
   }
 
-  .listingImage {
+  .imageColumn {
     width: 95px;
+  }
+
+  .listingImage {
     height: 90px;
   }
 
@@ -743,7 +960,15 @@
     padding: 0 8px;
     font-size: 10px;
   }
+
+  .postTextHeader {
+    font-size: 8px;
+  }
 }
+
+/* =========================
+   REDUCED MOTION
+========================= */
 
 @media (prefers-reduced-motion: reduce) {
   .spinIcon {
@@ -754,275 +979,9 @@
   .search input,
   .filters button,
   .openButton,
-  .publishButton {
+  .publishButton,
+  .downloadButton,
+  .copyButton {
     transition: none;
-  }
-}
-
-/* =========================
-   INSTAGRAM DOWNLOAD
-========================= */
-
-.loading {
-  display: flex;
-  justify-content: center;
-  padding: 40px 0;
-  color: #6d28d9;
-}
-
-.error {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px;
-  border-radius: 10px;
-  background: #fff5f5;
-  color: #c53030;
-  font-size: 13px;
-}
-
-.error button {
-  align-self: flex-start;
-  padding: 8px 14px;
-  border: 1px solid #fed7d7;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #c53030;
-  cursor: pointer;
-}
-
-.imageColumn {
-  width: 145px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.imageColumn .listingImage {
-  width: 100%;
-}
-
-.noImage {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: #a0aec0;
-  font-size: 10px;
-}
-
-.noImage svg {
-  width: 24px;
-  height: 24px;
-}
-
-.downloadButton {
-  width: 100%;
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 5px;
-  border: 1px solid #c4b5fd;
-  border-radius: 8px;
-  background: #f5f3ff;
-  color: #6d28d9;
-  font-family: inherit;
-  font-size: 9px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.downloadButton:hover:not(:disabled) {
-  background: #ede9fe;
-  border-color: #8b5cf6;
-}
-
-.downloadButton:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.downloadButton svg {
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
-}
-
-/* =========================
-   INSTAGRAM POST TEXT
-========================= */
-
-.postText {
-  margin: 0 16px 14px;
-  padding: 15px;
-  border: 1px solid #e9d5ff;
-  border-radius: 12px;
-  background: #faf5ff;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.postTextHeader {
-  color: #8b5cf6;
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-}
-
-.postTitle {
-  color: #1a202c;
-  font-size: 14px;
-  font-weight: 900;
-  line-height: 1.5;
-}
-
-.postPrice {
-  color: #6d28d9;
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.postDescription {
-  margin: 0;
-  color: #4a5568;
-  font-size: 12px;
-  line-height: 1.7;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
-
-.postLink {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: #7c3aed;
-  font-size: 11px;
-  font-weight: 700;
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-
-.postLink:hover {
-  text-decoration: underline;
-}
-
-.postLink svg {
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
-}
-
-.deletedListing {
-  padding: 20px 16px;
-  color: #718096;
-  font-size: 12px;
-}
-
-@media (max-width: 600px) {
-  .imageColumn {
-    width: 115px;
-  }
-
-  .postText {
-    margin: 0 13px 13px;
-  }
-}
-
-@media (max-width: 380px) {
-  .imageColumn {
-    width: 95px;
-  }
-}
-
-/* Instagram text header with copy button */
-
-.postTextHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.copyButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 5px 9px;
-  border: 1px solid #bfdbfe;
-  border-radius: 6px;
-  background: #eff6ff;
-  color: #2563eb;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.copyButton:hover {
-  background: #dbeafe;
-  border-color: #93c5fd;
-  color: #1d4ed8;
-}
-
-.copyButton:active {
-  transform: scale(0.96);
-}
-
-.copyButton:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
-
-.copyButton svg {
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
-}
-
-.copyButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 8px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fff;
-  color: #374151;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.copyButton:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
-}
-
-.copyButton:active {
-  transform: scale(0.97);
-}
-
-.copyButton:focus-visible {
-  outline: 2px solid #f97316;
-  outline-offset: 2px;
-}
-
-@media (max-width: 480px) {
-  .postTextHeader {
-    align-items: flex-start;
-    flex-wrap: wrap;
   }
 }
