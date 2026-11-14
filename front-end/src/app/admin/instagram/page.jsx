@@ -85,33 +85,66 @@ function formatDate(value) {
   }
 }
 
+// Получение URL изображения из разных форматов
 function getImageUrl(image) {
   if (typeof image === "string") {
     return image;
   }
 
   if (image && typeof image === "object") {
-    return image.url || image.publicUrl || image.imageUrl || image.path || "";
+    return (
+      image.url ||
+      image.publicUrl ||
+      image.imageUrl ||
+      image.path ||
+      image.src ||
+      ""
+    );
   }
 
   return "";
 }
 
-// Получение всех фотографий объявления
+// --------------------------------------------------
+// GET ALL LISTING IMAGES
+// --------------------------------------------------
+
 function getListingImages(listing) {
   if (!listing) return [];
 
-  const gallery = [
+  // Фотографии из базы данных
+  const listingPhotos =
+    listing.listing_photos || listing.raw?.listing_photos || [];
+
+  // Сортируем фотографии по display_order
+  const sortedPhotos = Array.isArray(listingPhotos)
+    ? [...listingPhotos].sort(
+        (a, b) =>
+          (Number(a?.display_order) || 0) - (Number(b?.display_order) || 0),
+      )
+    : [];
+
+  // Получаем все URL из listing_photos
+  const databaseImages = sortedPhotos.map(getImageUrl).filter(Boolean);
+
+  // Дополнительные возможные источники фотографий
+  const galleryImages = [
     ...(Array.isArray(listing.images) ? listing.images : []),
     ...(Array.isArray(listing.photos) ? listing.photos : []),
     ...(Array.isArray(listing.gallery) ? listing.gallery : []),
-  ];
+  ]
+    .map(getImageUrl)
+    .filter(Boolean);
 
+  // Главное изображение
   const mainImage = getImageUrl(listing.image);
 
-  const images = [mainImage, ...gallery.map(getImageUrl)].filter(Boolean);
+  // Объединяем все источники и убираем дубликаты
+  const allImages = [...databaseImages, ...galleryImages, mainImage].filter(
+    Boolean,
+  );
 
-  return [...new Set(images)];
+  return [...new Set(allImages)];
 }
 
 // --------------------------------------------------
@@ -119,49 +152,69 @@ function getListingImages(listing) {
 // --------------------------------------------------
 
 function mapRequest(raw) {
-  const listing = raw.listing;
+  const listing = raw?.listing;
+
+  if (!listing) {
+    return {
+      id: raw.id,
+      status: raw.status,
+      createdAt: formatDate(raw.createdAt),
+      listing: null,
+      user: {
+        name: raw.user?.name || "Пользователь",
+        phone: raw.user?.phone || "Телефон не указан",
+      },
+    };
+  }
+
+  // Получаем все фотографии из исходного объекта API
+  const images = getListingImages(listing);
+
+  // Главное фото: is_main -> первое фото -> image
+  const mainPhoto =
+    listing.listing_photos?.find((photo) => photo.is_main) ||
+    listing.listing_photos?.[0];
+
+  const mainImage =
+    getImageUrl(listing.image) || getImageUrl(mainPhoto) || images[0] || "";
 
   return {
     id: raw.id,
     status: raw.status,
     createdAt: formatDate(raw.createdAt),
 
-    listing: listing
-      ? {
-          id: listing.id,
-          title: listing.title || "Без названия",
+    listing: {
+      id: listing.id,
+      title: listing.title || "Без названия",
 
-          image: getImageUrl(listing.image),
+      image: mainImage,
 
-          images: getListingImages(listing),
+      // Все фотографии для скачивания
+      images,
 
-          description:
-            listing.description ||
-            listing.fullDescription ||
-            listing.details ||
-            "",
+      description:
+        listing.description || listing.fullDescription || listing.details || "",
 
-          type:
-            PROPERTY_TYPE_LABELS[listing.propertyType] ||
-            listing.propertyType ||
-            "Недвижимость",
+      type:
+        PROPERTY_TYPE_LABELS[listing.propertyType] ||
+        listing.propertyType ||
+        "Недвижимость",
 
-          location: formatLocation(listing),
+      location: formatLocation(listing),
 
-          rooms: listing.rooms,
+      rooms: listing.rooms,
 
-          area: listing.area ? `${listing.area} м²` : null,
+      area: listing.area ? `${listing.area} м²` : null,
 
-          price: formatPrice(listing.price, listing.currency),
+      price: formatPrice(listing.price, listing.currency),
 
-          status:
-            listing.promotionStatus && listing.promotionStatus !== "regular"
-              ? listing.promotionStatus
-              : listing.isUrgent
-                ? "urgent"
-                : null,
-        }
-      : null,
+      status:
+        listing.promotionStatus && listing.promotionStatus !== "regular"
+          ? listing.promotionStatus
+          : listing.isUrgent
+            ? "urgent"
+            : null,
+    },
 
     user: {
       name: raw.user?.name || "Пользователь",
@@ -210,7 +263,21 @@ export default function InstagramPage() {
     try {
       const data = await getAdminInstagramRequests(token);
 
-      setRequests((Array.isArray(data) ? data : []).map(mapRequest));
+      console.log("INSTAGRAM API RESPONSE:", data);
+
+      const mappedRequests = (Array.isArray(data) ? data : []).map(mapRequest);
+
+      console.log(
+        "INSTAGRAM IMAGES:",
+        mappedRequests.map((request) => ({
+          id: request.id,
+          title: request.listing?.title,
+          images: request.listing?.images,
+          imageCount: request.listing?.images?.length || 0,
+        })),
+      );
+
+      setRequests(mappedRequests);
     } catch (err) {
       console.error("Error loading Instagram requests:", err);
       setError(err.message || "Ошибка загрузки заявок Instagram");
@@ -231,12 +298,17 @@ export default function InstagramPage() {
       return;
     }
 
-    if (downloadingId) return;
+    if (downloadingId !== null) return;
 
     setDownloadingId(request.id);
 
     try {
-      await downloadInstagramImages(listing.images, listing.title);
+      // Убираем возможные дубликаты перед скачиванием
+      const images = [...new Set(listing.images.filter(Boolean))];
+
+      console.log(`Downloading ${images.length} Instagram images:`, images);
+
+      await downloadInstagramImages(images, listing.title);
     } catch (err) {
       console.error("Instagram image download error:", err);
 
@@ -276,9 +348,9 @@ export default function InstagramPage() {
 
     try {
       await navigator.clipboard.writeText(postText);
+
       setCopiedId(request.id);
 
-      // Возвращаем обычное состояние кнопки через 2 секунды
       setTimeout(() => {
         setCopiedId((current) => (current === request.id ? null : current));
       }, 2000);
@@ -295,7 +367,7 @@ export default function InstagramPage() {
   async function publishRequest(id) {
     const token = localStorage.getItem("uytap_token");
 
-    if (!token || publishingId) return;
+    if (!token || publishingId !== null) return;
 
     setPublishingId(id);
 
@@ -459,8 +531,6 @@ export default function InstagramPage() {
               </button>
             </div>
           ) : filteredRequests.length > 0 ? (
-            /* REQUESTS */
-
             <section className={styles.grid}>
               {filteredRequests.map((request) => {
                 const isPublished = request.status === "published";
@@ -674,8 +744,6 @@ export default function InstagramPage() {
               })}
             </section>
           ) : (
-            /* EMPTY */
-
             <div className={styles.empty}>
               <div className={styles.emptyIcon}>
                 <Camera />
