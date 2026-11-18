@@ -32,14 +32,98 @@ const REGION_NAMES = {
   turkey: "Турция",
 };
 
+function normalizePromotionStatus(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+}
+
+function toBoolean(value) {
+  if (value === true || value === 1) return true;
+
+  if (typeof value === "string") {
+    return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
+  }
+
+  return false;
+}
+
+function getListingPromotion(item = {}) {
+  const promotionStatus = normalizePromotionStatus(
+    item.promotion_status ?? item.promotionStatus,
+  );
+
+  const isVip =
+    ["vip", "premium"].includes(promotionStatus) ||
+    toBoolean(item.is_vip) ||
+    toBoolean(item.isVip);
+
+  const isUrgent =
+    ["urgent", "срочно"].includes(promotionStatus) ||
+    toBoolean(item.is_urgent) ||
+    toBoolean(item.isUrgent);
+
+  const isTop =
+    ["top", "топ", "featured"].includes(promotionStatus) ||
+    toBoolean(item.is_top) ||
+    toBoolean(item.isTop);
+
+  // Строгий приоритет: VIP > СРОЧНО > TOP > обычное
+  if (isVip) {
+    return {
+      status: "vip",
+      promotionStatus: "vip",
+      isVip: true,
+      isUrgent: false,
+      isTop: false,
+    };
+  }
+
+  if (isUrgent) {
+    return {
+      status: "urgent",
+      promotionStatus: "urgent",
+      isVip: false,
+      isUrgent: true,
+      isTop: false,
+    };
+  }
+
+  if (isTop) {
+    return {
+      status: "top",
+      promotionStatus: "top",
+      isVip: false,
+      isUrgent: false,
+      isTop: true,
+    };
+  }
+
+  return {
+    status: "regular",
+    promotionStatus: "regular",
+    isVip: false,
+    isUrgent: false,
+    isTop: false,
+  };
+}
+
 export function formatRegion(region) {
   if (!region) return "";
+
   const str = String(region).trim();
+
   if (REGION_NAMES[str]) return REGION_NAMES[str];
+
   const upper = str.toUpperCase();
+
   if (REGION_NAMES[upper]) return REGION_NAMES[upper];
+
   const underscored = upper.replace(/[-\s]+/g, "_");
+
   if (REGION_NAMES[underscored]) return REGION_NAMES[underscored];
+
   return str;
 }
 
@@ -66,7 +150,7 @@ export function formatListingLocation(item) {
   const upperRegion = rawRegion.toUpperCase();
   const lowerCity = rawCity.toLowerCase();
 
-  // 1. Бишкек: если rawRegion.toUpperCase() === 'BISHKEK' или rawCity.toLowerCase() === 'бишкек'
+  // Бишкек
   const isBishkek =
     upperRegion === "BISHKEK" ||
     lowerCity === "бишкек" ||
@@ -78,7 +162,7 @@ export function formatListingLocation(item) {
       : "Бишкек";
   }
 
-  // 2. Ош (город): если rawRegion.toUpperCase() === 'OSH_CITY' или (rawCity.toLowerCase() === 'ош' и не OSH_REGION)
+  // Ош
   const isOshRegion =
     upperRegion === "OSH_REGION" ||
     rawRegion.toLowerCase() === "osh_region" ||
@@ -95,34 +179,35 @@ export function formatListingLocation(item) {
       : "Ош";
   }
 
-  // 3. Город/село + область
+  // Город/село + область
   if (rawCity && regionName && regionName !== "Кыргызстан") {
-    // Проверить, что название области уже не содержит имя города (чтобы не дублировать)
     if (!regionName.toLowerCase().includes(lowerCity)) {
       return `${rawCity}, ${regionName}`;
     }
+
     return rawCity;
   }
 
-  // 4. Только город: если области нет
+  // Только город
   if (rawCity) {
     return rawCity;
   }
 
-  // 5. Только область: если город не указан
+  // Только область
   if (regionName && regionName !== "Кыргызстан") {
     if (rawDistrict) {
       return `${rawDistrict}, ${regionName}`;
     }
+
     return regionName;
   }
 
-  // 6. Только район: если нет города и области
+  // Только район
   if (rawDistrict) {
     return rawDistrict;
   }
 
-  // 7. Fallback: адрес или "Кыргызстан"
+  // Адрес или fallback
   if (item.address && String(item.address).trim()) {
     return String(item.address).trim();
   }
@@ -142,31 +227,38 @@ export function mapListingData(item) {
     parking: "Паркинг/гараж",
   };
 
-  const mainPhoto = item.listing_photos?.find((p) => p.is_main)?.url 
-    || item.listing_photos?.[0]?.url 
-    || "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?q=80&w=400";
+  const mainPhoto =
+    item.listing_photos?.find((p) => p.is_main)?.url ||
+    item.listing_photos?.[0]?.url ||
+    "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?q=80&w=400";
 
   const formattedLocation = formatListingLocation(item);
 
   const expiresAt = item.expires_at || null;
-  const isExpired = item.status === "expired" || (expiresAt && new Date(expiresAt) <= new Date());
-  const daysLeft = expiresAt && !isExpired
-    ? Math.max(0, Math.ceil((new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24)))
-    : 0;
+
+  const isExpired =
+    item.status === "expired" ||
+    (expiresAt && new Date(expiresAt) <= new Date());
+
+  const daysLeft =
+    expiresAt && !isExpired
+      ? Math.max(
+          0,
+          Math.ceil((new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24)),
+        )
+      : 0;
 
   const rawType = item.property_type || item.propertyType || "";
+
   const resolvedType =
     propertyTypeMapping[rawType] ||
     (typeof rawType === "string" && rawType.trim() ? rawType.trim() : "") ||
     "Другое";
 
-  const promoStatus = item.promotion_status || item.promotionStatus || "regular";
-  const isUrgent = Boolean(item.is_urgent ?? item.isUrgent);
+  const promotion = getListingPromotion(item);
 
   return {
-    // Характеристики категории (серия, этаж, стены и т.д.) — берём из
-    // features первыми, чтобы канонические поля ниже всегда были главнее
-    // и не могли быть случайно затёрты значениями формы (см. add-product).
+    // Характеристики категории
     ...(item.features || {}),
 
     id: item.id,
@@ -174,33 +266,52 @@ export function mapListingData(item) {
     description: item.description || "",
     type: resolvedType,
     dealType: item.deal_type === "sale" ? "Продажа" : "Сниму в аренду",
-    status: promoStatus === "vip"
-      ? "vip"
-      : (isUrgent
-          ? "urgent"
-          : (promoStatus === "top" ? "top" : "regular")),
-    promotion_status: promoStatus,
-    promotionStatus: promoStatus,
-    is_urgent: isUrgent,
-    isUrgent: isUrgent,
-    isVip: promoStatus === "vip" || Boolean(item.isVip ?? item.is_vip),
-    isTop: promoStatus === "top" || Boolean(item.isTop ?? item.is_top),
+
+    // Продвижение с единым приоритетом
+    status: promotion.status,
+    promotion_status: promotion.promotionStatus,
+    promotionStatus: promotion.promotionStatus,
+
+    isVip: promotion.isVip,
+    is_vip: promotion.isVip,
+
+    isUrgent: promotion.isUrgent,
+    is_urgent: promotion.isUrgent,
+
+    isTop: promotion.isTop,
+    is_top: promotion.isTop,
+
+    // Локация
     location: formattedLocation,
-    city: item.city || (item.region === "BISHKEK" || item.region === "bishkek" ? "Бишкек" : ""),
+    city:
+      item.city ||
+      (item.region === "BISHKEK" || item.region === "bishkek" ? "Бишкек" : ""),
     region: formatRegion(item.region),
     district: item.district,
     address: item.address || "",
-    price: `${item.price?.toLocaleString() || 0} ${item.currency === "USD" ? "$" : "сом"}`,
+
+    // Цена
+    price: `${item.price?.toLocaleString() || 0} ${
+      item.currency === "USD" ? "$" : "сом"
+    }`,
     rawPrice: item.price || 0,
     currency: item.currency || item.raw?.currency || "USD",
+
+    // Характеристики
     rawArea: item.area || 0,
-    image: mainPhoto,
-    likes: 0,
     rooms: item.rooms,
     area: item.area ? `${item.area} м²` : "",
+
+    // Фото и статистика
+    image: mainPhoto,
+    likes: 0,
+
+    // Срок публикации
     expiresAt,
     daysLeft,
     isExpired,
+
+    // Исходная запись
     raw: item,
   };
 }
@@ -222,9 +333,15 @@ export function mapListingDetail(item) {
     rent: "Аренда",
   };
 
-  let images = ["https://images.unsplash.com/photo-1564013799919-ab600027ffc6?q=80&w=800"];
+  let images = [
+    "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?q=80&w=800",
+  ];
+
   if (item.listing_photos && item.listing_photos.length > 0) {
-    const sorted = [...item.listing_photos].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+    const sorted = [...item.listing_photos].sort(
+      (a, b) => (a.display_order || 0) - (b.display_order || 0),
+    );
+
     images = sorted.map((p) => p.url);
   }
 
@@ -233,10 +350,16 @@ export function mapListingDetail(item) {
 
   const owner = {
     id: dbUser.id || "",
-    name: (dbProfile.first_name || dbProfile.last_name)
-      ? `${dbProfile.first_name || ""} ${dbProfile.last_name || ""}`.trim()
-      : dbUser.email || "Пользователь",
-    role: dbUser.account_type === "agency" ? "Агентство" : (dbUser.account_type === "realtor" ? "Риелтор" : "Владелец"),
+    name:
+      dbProfile.first_name || dbProfile.last_name
+        ? `${dbProfile.first_name || ""} ${dbProfile.last_name || ""}`.trim()
+        : dbUser.email || "Пользователь",
+    role:
+      dbUser.account_type === "agency"
+        ? "Агентство"
+        : dbUser.account_type === "realtor"
+          ? "Риелтор"
+          : "Владелец",
     avatar: dbProfile.avatar_url || "https://i.pravatar.cc/150?img=12",
     phone: dbUser?.phone || dbProfile?.phone || dbProfile?.phone_number || "",
   };
@@ -244,10 +367,7 @@ export function mapListingDetail(item) {
   const features = item.features || {};
   const resortFilters = item.resort_filters || {};
 
-  // Расстояние до пляжа: у новых объявлений хранится в resort_filters
-  // (корректно сохраняется после исправления формы добавления объявления),
-  // у старых объявлений (созданных до исправления) значение осело только
-  // в features.beachDistance — проверяем оба источника, чтобы не терять данные.
+  // Расстояние до пляжа: новые и старые объявления
   const beachDistance =
     resortFilters.beachDistanceFrom ??
     resortFilters.beachDistanceTo ??
@@ -255,26 +375,49 @@ export function mapListingDetail(item) {
     features.beachDistanceFrom ??
     null;
 
-  const dateOptions = { day: "numeric", month: "long", year: "numeric" };
+  const dateOptions = {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  };
+
   const createdAtFormatted = item.created_at
     ? new Date(item.created_at).toLocaleDateString("ru-RU", dateOptions)
     : "Не указана";
 
   const formattedLocation = formatListingLocation(item);
-  const city = item.city || (item.region === "BISHKEK" || item.region === "bishkek" ? "Бишкек" : "");
+
+  const city =
+    item.city ||
+    (item.region === "BISHKEK" || item.region === "bishkek" ? "Бишкек" : "");
 
   const expiresAt = item.expires_at || null;
-  const isExpired = item.status === "expired" || (expiresAt && new Date(expiresAt) <= new Date());
-  const daysLeft = expiresAt && !isExpired
-    ? Math.max(0, Math.ceil((new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24)))
-    : 0;
+
+  const isExpired =
+    item.status === "expired" ||
+    (expiresAt && new Date(expiresAt) <= new Date());
+
+  const daysLeft =
+    expiresAt && !isExpired
+      ? Math.max(
+          0,
+          Math.ceil((new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24)),
+        )
+      : 0;
+
+  const promotion = getListingPromotion(item);
 
   return {
     id: item.id,
     title: item.title || "Без названия",
-    price: `${item.price?.toLocaleString() || 0} ${item.currency === "USD" ? "$" : "сом"}`,
+
+    price: `${item.price?.toLocaleString() || 0} ${
+      item.currency === "USD" ? "$" : "сом"
+    }`,
+
     type: propertyTypeMapping[item.property_type] || "Другое",
     dealType: dealTypeMapping[item.deal_type] || "Другое",
+
     country: item.country || "Кыргызстан",
     region: formatRegion(item.region),
     rawRegion: item.region,
@@ -283,35 +426,39 @@ export function mapListingDetail(item) {
     settlement: item.settlement || "",
     location: formattedLocation,
     address: item.address || "",
+
     latitude: item.latitude != null ? item.latitude : null,
     longitude: item.longitude != null ? item.longitude : null,
+
     area: item.area ? `${item.area} м²` : "",
     rooms: item.rooms || 0,
     floors: item.total_floors || item.floor || 0,
+
     year: features.year || null,
     beachDistance,
-    status: item.is_urgent
-      ? "urgent"
-      : item.promotion_status === "vip"
-        ? "vip"
-        : item.promotion_status === "top"
-          ? "top"
-          : "regular",
-    promotion_status: item.promotion_status || "regular",
-    promotionStatus: item.promotion_status || "regular",
-    is_urgent: Boolean(item.is_urgent),
-    isUrgent: Boolean(item.is_urgent),
-    isVip: item.promotion_status === "vip" || Boolean(item.is_vip),
-    isTop: item.promotion_status === "top" || Boolean(item.is_top),
-    // Реальный статус публикации (active/draft/hidden/moderation) — не
-    // путать с полем status выше, которое означает тип продвижения
-    // (vip/urgent). Нужен, чтобы страница объявления честно показывала
-    // "Черновик"/"На модерации"/"Скрыто" вместо всегда "Опубликовано" —
-    // см. front-end/src/app/profile/ads/[id]/page.jsx.
-    publicationStatus: isExpired ? "expired" : (item.status || "active"),
+
+    // Продвижение с тем же приоритетом, что и в каталоге
+    status: promotion.status,
+    promotion_status: promotion.promotionStatus,
+    promotionStatus: promotion.promotionStatus,
+
+    isVip: promotion.isVip,
+    is_vip: promotion.isVip,
+
+    isUrgent: promotion.isUrgent,
+    is_urgent: promotion.isUrgent,
+
+    isTop: promotion.isTop,
+    is_top: promotion.isTop,
+
+    // Реальный статус публикации из базы.
+    // Не путать с status выше — он обозначает тип продвижения.
+    publicationStatus: isExpired ? "expired" : item.status || "active",
+
     expiresAt,
     daysLeft,
     isExpired,
+
     description: item.description || "Описание отсутствует.",
     images,
     owner,
