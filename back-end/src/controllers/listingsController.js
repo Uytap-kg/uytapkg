@@ -42,7 +42,7 @@ import { evictExpiredAndCapMap } from "../utils/boundedMap.js";
 import { isBatchCountersEnabled, bufferListingView } from "../utils/counterBatcher.js";
 
 const PUBLIC_LISTING_COLUMNS =
-  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
+  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, promotion_expires_at, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
 const MAX_CATALOG_PAGE = 1000;
 
 // Удаляет из пользовательского объекта features системные ключи:
@@ -675,7 +675,8 @@ export const getMapListings = async (req, res) => {
       .select(`
         id, title, price, currency, property_type, deal_type, rent_period,
         region, city, district, address, rooms, area, floor, total_floors,
-        latitude, longitude, status, is_urgent, promotion_status, priority_rank,
+        latitude, longitude, status, is_urgent, urgent_expires_at, promotion_status,
+        promotion_expires_at, priority_rank,
         created_at, expires_at,
         listing_photos (id, url, is_main, display_order),
         users (id, is_verified, account_type)

@@ -2,7 +2,7 @@ import { supabase } from "../config/db.js";
 import { sanitizeAuthorPII, maskExpiredPromotion } from "./listingsController.js";
 
 const FAVORITE_LISTING_COLUMNS =
-  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
+  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, promotion_expires_at, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
 
 const MAX_PAGE = 1000;
 const MAX_LIMIT = 100;

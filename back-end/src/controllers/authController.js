@@ -2221,7 +2221,7 @@ export const logoutAll = async (req, res) => {
 //    P2-06: Потолок пагинации (limit <= 100, page <= 1000) и отказ от select('*').
 // =======================================================
 const PUBLIC_PROFILE_LISTING_COLUMNS =
-  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
+  "id, user_id, title, description, property_type, deal_type, rent_period, price, currency, region, city, district, address, latitude, longitude, rooms, area, floor, total_floors, status, is_urgent, urgent_expires_at, promotion_status, promotion_expires_at, priority_rank, views_count, photos_count, features, resort_filters, is_resort, created_at, expires_at";
 const PUBLIC_PROFILE_COMPLEX_COLUMNS =
   "id, developer_id, name, description, region, city, address, completion_status, completion_date, housing_class, registry_link, cover_photo, features, created_at";
 
