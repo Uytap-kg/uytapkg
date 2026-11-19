@@ -12,11 +12,10 @@ import {
   Eye,
   Download,
   LoaderCircle,
-  CalendarDays,
 } from "lucide-react";
 
 import styles from "./PricingHistory.module.css";
-import CustomSelectBlack from "@/components/ui/CustomSelectBlack/CustomSelectBlack";
+import CustomSelect from "@/components/ui/customSelect/CustomSelect";
 
 const TARIFF_OPTIONS = [
   "Все тарифы",
@@ -132,7 +131,7 @@ export default function PaymentHistory({
           </div>
 
           <div className={styles.customSelect}>
-            <CustomSelectBlack
+            <CustomSelect
               icon={Filter}
               title="Тариф"
               options={TARIFF_OPTIONS}

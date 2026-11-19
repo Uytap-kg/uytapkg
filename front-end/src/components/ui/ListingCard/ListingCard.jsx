@@ -15,6 +15,74 @@ function formatPrice(value, locale = "ru-RU") {
   });
 }
 
+function toBoolean(value) {
+  if (value === true || value === 1) return true;
+
+  if (typeof value === "string") {
+    return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
+  }
+
+  return false;
+}
+
+function normalizeStatus(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+}
+
+function getPromotion(item = {}) {
+  const raw = item.raw || {};
+
+  const status = normalizeStatus(item.status);
+  const promotionStatus = normalizeStatus(
+    item.promotion_status ??
+      item.promotionStatus ??
+      raw.promotion_status ??
+      raw.promotionStatus,
+  );
+
+  const isVip =
+    ["vip", "premium"].includes(status) ||
+    ["vip", "premium"].includes(promotionStatus) ||
+    toBoolean(item.isVip) ||
+    toBoolean(item.is_vip) ||
+    toBoolean(raw.isVip) ||
+    toBoolean(raw.is_vip);
+
+  const isUrgent =
+    ["urgent", "срочно"].includes(status) ||
+    ["urgent", "срочно"].includes(promotionStatus) ||
+    toBoolean(item.isUrgent) ||
+    toBoolean(item.is_urgent) ||
+    toBoolean(raw.isUrgent) ||
+    toBoolean(raw.is_urgent);
+
+  const isTop =
+    ["top", "топ", "featured"].includes(status) ||
+    ["top", "топ", "featured"].includes(promotionStatus) ||
+    toBoolean(item.isTop) ||
+    toBoolean(item.is_top) ||
+    toBoolean(raw.isTop) ||
+    toBoolean(raw.is_top);
+
+  // Приоритет: VIP > СРОЧНО > TOP
+  if (isVip) {
+    return { isVip: true, isUrgent: false, isTop: false };
+  }
+
+  if (isUrgent) {
+    return { isVip: false, isUrgent: true, isTop: false };
+  }
+
+  if (isTop) {
+    return { isVip: false, isUrgent: false, isTop: true };
+  }
+
+  return { isVip: false, isUrgent: false, isTop: false };
+}
+
 export default function ListingCard({
   item,
   isFavorite,
@@ -35,7 +103,6 @@ export default function ListingCard({
   ).toUpperCase();
 
   const rawPrice = Number(item?.rawPrice ?? item?.raw?.price ?? 0);
-
   const isUSD = currency === "USD";
 
   const mainPrice = isUSD
@@ -46,45 +113,11 @@ export default function ListingCard({
     ? `≈ ${formatPrice(rawPrice * EXCHANGE_RATE)} сом`
     : `≈ $${formatPrice(rawPrice / EXCHANGE_RATE, "en-US")}`;
 
-  // Normalize status values received from the API or mapped listing.
-  const status = String(item?.status ?? "")
-    .trim()
-    .toLowerCase();
-
-  const promoStatus = String(
-    item?.promotion_status ??
-      item?.promotionStatus ??
-      item?.raw?.promotion_status ??
-      "",
-  )
-    .trim()
-    .toLowerCase();
-
-  const isVip =
-    ["vip", "premium"].includes(status) ||
-    ["vip", "premium"].includes(promoStatus) ||
-    item?.isVip === true ||
-    item?.is_vip === true ||
-    item?.raw?.is_vip === true;
-
-  const isUrgent =
-    ["urgent", "срочно"].includes(status) ||
-    ["urgent", "срочно"].includes(promoStatus) ||
-    item?.isUrgent === true ||
-    item?.is_urgent === true ||
-    item?.raw?.is_urgent === true;
-
-  const isTop =
-    !isVip &&
-    (["top", "топ"].includes(status) ||
-      ["top", "топ"].includes(promoStatus) ||
-      item?.isTop === true ||
-      item?.is_top === true ||
-      item?.raw?.is_top === true);
+  // PROMOTION: only one badge according to priority
+  const { isVip, isUrgent, isTop } = getPromotion(item);
 
   function openListing() {
     if (!item?.id) return;
-
     router.push(`/all-products/${item.id}`);
   }
 
@@ -133,7 +166,6 @@ export default function ListingCard({
       onClick={openListing}
     >
       {/* IMAGE */}
-
       <div className={styles.image}>
         <Image
           src={item.image}
@@ -143,7 +175,6 @@ export default function ListingCard({
         />
 
         {/* COMPARE SELECT */}
-
         {compareMode && (
           <button
             type="button"
@@ -178,7 +209,6 @@ export default function ListingCard({
         )}
 
         {/* STATUS BADGES */}
-
         <div
           className={`${styles.badges} ${
             compareMode ? styles.badgesCompare : ""
@@ -191,14 +221,14 @@ export default function ListingCard({
             </span>
           )}
 
-          {isUrgent && (
+          {!isVip && isUrgent && (
             <span className={`${styles.status} ${styles.urgent}`}>
               <Zap />
               СРОЧНО
             </span>
           )}
 
-          {isTop && (
+          {!isVip && !isUrgent && isTop && (
             <span className={`${styles.status} ${styles.top}`}>
               <TrendingUp />
               TOP
@@ -209,7 +239,6 @@ export default function ListingCard({
         </div>
 
         {/* FAVORITE */}
-
         <button
           type="button"
           className={styles.favorite}
@@ -229,7 +258,6 @@ export default function ListingCard({
       </div>
 
       {/* CONTENT */}
-
       <div className={styles.content}>
         <h2>{item.title}</h2>
 
@@ -252,11 +280,9 @@ export default function ListingCard({
         </div>
 
         {/* BOTTOM */}
-
         <div className={styles.bottom}>
           <div className={styles.priceBlock}>
             <strong>{mainPrice}</strong>
-
             <span className={styles.secondaryPrice}>{secondaryPrice}</span>
           </div>
 
