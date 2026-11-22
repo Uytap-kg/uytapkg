@@ -2,12 +2,21 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { MapPin, Heart, Crown, Zap, TrendingUp, Check } from "lucide-react";
+import {
+  MapPin,
+  Heart,
+  Crown,
+  Zap,
+  TrendingUp,
+  Check,
+  Share2,
+} from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 
 import styles from "./ListingCard.module.css";
 
 const EXCHANGE_RATE = 87.8;
+const SITE_URL = "https://uytap.kg";
 
 function formatPrice(value, locale = "ru-RU") {
   return Number(value || 0).toLocaleString(locale, {
@@ -113,8 +122,51 @@ export default function ListingCard({
     ? `≈ ${formatPrice(rawPrice * EXCHANGE_RATE)} сом`
     : `≈ $${formatPrice(rawPrice / EXCHANGE_RATE, "en-US")}`;
 
-  // PROMOTION: only one badge according to priority
+  // PROMOTION
   const { isVip, isUrgent, isTop } = getPromotion(item);
+
+  // SHARE LISTING
+  async function handleShare(event) {
+    event.stopPropagation();
+
+    if (!item?.id) return;
+
+    const listingUrl = `${SITE_URL}/all-products/${encodeURIComponent(
+      item.id,
+    )}`;
+
+    const shareText = item.title
+      ? `Смотри, какое объявление я нашёл на UyTap.kg: ${item.title}`
+      : "Смотри, какое объявление я нашёл на UyTap.kg!";
+
+    // Native sharing: mobile devices and supported browsers
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: item.title || "Объявление на UyTap.kg",
+          text: shareText,
+          url: listingUrl,
+        });
+      } catch (error) {
+        // Пользователь просто закрыл меню «Поделиться»
+        if (error.name !== "AbortError") {
+          console.error("Share error:", error);
+        }
+      }
+
+      return;
+    }
+
+    // Fallback: copy link and message
+    try {
+      await navigator.clipboard.writeText(`${shareText}\n${listingUrl}`);
+
+      alert("Ссылка на объявление скопирована!");
+    } catch (error) {
+      // Последний fallback для браузеров без Clipboard API
+      window.prompt("Скопируйте ссылку на объявление:", listingUrl);
+    }
+  }
 
   function openListing() {
     if (!item?.id) return;
@@ -254,6 +306,17 @@ export default function ListingCard({
           }}
         >
           <Heart fill={isFavorite ? "currentColor" : "none"} />
+        </button>
+
+        {/* SHARE */}
+        <button
+          type="button"
+          className={styles.share}
+          aria-label="Поделиться объявлением"
+          title="Поделиться"
+          onClick={handleShare}
+        >
+          <Share2 />
         </button>
       </div>
 
