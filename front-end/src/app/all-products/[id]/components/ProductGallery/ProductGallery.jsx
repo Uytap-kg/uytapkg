@@ -7,10 +7,13 @@ import {
   Heart,
   Sparkles,
   Flame,
+  Share2,
 } from "lucide-react";
 
 import { useLanguage } from "@/context/LanguageContext";
 import styles from "./ProductGallery.module.css";
+
+const SITE_URL = "https://uytap.kg";
 
 export default function ProductGallery({
   product,
@@ -35,6 +38,43 @@ export default function ProductGallery({
     setCurrentImage((prev) => (prev === 0 ? images.length - 1 : prev - 1));
   };
 
+  // SHARE PRODUCT
+  const handleShare = async () => {
+    if (!product?.id) return;
+
+    const listingUrl = `${SITE_URL}/all-products/${encodeURIComponent(
+      product.id,
+    )}`;
+
+    const shareText = product.title
+      ? `Смотри, какое объявление я нашёл на UyTap.kg: ${product.title}`
+      : "Смотри, какое объявление я нашёл на UyTap.kg!";
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: product.title || "Объявление на UyTap.kg",
+          text: shareText,
+          url: listingUrl,
+        });
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          console.error("Share error:", error);
+        }
+      }
+
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(`${shareText}\n${listingUrl}`);
+
+      alert("Ссылка на объявление скопирована!");
+    } catch (error) {
+      window.prompt("Скопируйте ссылку на объявление:", listingUrl);
+    }
+  };
+
   const currentImageSrc = images[currentImage] || images[0];
 
   return (
@@ -51,7 +91,6 @@ export default function ProductGallery({
         <div className={styles.imageOverlay} />
 
         {/* BADGES */}
-
         <div className={styles.badges}>
           {product.status === "vip" && (
             <span className={`${styles.badge} ${styles.vip}`}>
@@ -73,7 +112,6 @@ export default function ProductGallery({
         </div>
 
         {/* FAVORITE */}
-
         <button
           type="button"
           className={`${styles.favorite} ${
@@ -90,8 +128,18 @@ export default function ProductGallery({
           <Heart size={23} fill={isFavorite ? "currentColor" : "none"} />
         </button>
 
-        {/* ARROWS */}
+        {/* SHARE */}
+        <button
+          type="button"
+          className={styles.share}
+          onClick={handleShare}
+          aria-label="Поделиться объявлением"
+          title="Поделиться"
+        >
+          <Share2 size={21} />
+        </button>
 
+        {/* ARROWS */}
         {images.length > 1 && (
           <>
             <button
@@ -115,14 +163,12 @@ export default function ProductGallery({
         )}
 
         {/* COUNTER */}
-
         <div className={styles.imageCounter}>
           {currentImage + 1} / {images.length}
         </div>
       </div>
 
       {/* THUMBNAILS */}
-
       {images.length > 1 && (
         <>
           <div className={styles.thumbnails}>
