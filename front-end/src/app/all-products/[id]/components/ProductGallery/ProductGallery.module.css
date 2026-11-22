@@ -971,25 +971,30 @@
 
 .share {
   position: absolute;
-  top: 72px;
+  top: 16px;
   right: 16px;
   z-index: 10;
 
-  width: 46px;
-  height: 46px;
+  min-height: 35px;
+  width: 35px;
+  height: 35px;
 
-  display: flex;
+  box-sizing: border-box;
+
+  display: inline-flex;
   align-items: center;
   justify-content: center;
 
   border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 50%;
+  border-radius: 11px;
 
   background: rgba(255, 255, 255, 0.95);
   color: #333;
 
   cursor: pointer;
-  backdrop-filter: blur(10px);
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 
   transition:
     background 0.2s ease,
