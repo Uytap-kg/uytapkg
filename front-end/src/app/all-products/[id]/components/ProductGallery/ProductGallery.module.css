@@ -971,8 +971,8 @@
 
 .share {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 12px;
+  right: 12px;
   z-index: 10;
 
   min-height: 35px;
